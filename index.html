@@ -1,0 +1,4820 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dizionario Italiano</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #f5f0e8;
+    --parchment: #ede5d0;
+    --ink: #1a1208;
+    --ink-light: #3d2e0f;
+    --terracotta: #c4522a;
+    --gold: #b8860b;
+    --gold-light: #d4a017;
+    --sage: #4a5e3a;
+    --stone: #8b7355;
+    --muted: #7a6a50;
+    --border: rgba(139,115,85,0.3);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { max-width: 100%; overflow-x: hidden; }
+
+  body {
+    background: var(--cream);
+    color: var(--ink);
+    font-family: 'Crimson Pro', Georgia, serif;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(196,82,42,0.04) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 20%, rgba(184,134,11,0.05) 0%, transparent 50%);
+  }
+
+  /* Grain texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  .container {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  header {
+    text-align: center;
+    margin-bottom: 52px;
+    position: relative;
+  }
+
+  .header-ornament {
+    font-size: 13px;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    color: var(--terracotta);
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    margin-bottom: 12px;
+    opacity: 0.8;
+  }
+
+  h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(42px, 7vw, 72px);
+    font-weight: 700;
+    line-height: 1;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+
+  h1 em {
+    font-style: italic;
+    color: var(--terracotta);
+  }
+
+  .subtitle {
+    font-size: 16px;
+    color: var(--muted);
+    font-style: italic;
+    letter-spacing: 0.05em;
+  }
+
+  .header-rule {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 28px;
+  }
+
+  .header-rule::before,
+  .header-rule::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--gold), transparent);
+  }
+
+  .rule-diamond {
+    width: 8px;
+    height: 8px;
+    background: var(--terracotta);
+    transform: rotate(45deg);
+    flex-shrink: 0;
+  }
+
+  /* Search */
+  .search-area {
+    margin-bottom: 48px;
+  }
+
+  .search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 18px 64px 18px 28px;
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-style: italic;
+    background: var(--parchment);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    color: var(--ink);
+    outline: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 12px rgba(26,18,8,0.06), inset 0 1px 3px rgba(26,18,8,0.04);
+  }
+
+  .search-input::placeholder {
+    color: var(--stone);
+    opacity: 0.6;
+  }
+
+  .search-input:focus {
+    border-color: var(--terracotta);
+    box-shadow: 0 4px 20px rgba(196,82,42,0.12), inset 0 1px 3px rgba(26,18,8,0.04);
+    background: #f9f4ea;
+  }
+
+  .search-btn {
+    position: absolute;
+    right: 12px;
+    background: var(--terracotta);
+    border: none;
+    width: 42px;
+    height: 42px;
+    border-radius: 3px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    color: white;
+  }
+
+  .search-btn:hover {
+    background: #a8411e;
+    transform: scale(1.05);
+  }
+
+  .search-btn svg { width: 18px; height: 18px; }
+
+  /* State messages */
+  .state-msg {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+    font-style: italic;
+    font-size: 18px;
+    display: none;
+  }
+
+  .state-msg.active { display: block; }
+
+  .loading-dots {
+    display: inline-flex;
+    gap: 6px;
+    margin-top: 16px;
+  }
+
+  .loading-dots span {
+    width: 6px;
+    height: 6px;
+    background: var(--terracotta);
+    border-radius: 50%;
+    animation: bounce 1.4s infinite both;
+  }
+
+  .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes bounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+
+  /* Result card */
+  .result-card {
+    display: none;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .result-card.active { display: block; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Word header section */
+  .word-hero {
+    background: var(--parchment);
+    border: 1.5px solid var(--border);
+    border-radius: 6px 6px 0 0;
+    padding: 36px 40px 28px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .word-hero::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--terracotta), var(--gold), var(--terracotta));
+  }
+
+  .word-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--terracotta);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 12px;
+    font-style: normal;
+    background: rgba(196,82,42,0.08);
+    padding: 4px 10px;
+    border-radius: 2px;
+    border: 1px solid rgba(196,82,42,0.2);
+  }
+
+  .word-main {
+    display: flex;
+    align-items: baseline;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  .word-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(36px, 6vw, 58px);
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1;
+  }
+
+  .word-phonetic {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    color: var(--stone);
+    background: rgba(139,115,85,0.1);
+    padding: 4px 12px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  /* Stress highlight */
+  .stress { color: var(--terracotta); font-weight: bold; }
+
+  .word-gender {
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    font-size: 18px;
+    color: var(--sage);
+    font-weight: 300;
+  }
+
+  /* Translations section */
+  .translations-section {
+    background: white;
+    border: 1.5px solid var(--border);
+    border-top: none;
+    padding: 28px 40px;
+  }
+
+  .lang-row {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 16px;
+    align-items: start;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .lang-row:last-child { border-bottom: none; }
+
+  .lang-label {
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    padding-top: 3px;
+  }
+
+  .lang-flag {
+    display: inline-block;
+    margin-right: 6px;
+    font-size: 14px;
+  }
+
+  .translation-text {
+    font-size: 20px;
+    color: var(--ink);
+    font-weight: 400;
+    line-height: 1.4;
+  }
+
+  .translation-alts {
+    font-size: 15px;
+    color: var(--stone);
+    font-style: italic;
+    margin-top: 2px;
+  }
+
+  /* Definition */
+  .definition-section {
+    background: var(--parchment);
+    border: 1.5px solid var(--border);
+    border-top: none;
+    padding: 28px 40px;
+  }
+
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .definition-text {
+    font-size: 20px;
+    color: var(--ink);
+    line-height: 1.75;
+    font-style: italic;
+  }
+
+  .example-text {
+    font-size: 18px;
+    color: var(--ink-light);
+    margin-top: 14px;
+    padding-left: 18px;
+    border-left: 3px solid var(--terracotta);
+    line-height: 1.7;
+  }
+
+  /* Conjugation section */
+  .conjugation-section {
+    background: white;
+    border: 1.5px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    overflow: hidden;
+  }
+
+  .conjugation-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 40px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s;
+    border-bottom: 1px solid transparent;
+  }
+
+  .conjugation-header:hover {
+    background: var(--parchment);
+  }
+
+  .conjugation-header.open {
+    border-bottom-color: var(--border);
+    background: var(--parchment);
+  }
+
+  .conj-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    color: var(--ink);
+  }
+
+  .conj-icon {
+    width: 32px; height: 32px;
+    background: var(--terracotta);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: white;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .toggle-arrow {
+    width: 28px; height: 28px;
+    border: 1.5px solid var(--border);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.3s ease, border-color 0.2s;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .conjugation-header.open .toggle-arrow {
+    transform: rotate(180deg);
+    border-color: var(--terracotta);
+    color: var(--terracotta);
+  }
+
+  .conjugation-body {
+    display: none;
+    padding: 32px 40px;
+  }
+
+  .conjugation-body.open { display: block; }
+
+  /* Tense tabs */
+  .tense-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .tense-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .tense-group-label {
+    font-size: 9px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2px;
+  }
+
+  .tense-group-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .tense-tab {
+    padding: 6px 14px;
+    font-size: 13px;
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--stone);
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .tense-tab:hover {
+    background: var(--parchment);
+    color: var(--ink);
+  }
+
+  .tense-tab.active {
+    background: var(--terracotta);
+    border-color: var(--terracotta);
+    color: white;
+    font-style: normal;
+  }
+
+  /* Conjugation table */
+  .conj-table-wrap {
+    animation: fadeUp 0.3s ease;
+  }
+
+  .tense-title-display {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-style: italic;
+    color: var(--ink);
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .conj-grid-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .conj-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  @media (max-width: 560px) {
+    .conj-grid { grid-template-columns: 1fr; }
+  }
+
+  .conj-row {
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    gap: 0;
+    background: var(--parchment);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .conj-pronoun {
+    padding: 10px 14px;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+    background: rgba(139,115,85,0.12);
+    display: flex;
+    align-items: center;
+  }
+
+  .conj-form {
+    padding: 10px 16px;
+    font-size: 17px;
+    color: var(--ink);
+    font-weight: 400;
+  }
+
+  /* Mood sections */
+  .mood-section { margin-bottom: 28px; }
+  .mood-label {
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--terracotta);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 12px;
+  }
+
+  /* Error state */
+  .error-msg {
+    text-align: center;
+    padding: 48px 20px;
+    display: none;
+  }
+
+  .error-msg.active { display: block; }
+
+  .error-icon {
+    font-size: 36px;
+    margin-bottom: 16px;
+  }
+
+  .error-text {
+    font-style: italic;
+    color: var(--muted);
+    font-size: 18px;
+  }
+
+  /* Responsive */
+  /* ── Favourites ─────────────────────────────────────────── */
+  /* ── Hero action buttons group ──────────────────────────── */
+  .hero-actions {
+    position: absolute;
+    top: 20px; right: 20px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    z-index: 2;
+  }
+
+  .hero-action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 4px;
+    color: rgba(139,115,85,0.3);
+    transition: all 0.2s;
+    padding: 0;
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .hero-action-btn:hover { color: var(--stone); transform: scale(1.1); background: none; }
+  .hero-action-btn.star:hover { color: var(--gold); background: none; }
+  .hero-action-btn.star.starred { color: #d4a017; filter: drop-shadow(0 0 6px rgba(212,160,23,0.5)); }
+  .hero-action-btn.refresh:hover { color: var(--stone); transform: rotate(30deg) scale(1.1); background: none; }
+  .hero-action-btn.deck:hover { color: var(--sage); background: none; }
+
+  body.mode-grammar .hero-action-btn { color: rgba(107,154,240,0.2); }
+  body.mode-grammar .hero-action-btn:hover { color: #6b9af0; background: none; }
+  body.mode-grammar .hero-action-btn.star.starred { color: #6b9af0; filter: drop-shadow(0 0 6px rgba(107,154,240,0.5)); }
+
+  /* Keep old .star-btn for grammar (dynamically rendered) */
+  .star-btn {
+    background: none; border: none; cursor: pointer;
+    font-size: 22px; line-height: 1;
+    color: rgba(107,154,240,0.2);
+    transition: all 0.2s; padding: 4px; z-index: 2;
+  }
+
+  .star-btn::after {
+    display: none;
+  }
+
+  .star-btn:hover { color: var(--gold); transform: scale(1.1); }
+  .star-btn.starred { color: #d4a017; filter: drop-shadow(0 0 8px rgba(212,160,23,0.6)); }
+
+  body.mode-grammar .star-btn { color: rgba(107,154,240,0.2); }
+  body.mode-grammar .star-btn:hover { color: #6b9af0; }
+  body.mode-grammar .star-btn.starred { color: #6b9af0; filter: drop-shadow(0 0 8px rgba(107,154,240,0.6)); }
+
+  /* Favourites panel */
+  .fav-panel {
+    display: none;
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: 320px;
+    background: var(--parchment);
+    border-left: 1.5px solid var(--border);
+    z-index: 100;
+    box-shadow: -8px 0 32px rgba(26,18,8,0.12);
+    flex-direction: column;
+    animation: slideIn 0.3s ease;
+  }
+
+  body.mode-grammar .fav-panel {
+    background: #111c36;
+    border-left-color: rgba(107,154,240,0.2);
+  }
+
+  @keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  .fav-panel.open { display: flex; }
+
+  .fav-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  body.mode-grammar .fav-panel-header { border-bottom-color: rgba(107,154,240,0.2); }
+
+  .fav-panel-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  body.mode-grammar .fav-panel-title { color: #e8edf8; }
+
+  .fav-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+    color: var(--muted);
+    padding: 4px;
+    line-height: 1;
+    transition: color 0.2s;
+  }
+
+  .fav-close:hover { color: var(--ink); }
+  body.mode-grammar .fav-close { color: #6b7fa8; }
+  body.mode-grammar .fav-close:hover { color: #e8edf8; }
+
+  .fav-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  body.mode-grammar .fav-tabs { border-bottom-color: rgba(107,154,240,0.2); }
+
+  .fav-tab {
+    flex: 1;
+    padding: 10px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 14px;
+    font-style: italic;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--stone);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+  }
+
+  .fav-tab.active {
+    color: var(--terracotta);
+    border-bottom-color: var(--terracotta);
+      }
+
+  body.mode-grammar .fav-tab { color: #6b7fa8; }
+  body.mode-grammar .fav-tab.active { color: #6b9af0; border-bottom-color: #6b9af0; }
+
+  .fav-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+  }
+
+  .fav-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s;
+    gap: 8px;
+  }
+
+  .fav-item:hover { background: rgba(139,115,85,0.1); }
+  body.mode-grammar .fav-item:hover { background: rgba(107,154,240,0.08); }
+
+  .fav-item-word {
+    font-family: 'Playfair Display', serif;
+    font-size: 17px;
+    color: var(--ink);
+    flex: 1;
+  }
+
+  body.mode-grammar .fav-item-word { color: #e8edf8; }
+
+  .fav-item-meta {
+    font-size: 12px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  body.mode-grammar .fav-item-meta { color: #6b7fa8; }
+
+  .fav-item-del {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--border);
+    font-size: 16px;
+    padding: 2px 4px;
+    transition: color 0.2s;
+    flex-shrink: 0;
+  }
+
+  .fav-item-del:hover { color: var(--terracotta); }
+
+  .fav-empty {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--muted);
+    font-style: italic;
+    font-size: 15px;
+  }
+
+  body.mode-grammar .fav-empty { color: #6b7fa8; }
+
+  /* Fav toggle button in header */
+  .fav-toggle-btn {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--terracotta);
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(196,82,42,0.35);
+    transition: all 0.2s;
+    z-index: 50;
+  }
+
+  .fav-toggle-btn:hover { transform: scale(1.1); }
+  body.mode-grammar .fav-toggle-btn { background: #3b64b4; box-shadow: 0 4px 16px rgba(59,100,180,0.4); }
+
+  .fav-badge {
+    position: absolute;
+    top: -4px; right: -4px;
+    background: #d4a017;
+    color: white;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    display: none;
+  }
+
+  .fav-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 99;
+  }
+
+  .fav-overlay.open { display: block; }
+
+  @media (max-width: 640px) {
+    .fav-panel { width: 100%; }
+  }
+
+  @media (max-width: 640px) {
+    /* Container — full width, small padding */
+    .container { padding: 20px 12px 60px; }
+
+    /* Header */
+    h1 { font-size: 38px; }
+    .subtitle { font-size: 13px; }
+    .header-ornament { font-size: 11px; letter-spacing: 0.25em; }
+
+    /* Nav — two rows on mobile */
+    .app-nav {
+      width: 100% !important;
+      max-width: 100% !important;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+      overflow: visible;
+    }
+    .app-nav-btn { padding: 8px 10px; font-size: 13px; flex: 1; min-width: 120px; gap: 5px; }
+    .app-nav-btn .nav-icon { font-size: 14px; }
+    /* Карточки на второй строке */
+    #navCarte { flex: 0 0 100%; justify-content: center; margin-top: 2px; }
+
+    /* Lang toggle — full width */
+    .lang-toggle { width: auto; display: flex; margin-left: auto; margin-right: auto; }
+    .lang-toggle-btn { flex: 1; text-align: center; padding: 9px 10px; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 0; }
+    .lang-toggle-btn .lang-flag { display: none; }
+
+    /* Search — full width */
+    .search-area { width: 100%; }
+    .search-wrapper { width: 100%; }
+    .search-input { font-size: 15px; padding: 13px 50px 13px 16px; width: 100%; }
+
+    /* Result card — full width, no overflow */
+    .result-card, .grammar-card, .ru-results, .fav-screen {
+      width: 100%;
+      overflow-x: hidden;
+    }
+
+    /* Word card */
+    .word-hero, .translations-section, .definition-section,
+    .conjugation-header, .conjugation-body { padding-left: 16px; padding-right: 16px; }
+    .word-title { font-size: 30px; }
+    .word-phonetic { font-size: 12px; padding: 3px 8px; }
+    .word-main { gap: 10px; flex-wrap: wrap; }
+    .lang-row { grid-template-columns: 48px 1fr; gap: 8px; }
+    .translation-text { font-size: 15px; }
+    .translation-alts { font-size: 12px; }
+    .plural-forms { gap: 14px; }
+    .conj-grid { grid-template-columns: 1fr; gap: 2px; }
+    .conj-row { grid-template-columns: 60px 1fr; }
+    .conj-form { font-size: 13px; }
+    .conj-pronoun { font-size: 11px; }
+    .star-btn { font-size: 18px; }
+    .tense-group-label { font-size: 8px; }
+    .tense-tab { padding: 4px 8px; font-size: 11px; }
+    .definition-text { font-size: 15px; }
+    .example-text { font-size: 13px; }
+
+    /* Grammar — full width */
+    .grammar-hero, .grammar-section { padding-left: 16px; padding-right: 16px; width: 100%; box-sizing: border-box; }
+    .grammar-title { font-size: 22px; }
+    .grammar-subtitle-text { font-size: 11px; }
+    .grammar-explanation { font-size: 14px; line-height: 1.7; }
+    .grammar-rule-text { font-size: 13px; }
+    .grammar-rule { padding: 10px 12px; }
+    .grammar-rule-num { width: 22px; height: 22px; font-size: 11px; }
+    .grammar-example-it { font-size: 15px; }
+    .grammar-example-ru { font-size: 12px; }
+    .grammar-error-form { font-size: 13px; }
+    .grammar-error-explain { font-size: 11px; }
+    .grammar-table { font-size: 11px; }
+    .grammar-table th { font-size: 10px; padding: 7px 8px; }
+    .grammar-table td { padding: 8px 8px; }
+    .grammar-section-label { font-size: 9px; }
+    .grammar-topic-badge { font-size: 9px; }
+
+    /* Russian results */
+    .ru-word-card { padding: 12px 14px; }
+    .ru-word-italian { font-size: 16px; }
+    .ru-word-meta { font-size: 11px; }
+    .ru-results-title { font-size: 11px; }
+
+    /* Favorites */
+    .fav-card { padding: 12px 14px; }
+    .fav-card-word { font-size: 15px; }
+    .fav-card-meta { font-size: 12px; }
+    .fav-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .fav-title { font-size: 16px; }
+    .fav-tabs { width: 100%; }
+    .fav-tab { flex: 1; text-align: center; }
+  }
+
+  /* Language toggle */
+  .lang-toggle {
+    display: flex;
+    gap: 0;
+    margin-bottom: 20px;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  .lang-toggle-btn {
+    font-style: normal;
+    padding: 10px 22px;
+    font-family: 'PT Serif', 'Crimson Pro', serif;
+    font-size: 15px;
+    font-style: italic;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    color: var(--stone);
+    transition: all 0.2s;
+    border-right: 1px solid var(--border);
+    font-size-adjust: 0.46;
+  }
+
+  .lang-toggle-btn:last-child { border-right: none; }
+
+  .lang-toggle-btn.active {
+    background: var(--terracotta);
+    color: white;
+      }
+
+  .lang-toggle-btn:hover:not(.active) {
+    background: var(--parchment);
+    color: var(--ink);
+  }
+
+  /* Russian results list */
+  .ru-results {
+    display: none;
+    animation: fadeUp 0.4s ease both;
+  }
+
+  .ru-results.active { display: block; }
+
+  .ru-results-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 13px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .ru-results-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .ru-word-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    background: var(--parchment);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    gap: 16px;
+  }
+
+  .ru-word-card:hover {
+    border-color: var(--terracotta);
+    background: #f2ead8;
+    transform: translateX(4px);
+  }
+
+  .ru-word-left { flex: 1; }
+
+  .ru-word-italian {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    color: var(--ink);
+    margin-bottom: 3px;
+  }
+
+  .ru-word-meta {
+    font-size: 13px;
+    color: var(--stone);
+    font-style: italic;
+  }
+
+  .ru-word-arrow {
+    color: var(--terracotta);
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  /* Plural row */
+  .plural-row {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 16px;
+    align-items: start;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .plural-label {
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    padding-top: 3px;
+  }
+
+  .plural-forms {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .plural-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .plural-item-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--stone);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .plural-item-form {
+    font-size: 20px;
+    color: var(--ink);
+  }
+
+  .plural-item-form em {
+    color: var(--stone);
+    font-style: normal;
+    font-size: 16px;
+    margin-right: 4px;
+  }
+
+  /* ── Mode switching ─────────────────────────────────────── */
+  body.mode-grammar {
+    background: #0f1624;
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(59,100,180,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 20%, rgba(100,140,220,0.06) 0%, transparent 50%);
+    color: #e8edf8;
+  }
+
+  body.mode-grammar .header-ornament { color: #6b9af0; }
+  body.mode-grammar h1 { color: #e8edf8; }
+  body.mode-grammar h1 em { color: #6b9af0; }
+  body.mode-grammar .subtitle { color: #6b7fa8; }
+  body.mode-grammar .header-rule::before,
+  body.mode-grammar .header-rule::after { background: linear-gradient(to right, transparent, #3b64b4, transparent); }
+  body.mode-grammar .rule-diamond { background: #6b9af0; }
+
+  body.mode-grammar .search-input {
+    background: #1a2540;
+    border-color: rgba(107,154,240,0.25);
+    color: #e8edf8;
+    box-shadow: 0 2px 12px rgba(0,0,20,0.3);
+  }
+  body.mode-grammar .search-input::placeholder { color: #4a5e8a; }
+  body.mode-grammar .search-input:focus {
+    border-color: #6b9af0;
+    box-shadow: 0 4px 20px rgba(107,154,240,0.15);
+    background: #1e2d4e;
+  }
+  body.mode-grammar .search-btn { background: #3b64b4; }
+  body.mode-grammar .search-btn:hover { background: #2a4d9c; }
+
+  body.mode-grammar .lang-toggle { border-color: rgba(107,154,240,0.25); }
+  body.mode-grammar .lang-toggle-btn { color: #6b7fa8; border-right-color: rgba(107,154,240,0.2); }
+  body.mode-grammar .lang-toggle-btn.active { background: #3b64b4; color: white; }
+  body.mode-grammar .lang-toggle-btn:hover:not(.active) { background: #1a2540; color: #e8edf8; }
+
+  body.mode-grammar .state-msg { color: #6b7fa8; }
+  body.mode-grammar .loading-dots span { background: #6b9af0; }
+
+  /* ── App mode switcher (top nav) ─────────────────────────── */
+  .app-nav {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    margin-bottom: 44px;
+    background: rgba(139,115,85,0.08);
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    padding: 5px;
+    width: fit-content;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
+  }
+
+  body.mode-grammar .app-nav {
+    background: rgba(15,25,50,0.8);
+    border-color: rgba(91,138,255,0.3);
+  }
+
+  .app-nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 24px;
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    cursor: pointer;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--stone);
+    transition: all 0.25s ease;
+    white-space: nowrap;
+  }
+
+  body.mode-grammar .app-nav-btn { color: #8aa4d4; }
+
+  .app-nav-btn .nav-icon {
+    font-size: 16px;
+  }
+
+  .app-nav-btn { font-style: italic; }
+  .app-nav-btn .nav-label-it { font-style: italic; }
+
+  .app-nav-btn.active {
+    background: var(--terracotta);
+    color: white;
+        box-shadow: 0 2px 8px rgba(196,82,42,0.3);
+  }
+
+  body.mode-grammar .app-nav-btn.active {
+    background: #5b8aff;
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 2px 12px rgba(91,138,255,0.5);
+  }
+
+  .app-nav-btn:hover:not(.active) {
+    background: rgba(139,115,85,0.12);
+    color: var(--ink);
+  }
+
+  body.mode-grammar .app-nav-btn:hover:not(.active) {
+    background: rgba(107,154,240,0.1);
+    color: #e8edf8;
+  }
+
+  /* ── Grammar result card ─────────────────────────────────── */
+  .grammar-card {
+    display: none;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .grammar-card.active { display: block; }
+
+  .grammar-hero {
+    background: #111c36;
+    border: 1.5px solid rgba(107,154,240,0.2);
+    border-radius: 6px 6px 0 0;
+    padding: 32px 40px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .grammar-hero::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #3b64b4, #6b9af0, #3b64b4);
+  }
+
+  .grammar-topic-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #6b9af0;
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 12px;
+    background: rgba(107,154,240,0.1);
+    padding: 4px 10px;
+    border-radius: 2px;
+    border: 1px solid rgba(107,154,240,0.2);
+  }
+
+  .grammar-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(28px, 5vw, 46px);
+    font-weight: 700;
+    color: #e8edf8;
+    line-height: 1.1;
+    margin-bottom: 8px;
+  }
+
+  .grammar-title em {
+    font-style: italic;
+    color: #6b9af0;
+  }
+
+  .grammar-subtitle-text {
+    font-size: 15px;
+    color: #6b7fa8;
+    font-style: italic;
+  }
+
+  /* Grammar sections */
+  .grammar-section {
+    background: #0d1628;
+    border: 1.5px solid rgba(107,154,240,0.15);
+    border-top: none;
+    padding: 28px 40px;
+  }
+
+  .grammar-section:last-child {
+    border-radius: 0 0 6px 6px;
+  }
+
+  .grammar-section-label {
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #91b8ff;
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .grammar-section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(107,154,240,0.35);
+  }
+
+  .grammar-explanation {
+    font-size: 21px;
+    color: #dde5f8;
+    line-height: 1.85;
+  }
+
+  .grammar-explanation strong {
+    color: #ffffff;
+    font-weight: 700;
+  }
+
+  .grammar-explanation em {
+    color: #91b8ff;
+    font-style: italic;
+  }
+
+  /* Rules list */
+  .grammar-rules {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .grammar-rule {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: rgba(59,100,180,0.14);
+    border: 1px solid rgba(107,154,240,0.22);
+    border-radius: 4px;
+    padding: 14px 18px;
+  }
+
+  .grammar-rule-num {
+    width: 26px;
+    height: 26px;
+    background: #3b64b4;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: white;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .grammar-rule-text {
+    font-size: 20px;
+    color: #dde5f8;
+    line-height: 1.6;
+  }
+
+  .grammar-rule-text strong { color: #ffffff; }
+  .grammar-rule-text em { color: #91b8ff; }
+
+  /* Grammar table */
+  .grammar-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+
+  .grammar-table {
+    width: 100%;
+    min-width: 400px;
+    border-collapse: collapse;
+    font-size: 18px;
+  }
+
+  .grammar-table th {
+    background: rgba(59,100,180,0.35);
+    color: #a0c0ff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid rgba(107,154,240,0.2);
+    font-weight: 600;
+  }
+
+  .grammar-table td {
+    padding: 13px 16px;
+    border-bottom: 1px solid rgba(107,154,240,0.1);
+    color: #dde5f8;
+    vertical-align: top;
+    line-height: 1.6;
+  }
+
+  .grammar-table tr:last-child td { border-bottom: none; }
+  .grammar-table tr:hover td { background: rgba(59,100,180,0.12); }
+
+  .grammar-table td:first-child {
+    color: #ffffff;
+    font-weight: 600;
+  }
+
+  .grammar-table em { color: #91b8ff; font-style: italic; }
+
+  /* Examples */
+  .grammar-examples {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .grammar-example-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border-radius: 0 6px 6px 0;
+    overflow: hidden;
+    border-left: 3px solid #5b8aff;
+  }
+
+  .grammar-example {
+    padding: 12px 18px;
+    background: rgba(59,100,180,0.12);
+  }
+
+  .grammar-example + .grammar-example {
+    background: rgba(59,100,180,0.18);
+    border-top: 1px solid rgba(91,138,255,0.15);
+  }
+
+  .grammar-example-arrow {
+    text-align: center;
+    font-size: 14px;
+    color: #5b8aff;
+    background: rgba(59,100,180,0.08);
+    padding: 2px 0;
+    opacity: 0.6;
+  }
+
+  .grammar-example-it {
+    font-size: 22px;
+    color: #ffffff;
+    font-style: italic;
+    margin-bottom: 6px;
+  }
+
+  .grammar-example-ru {
+    font-size: 18px;
+    color: #9aaed4;
+  }
+
+  /* Errors */
+  .grammar-errors {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  .grammar-error-pair {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .grammar-error {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 12px 16px;
+    border-radius: 4px;
+  }
+
+  .grammar-error.wrong {
+    background: rgba(180,59,59,0.18);
+    border: 1px solid rgba(220,80,80,0.3);
+  }
+
+  .grammar-error.right {
+    background: rgba(59,150,80,0.18);
+    border: 1px solid rgba(80,180,100,0.3);
+  }
+
+  .grammar-error-mark {
+    font-size: 14px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .grammar-error-content { flex: 1; }
+
+  .grammar-error-form {
+    font-size: 20px;
+    font-style: italic;
+    margin-bottom: 4px;
+  }
+
+  .grammar-error.wrong .grammar-error-form { color: #ff8888; }
+  .grammar-error.right .grammar-error-form { color: #6be896; }
+
+  .grammar-error-explain {
+    font-size: 17px;
+    color: #b8cce8;
+  }
+
+  /* Grammar suggestions */
+  .grammar-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .grammar-suggestion {
+    padding: 6px 14px;
+    background: rgba(59,100,180,0.12);
+    border: 1px solid rgba(107,154,240,0.2);
+    border-radius: 3px;
+    font-size: 13px;
+    color: #6b9af0;
+    cursor: pointer;
+    font-style: italic;
+    font-family: 'Crimson Pro', serif;
+    transition: all 0.2s;
+  }
+
+  .grammar-suggestion:hover {
+    background: rgba(59,100,180,0.25);
+    color: #e8edf8;
+  }
+
+  @media (max-width: 640px) {
+    .grammar-hero, .grammar-section { padding-left: 24px; padding-right: 24px; }
+    .app-nav-btn { padding: 8px 16px; font-size: 14px; }
+  }
+
+
+  /* ── Favourites ──────────────────────────────────────────── */
+  .fav-btn {
+    position: absolute;
+    top: 28px; right: 28px;
+    width: 38px; height: 38px;
+    border: 1.5px solid var(--border);
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    transition: all 0.2s;
+    color: var(--stone);
+    z-index: 2;
+  }
+  .fav-btn:hover { border-color: var(--gold); transform: scale(1.1); }
+  .fav-btn.saved { border-color: var(--gold); color: var(--gold); }
+  .fav-btn.saved:hover { border-color: #c0392b; color: #c0392b; }
+
+  body.mode-grammar .fav-btn {
+    border-color: rgba(107,154,240,0.3);
+    color: #4a5e8a;
+  }
+  body.mode-grammar .fav-btn:hover { border-color: #5b8aff; }
+  body.mode-grammar .fav-btn.saved { border-color: #5b8aff; color: #5b8aff; }
+
+  /* Favourites panel */
+  .fav-panel {
+    display: none;
+    animation: fadeUp 0.4s ease both;
+  }
+  .fav-panel.active { display: block; }
+
+  .fav-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .fav-panel-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    color: var(--ink);
+  }
+
+  body.mode-grammar .fav-panel-title { color: #e8edf8; }
+
+  .fav-clear-btn {
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.1em;
+    color: var(--stone);
+    background: none;
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .fav-clear-btn:hover { color: #c0392b; border-color: #c0392b; }
+
+  .fav-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 20px;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    width: fit-content;
+  }
+
+  body.mode-grammar .fav-tabs { border-color: rgba(107,154,240,0.25); }
+
+  .fav-tab {
+    padding: 8px 20px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 15px;
+    font-style: normal;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--stone);
+    transition: all 0.2s;
+    border-right: 1px solid var(--border);
+  }
+  .fav-tab:last-child { border-right: none; }
+  .fav-tab.active { background: var(--terracotta); color: white; }
+  body.mode-grammar .fav-tab.active { background: #3b64b4; }
+  body.mode-grammar .fav-tab { color: #6b7fa8; border-right-color: rgba(107,154,240,0.2); }
+
+  .fav-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .fav-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: var(--parchment);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    gap: 12px;
+  }
+
+  body.mode-grammar .fav-item {
+    background: #1a2540;
+    border-color: rgba(107,154,240,0.2);
+  }
+
+  .fav-item:hover { border-color: var(--terracotta); transform: translateX(3px); }
+  body.mode-grammar .fav-item:hover { border-color: #5b8aff; }
+
+  .fav-item-left { flex: 1; }
+
+  .fav-item-word {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    color: var(--ink);
+    margin-bottom: 2px;
+  }
+  body.mode-grammar .fav-item-word { color: #e8edf8; }
+
+  .fav-item-meta {
+    font-size: 13px;
+    color: var(--stone);
+    font-style: italic;
+  }
+  body.mode-grammar .fav-item-meta { color: #6b7fa8; }
+
+  .fav-item-remove {
+    width: 28px; height: 28px;
+    border: none; background: none;
+    cursor: pointer; color: var(--stone);
+    font-size: 16px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; flex-shrink: 0;
+  }
+  .fav-item-remove:hover { color: #c0392b; background: rgba(192,57,43,0.1); }
+
+  .fav-empty {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--muted);
+    font-style: italic;
+    font-size: 17px;
+  }
+  body.mode-grammar .fav-empty { color: #4a5e8a; }
+
+  /* Fav icon in nav */
+  .nav-fav-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    cursor: pointer;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--stone);
+    transition: all 0.25s ease;
+    white-space: nowrap;
+    position: relative;
+  }
+  body.mode-grammar .nav-fav-btn { color: #4a5e8a; }
+  .nav-fav-btn:hover { background: rgba(139,115,85,0.12); color: var(--ink); }
+  body.mode-grammar .nav-fav-btn:hover { background: rgba(107,154,240,0.1); color: #e8edf8; }
+  .nav-fav-btn.active { background: var(--gold); color: white; }
+  body.mode-grammar .nav-fav-btn.active { background: #3b64b4; color: white; }
+
+  .fav-count {
+    display: none;
+    background: var(--terracotta);
+    color: white;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    align-items: center; justify-content: center;
+  }
+  .fav-count.visible { display: flex; }
+  body.mode-grammar .fav-count { background: #5b8aff; }
+
+
+  /* star-btn styles defined above */
+
+  /* ── Favorites screen ────────────────────────────────────── */
+  .fav-screen {
+    display: none;
+    animation: fadeUp 0.4s ease both;
+  }
+  .fav-screen.active { display: block; }
+
+  .fav-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+
+  .fav-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    color: var(--ink);
+  }
+
+  body.mode-grammar .fav-title { color: #e8edf8; }
+
+  .fav-empty {
+    text-align: center;
+    padding: 60px 20px;
+    font-style: italic;
+    color: var(--muted);
+    font-size: 18px;
+  }
+
+  body.mode-grammar .fav-empty { color: #4a5e8a; }
+
+  .fav-tabs {
+    display: flex;
+    gap: 0;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    width: fit-content;
+  }
+
+  body.mode-grammar .fav-tabs { border-color: rgba(107,154,240,0.25); }
+
+  .fav-tab {
+    padding: 8px 20px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 15px;
+    font-style: normal;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--border);
+    color: var(--stone);
+    transition: all 0.2s;
+  }
+
+  .fav-tab:last-child { border-right: none; }
+  .fav-tab.active { background: var(--terracotta); color: white; }
+  .fav-tab:hover:not(.active) { background: var(--parchment); color: var(--ink); }
+
+  body.mode-grammar .fav-tab { border-right-color: rgba(107,154,240,0.2); color: #6b7fa8; }
+  body.mode-grammar .fav-tab.active { background: #3b64b4; }
+  body.mode-grammar .fav-tab:hover:not(.active) { background: rgba(107,154,240,0.1); color: #e8edf8; }
+
+  .fav-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .fav-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    background: var(--parchment);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    gap: 16px;
+  }
+
+  .fav-card:hover { border-color: var(--terracotta); transform: translateX(4px); }
+
+  body.mode-grammar .fav-card {
+    background: #1a2540;
+    border-color: rgba(107,154,240,0.2);
+  }
+  body.mode-grammar .fav-card:hover { border-color: #6b9af0; }
+
+  .fav-card-left { flex: 1; }
+
+  .fav-card-word {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    color: var(--ink);
+    margin-bottom: 3px;
+  }
+
+  body.mode-grammar .fav-card-word { color: #e8edf8; font-size: 18px; }
+
+  .fav-card-meta { font-size: 14px; color: var(--stone); font-style: italic; }
+  body.mode-grammar .fav-card-meta { color: #6b7fa8; }
+
+  .fav-card-right {
+    display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+  }
+
+  .fav-card-arrow { color: var(--terracotta); font-size: 18px; }
+  body.mode-grammar .fav-card-arrow { color: #6b9af0; }
+
+  .fav-remove {
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 16px; padding: 4px;
+    transition: color 0.2s; line-height: 1;
+    opacity: 0.5;
+  }
+  .fav-remove:hover { color: #c44; opacity: 1; }
+
+
+
+
+  /* ── Header favorites button ────────────────────────────── */
+  .header-fav-btn {
+    position: absolute;
+    top: 0; right: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: none;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 14px;
+    font-style: italic;
+    color: var(--stone);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .header-fav-btn:hover {
+    border-color: var(--gold);
+    color: var(--gold);
+  }
+
+  .header-fav-btn.active {
+    border-color: var(--gold);
+    color: var(--gold);
+    background: rgba(184,134,11,0.06);
+  }
+
+  body.mode-grammar .header-fav-btn {
+    border-color: rgba(107,154,240,0.25);
+    color: #6b7fa8;
+  }
+
+  body.mode-grammar .header-fav-btn:hover {
+    border-color: #6b9af0;
+    color: #6b9af0;
+  }
+
+  body.mode-grammar .header-fav-btn.active {
+    border-color: #6b9af0;
+    color: #6b9af0;
+    background: rgba(107,154,240,0.08);
+  }
+
+  .header-fav-star { font-size: 16px; }
+
+
+
+  header { position: relative; }
+
+  @media (max-width: 640px) {
+    .header-fav-btn {
+      padding: 5px 10px;
+      font-size: 11px;
+      top: 0; right: 0;
+      border-radius: 3px;
+    }
+    .header-fav-star { font-size: 12px; }
+    .header-fav-badge { width: 14px; height: 14px; font-size: 9px; }
+  }
+
+
+  /* ── Favorites search ────────────────────────────────────── */
+  .fav-search-wrap {
+    position: relative;
+    margin-bottom: 20px;
+  }
+
+  .fav-search {
+    width: 100%;
+    padding: 12px 40px 12px 16px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 17px;
+    font-style: italic;
+    background: var(--parchment);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .fav-search::placeholder { color: var(--stone); opacity: 0.6; }
+  .fav-search:focus { border-color: var(--terracotta); }
+
+  .fav-search-icon {
+    position: absolute;
+    right: 12px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--stone);
+    opacity: 0.5;
+    pointer-events: none;
+    font-size: 15px;
+  }
+
+  .fav-empty-search {
+    text-align: center;
+    padding: 40px 20px;
+    font-style: italic;
+    color: var(--muted);
+    font-size: 17px;
+  }
+
+
+  /* ── Floating favorites button (mobile only) ────────────── */
+  .fav-float-btn {
+    display: none;
+  }
+
+  @media (max-width: 640px) {
+    .fav-float-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: fixed;
+      bottom: 28px;
+      right: 16px;
+      z-index: 999;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--terracotta);
+      color: white;
+      font-size: 22px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(196,82,42,0.4);
+      transition: transform 0.3s ease, opacity 0.3s ease, box-shadow 0.2s;
+    }
+
+    body.mode-grammar .fav-float-btn {
+      background: #3b64b4;
+      box-shadow: 0 4px 16px rgba(59,100,180,0.4);
+    }
+
+    .fav-float-btn.hidden {
+      transform: translateY(80px);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+
+
+    /* Hide header fav button on mobile */
+    .header-fav-btn { display: none; }
+  }
+
+
+  /* ── Cyrillic font fix ───────────────────────────────────── */
+  @font-face {
+    font-family: 'CyrillicBody';
+    src: local('PT Serif');
+  }
+
+  /* Apply PT Serif for Cyrillic text blocks */
+  .translation-text,
+  .translation-alts,
+  .definition-text,
+  .example-text,
+  .grammar-explanation,
+  .grammar-rule-text,
+  .grammar-error-explain,
+  .grammar-example-ru,
+  .ru-word-meta,
+  .fav-card-meta,
+  .state-msg {
+    font-family: 'PT Serif', 'Crimson Pro', Georgia, serif;
+    font-size-adjust: 0.46;
+  }
+
+
+  /* ── Refresh button ──────────────────────────────────────── */
+  /* refresh-btn now uses .hero-action-btn.refresh */
+  .refresh-btn.spinning svg { animation: spin 0.6s linear infinite; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  @media (max-width: 640px) {
+
+  }
+
+
+  /* ── Word category badge ─────────────────────────────────── */
+  .word-category-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 3px 10px;
+    border-radius: 2px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  .cat-cibo       { background: rgba(230,126,34,0.15); color: #c0641a; border: 1px solid rgba(230,126,34,0.4); }
+  .cat-natura     { background: rgba(39,174,96,0.15);  color: #1e8449; border: 1px solid rgba(39,174,96,0.4); }
+  .cat-persone    { background: rgba(142,68,173,0.15); color: #7d3c98; border: 1px solid rgba(142,68,173,0.4); }
+  .cat-lavoro     { background: rgba(41,128,185,0.15); color: #1f618d; border: 1px solid rgba(41,128,185,0.4); }
+  .cat-casa       { background: rgba(192,57,43,0.15);  color: #a04000; border: 1px solid rgba(192,57,43,0.4); }
+  .cat-viaggio    { background: rgba(22,160,133,0.15); color: #0e6655; border: 1px solid rgba(22,160,133,0.4); }
+  .cat-emozioni   { background: rgba(231,76,60,0.15);  color: #b03a2e; border: 1px solid rgba(231,76,60,0.4); }
+  .cat-tempo      { background: rgba(52,73,94,0.15);   color: #2c3e50; border: 1px solid rgba(52,73,94,0.4); }
+  .cat-corpo      { background: rgba(243,156,18,0.15); color: #b7770d; border: 1px solid rgba(243,156,18,0.4); }
+  .cat-cultura    { background: rgba(155,89,182,0.15); color: #7d3c98; border: 1px solid rgba(155,89,182,0.4); }
+  .cat-altro      { background: rgba(127,140,141,0.15);color: #566573; border: 1px solid rgba(127,140,141,0.4); }
+
+  /* ── Deck button ─────────────────────────────────────────── */
+  /* deck-btn now uses .hero-action-btn */
+
+  .hero-action-btn.deck.in-deck { color: var(--sage); }
+
+  @media (max-width: 640px) {
+    .hero-actions { top: 14px; right: 14px; gap: 2px; }
+    .hero-action-btn { width: 28px; height: 28px; font-size: 16px; }
+  }
+
+  /* ── Deck popup ──────────────────────────────────────────── */
+  .deck-popup-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(26,18,8,0.4);
+    z-index: 1000;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  .deck-popup-overlay.open { display: flex; }
+
+  .deck-popup {
+    background: var(--cream);
+    border-radius: 16px 16px 0 0;
+    width: 100%;
+    max-width: 560px;
+    padding: 24px 24px 40px;
+    animation: slideUp 0.3s ease;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  .deck-popup-handle {
+    width: 40px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 20px;
+  }
+
+  .deck-popup-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    color: var(--ink);
+    margin-bottom: 6px;
+  }
+
+  .deck-popup-sub {
+    font-size: 14px;
+    color: var(--muted);
+    font-style: italic;
+    margin-bottom: 20px;
+  }
+
+  .deck-popup-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .deck-popup-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    background: var(--parchment);
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .deck-popup-item:hover { border-color: var(--sage); }
+  .deck-popup-item.added { border-color: var(--sage); background: rgba(74,94,58,0.06); }
+
+  .deck-popup-item-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 17px;
+    color: var(--ink);
+  }
+
+  .deck-popup-item-count {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .deck-popup-item-check {
+    color: var(--sage);
+    font-size: 18px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .deck-popup-item.added .deck-popup-item-check { opacity: 1; }
+
+  .deck-popup-new {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .deck-popup-input {
+    flex: 1;
+    padding: 10px 14px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 16px;
+    font-style: italic;
+    background: var(--parchment);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    color: var(--ink);
+    outline: none;
+  }
+
+  .deck-popup-input:focus { border-color: var(--sage); }
+
+  .deck-popup-create {
+    padding: 10px 18px;
+    background: var(--sage);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 15px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+  }
+
+  .deck-popup-create:hover { background: #3a4d2e; }
+
+  /* ── Le Carte section ────────────────────────────────────── */
+  .carte-screen {
+    display: none;
+    animation: fadeUp 0.4s ease both;
+  }
+  .carte-screen.active { display: block; }
+
+  .carte-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .carte-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    color: var(--ink);
+  }
+
+  .carte-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    color: var(--ink);
+  }
+
+  .carte-new-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    background: var(--sage);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 15px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .carte-new-btn:hover { background: #3a4d2e; }
+
+  .decks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .deck-card {
+    background: var(--parchment);
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    padding: 20px 22px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .deck-card:hover { border-color: var(--sage); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(26,18,8,0.08); }
+
+  .deck-card-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    color: var(--ink);
+    margin-bottom: 6px;
+  }
+
+  .deck-card-meta {
+    font-size: 13px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .deck-card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .deck-action-btn {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    background: transparent;
+    font-family: 'Crimson Pro', serif;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--stone);
+    transition: all 0.2s;
+    text-align: center;
+  }
+
+  .deck-action-btn:hover { border-color: var(--sage); color: var(--sage); }
+  .deck-action-btn.primary { background: var(--sage); color: white; border-color: var(--sage); }
+  .deck-action-btn.primary:hover { background: #3a4d2e; }
+  .deck-action-btn.danger:hover { border-color: #c0392b; color: #c0392b; }
+
+  .deck-card-del {
+    position: absolute;
+    top: 12px; right: 12px;
+    background: none; border: none;
+    color: var(--border); cursor: pointer;
+    font-size: 16px; padding: 2px;
+    transition: color 0.2s;
+  }
+  .deck-card-del:hover { color: #c0392b; }
+
+  /* ── Deck view (inside a deck) ───────────────────────────── */
+  .deck-view-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .deck-back-btn {
+    background: none;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    padding: 7px 14px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 14px;
+    cursor: pointer;
+    color: var(--stone);
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .deck-back-btn:hover { border-color: var(--sage); color: var(--sage); }
+
+  .deck-view-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    color: var(--ink);
+    flex: 1;
+  }
+
+  .deck-word-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+
+  .deck-word-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    background: var(--parchment);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    gap: 12px;
+  }
+
+  .deck-word-item-left { flex: 1; }
+  .deck-word-item-word {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    color: var(--ink);
+  }
+  .deck-word-item-meta { font-size: 13px; color: var(--muted); font-style: italic; }
+
+  .deck-word-remove {
+    background: rgba(192,57,43,0.08);
+    border: 1px solid rgba(192,57,43,0.2);
+    border-radius: 4px;
+    cursor: pointer;
+    color: #c0392b;
+    font-size: 13px;
+    padding: 5px 9px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+  .deck-word-remove:hover { background: rgba(192,57,43,0.18); border-color: rgba(192,57,43,0.4); }
+
+  .deck-import-area {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    border: 2px dashed var(--border);
+    border-radius: 6px;
+    padding: 18px 24px;
+    text-align: center;
+    font-style: italic;
+    color: var(--muted);
+    font-size: 15px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    margin-top: 16px;
+    margin-bottom: 16px;
+    clear: both;
+  }
+  .deck-import-area:hover { border-color: var(--sage); color: var(--sage); }
+
+  /* Study modes */
+  .study-mode-btns {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+
+  .study-btn {
+    flex: 1;
+    min-width: 140px;
+    padding: 14px 20px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    background: var(--parchment);
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    cursor: pointer;
+    color: var(--ink);
+    transition: all 0.2s;
+    text-align: center;
+  }
+
+  .study-btn:hover { border-color: var(--sage); background: rgba(74,94,58,0.05); }
+  .study-btn .study-btn-icon { font-size: 24px; display: block; margin-bottom: 6px; }
+  .study-btn .study-btn-label { font-style: italic; font-size: 13px; color: var(--muted); display: block; margin-top: 2px; }
+
+  /* ── Flashcard (swipe mode) ──────────────────────────────── */
+  .flashcard-screen {
+    display: none;
+    animation: fadeUp 0.4s ease both;
+  }
+  .flashcard-screen.active { display: block; }
+
+  .flashcard-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .flashcard-progress {
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+  }
+
+  .flashcard-exit {
+    background: none; border: 1.5px solid var(--border);
+    border-radius: 4px; padding: 6px 14px;
+    font-family: 'Crimson Pro', serif; font-size: 14px;
+    cursor: pointer; color: var(--stone); transition: all 0.2s;
+  }
+  .flashcard-exit:hover { border-color: var(--terracotta); color: var(--terracotta); }
+
+  .flashcard-wrap {
+    perspective: 1000px;
+    margin-bottom: 24px;
+    width: 100%;
+  }
+
+  .flashcard {
+    width: 100%;
+    height: 260px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border);
+    background: transparent;
+    cursor: pointer;
+    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-style: preserve-3d;
+    position: relative;
+    user-select: none;
+  }
+
+  .flashcard.flipped { transform: rotateY(180deg); }
+  .flashcard:hover { box-shadow: 0 4px 20px rgba(26,18,8,0.1); }
+
+  .flashcard-front, .flashcard-back {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 28px;
+    backface-visibility: hidden;
+    border-radius: 8px;
+  }
+
+  .flashcard-back { transform: rotateY(180deg); background: var(--parchment); }
+
+  .flashcard-hint {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 16px;
+  }
+
+  .flashcard-word {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(28px, 5vw, 42px);
+    color: var(--ink);
+    margin-bottom: 8px;
+  }
+
+  .flashcard-phonetic {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: var(--terracotta);
+    margin-bottom: 12px;
+    opacity: 0.8;
+  }
+
+  .flashcard-example {
+    font-size: 15px;
+    color: var(--muted);
+    font-style: italic;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    max-width: 340px;
+    line-height: 1.5;
+  }
+
+  .flashcard-sub {
+    font-size: 16px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .flashcard-actions {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+  }
+
+  .fc-btn {
+    flex: 1;
+    max-width: 160px;
+    padding: 16px;
+    border: none;
+    border-radius: 50px;
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+
+  .fc-btn.dont-know { background: rgba(192,57,43,0.1); color: #c0392b; }
+  .fc-btn.dont-know:hover { background: rgba(192,57,43,0.2); }
+  .fc-btn.know { background: rgba(39,174,96,0.12); color: #27ae60; }
+  .fc-btn.know:hover { background: rgba(39,174,96,0.22); }
+
+  .flashcard-swipe-hint {
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    font-style: italic;
+    margin-top: 12px;
+    opacity: 0.6;
+  }
+
+  /* ── Write mode ──────────────────────────────────────────── */
+  .write-screen {
+    display: none;
+    animation: fadeUp 0.4s ease both;
+  }
+  .write-screen.active { display: block; }
+
+  .write-prompt {
+    text-align: center;
+    padding: 32px 24px 24px;
+    background: var(--parchment);
+    border: 1.5px solid var(--border);
+    border-radius: 6px 6px 0 0;
+    margin-bottom: 0;
+  }
+
+  .write-prompt-hint {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 12px;
+  }
+
+  .write-prompt-word {
+    font-family: 'Playfair Display', serif;
+    font-size: 36px;
+    color: var(--ink);
+    margin-bottom: 6px;
+  }
+
+  .write-prompt-sub { font-size: 15px; color: var(--muted); font-style: italic; }
+
+  .write-answer-area {
+    background: white;
+    border: 1.5px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+
+  .write-input {
+    width: 100%;
+    padding: 12px 16px;
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-style: italic;
+    background: var(--parchment);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 12px;
+  }
+
+  .write-input:focus { border-color: var(--terracotta); }
+  .write-input.correct { border-color: #27ae60; background: rgba(39,174,96,0.05); }
+  .write-input.wrong { border-color: #c0392b; background: rgba(192,57,43,0.05); }
+
+  .write-check-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--terracotta);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-family: 'Playfair Display', serif;
+    font-size: 17px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .write-check-btn:hover { background: #a8411e; }
+
+  .write-result {
+    padding: 14px 18px;
+    border-radius: 4px;
+    font-size: 16px;
+    margin-top: 8px;
+    display: none;
+  }
+
+  .write-result.show { display: block; }
+  .write-result.ok { background: rgba(39,174,96,0.1); color: #27ae60; border: 1px solid rgba(39,174,96,0.2); }
+  .write-result.fail { background: rgba(192,57,43,0.08); color: #c0392b; border: 1px solid rgba(192,57,43,0.15); }
+
+  .write-next-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--sage);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-family: 'Playfair Display', serif;
+    font-size: 17px;
+    cursor: pointer;
+    margin-top: 10px;
+    display: none;
+    transition: background 0.2s;
+  }
+
+  .write-next-btn.show { display: block; }
+  .write-next-btn:hover { background: #3a4d2e; }
+
+  @media (max-width: 640px) {
+    .decks-grid { grid-template-columns: 1fr; }
+    .study-mode-btns { flex-direction: column; }
+  }
+
+
+  /* ── Custom dialog ───────────────────────────────────────── */
+  .custom-dialog-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(26,18,8,0.45);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .custom-dialog-overlay.open { display: flex; }
+
+  .custom-dialog {
+    background: var(--cream);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 28px 28px 24px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 8px 40px rgba(26,18,8,0.2);
+    animation: fadeUp 0.2s ease;
+  }
+
+  body.mode-grammar .custom-dialog {
+    background: #1a2540;
+    border-color: rgba(107,154,240,0.25);
+  }
+
+  .custom-dialog-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    color: var(--ink);
+    margin-bottom: 6px;
+  }
+
+  body.mode-grammar .custom-dialog-title { color: #e8edf8; }
+
+  .custom-dialog-sub {
+    font-size: 14px;
+    color: var(--muted);
+    font-style: italic;
+    margin-bottom: 18px;
+  }
+
+  .custom-dialog-input {
+    width: 100%;
+    padding: 11px 14px;
+    font-family: 'Playfair Display', serif;
+    font-size: 17px;
+    font-style: italic;
+    background: var(--parchment);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    color: var(--ink);
+    outline: none;
+    margin-bottom: 16px;
+    transition: border-color 0.2s;
+  }
+
+  .custom-dialog-input:focus { border-color: var(--terracotta); }
+
+  body.mode-grammar .custom-dialog-input {
+    background: #111c36;
+    border-color: rgba(107,154,240,0.25);
+    color: #e8edf8;
+  }
+
+  .custom-dialog-btns {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+
+  .custom-dialog-cancel {
+    padding: 9px 20px;
+    background: transparent;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 15px;
+    cursor: pointer;
+    color: var(--stone);
+    transition: all 0.2s;
+  }
+
+  .custom-dialog-cancel:hover { border-color: var(--stone); color: var(--ink); }
+
+  .custom-dialog-ok {
+    padding: 9px 24px;
+    background: var(--terracotta);
+    border: none;
+    border-radius: 4px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 15px;
+    cursor: pointer;
+    color: white;
+    transition: background 0.2s;
+  }
+
+  .custom-dialog-ok:hover { background: #a8411e; }
+  .custom-dialog-ok.danger { background: #c0392b; }
+  .custom-dialog-ok.danger:hover { background: #a93226; }
+  .custom-dialog-ok.sage { background: var(--sage); }
+  .custom-dialog-ok.sage:hover { background: #3a4d2e; }
+
+
+  /* ── Back button ─────────────────────────────────────────── */
+  .back-btn {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    padding: 7px 14px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 14px;
+    cursor: pointer;
+    color: var(--stone);
+    transition: all 0.2s;
+    margin-bottom: 16px;
+  }
+
+  .back-btn.visible { display: flex; }
+  .back-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
+  body.mode-grammar .back-btn { border-color: rgba(107,154,240,0.25); color: #6b7fa8; }
+  body.mode-grammar .back-btn:hover { border-color: #6b9af0; color: #6b9af0; }
+
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <button class="header-fav-btn" id="headerFavBtn" onclick="switchMode('favorites')" title="Избранное">
+      <span class="header-fav-star">★</span>
+      <span id="headerFavLabel">Preferiti</span>
+
+    </button>
+    <div class="header-ornament" id="headerOrnament">Vocabolario completo</div>
+    <h1 id="headerTitle">Diziona<em>rio</em></h1>
+    <p class="subtitle" id="headerSubtitle">Italiano · Russo · Inglese</p>
+    <div class="header-rule"><div class="rule-diamond"></div></div>
+  </header>
+
+  <nav class="app-nav">
+    <button class="app-nav-btn active" id="navDict" onclick="switchMode('dict')">
+      <span class="nav-icon">📖</span>
+      <span>Il <span class="nav-label-it">Dizionario</span></span>
+    </button>
+    <button class="app-nav-btn" id="navGram" onclick="switchMode('grammar')">
+      <span class="nav-icon">📐</span>
+      <span>La <span class="nav-label-it">Grammatica</span></span>
+    </button>
+    <button class="app-nav-btn" id="navCarte" onclick="switchMode('carte')">
+      <span class="nav-icon">🃏</span>
+      <span>Le <span class="nav-label-it">Carte</span></span>
+    </button>
+  </nav>
+
+  <div class="search-area">
+    <div class="lang-toggle">
+      <button class="lang-toggle-btn active" id="btnIT" onclick="setLang('it')"><span class="lang-flag">🇮🇹 </span>Italiano</button>
+      <button class="lang-toggle-btn" id="btnRU" onclick="setLang('ru')"><span class="lang-flag">🇷🇺 </span>Русский</button>
+    </div>
+    <div class="search-wrapper">
+      <input
+        type="text"
+        class="search-input"
+        id="searchInput"
+        placeholder="Cerca una parola italiana…"
+        autocomplete="off"
+        autocorrect="off"
+        spellcheck="false"
+      />
+      <button class="search-btn" id="searchBtn" title="Cerca">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Back button -->
+  <button class="back-btn" id="backBtn" onclick="goBack()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    Назад
+  </button>
+
+  <!-- States -->
+  <div class="state-msg active" id="initialMsg">
+    <div id="initialMsgText">Inserisci una parola italiana per iniziare</div>
+    <div style="font-size:13px;margin-top:8px;color:var(--stone)" id="initialMsgSub">Введите итальянское слово для поиска</div>
+  </div>
+
+  <!-- Russian results list -->
+  <div class="ru-results" id="ruResults"></div>
+
+  <!-- Grammar result -->
+  <div class="grammar-card" id="grammarCard"></div>
+
+  <!-- Favorites screen -->
+  <!-- Le Carte screens -->
+  <div class="carte-screen" id="carteScreen"></div>
+  <div class="flashcard-screen" id="flashcardScreen"></div>
+  <div class="write-screen" id="writeScreen"></div>
+
+  <div class="fav-screen" id="favScreen">
+    <div class="fav-header">
+      <div class="fav-title">Preferiti — Избранное</div>
+      <div class="fav-tabs">
+        <button class="fav-tab active" id="favTabWords" onclick="switchFavTab('words')">Слова</button>
+        <button class="fav-tab" id="favTabGram" onclick="switchFavTab('grammar')">Грамматика</button>
+      </div>
+    </div>
+    <div class="fav-search-wrap">
+      <input type="text" class="fav-search" id="favSearch" placeholder="Поиск по избранному…" oninput="filterFavList()" autocomplete="off" spellcheck="false">
+      <span class="fav-search-icon">🔍</span>
+    </div>
+    <div class="fav-list" id="favList"></div>
+  </div>
+
+  <div class="state-msg" id="loadingMsg">
+    <div>Ricerca in corso…</div>
+    <div class="loading-dots"><span></span><span></span><span></span></div>
+  </div>
+
+  <div class="error-msg" id="errorMsg">
+    <div class="error-icon">🔎</div>
+    <div class="error-text" id="errorText">Parola non trovata</div>
+  </div>
+
+  <!-- Result -->
+  <div class="result-card" id="resultCard">
+
+    <div class="word-hero" style="position:relative">
+      <div class="hero-actions">
+        <button class="hero-action-btn deck" id="dictDeckBtn" title="Добавить в колоду" onclick="openDeckPopup()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8a2 2 0 0 0-2 2v2h12V5a2 2 0 0 0-2-2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+        </button>
+        <button class="hero-action-btn refresh" id="dictRefreshBtn" title="Обновить статью" onclick="refreshEntry('dict')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>
+        <button class="hero-action-btn star" id="dictStarBtn" title="Добавить в избранное" onclick="toggleFav('dict')">☆</button>
+      </div>
+      <div class="word-type-badge" id="wordType">—</div>
+      <div class="word-main">
+        <div class="word-title" id="wordTitle">—</div>
+        <div class="word-phonetic" id="wordPhonetic">—</div>
+      </div>
+      <div class="word-gender" id="wordGender"></div>
+    </div>
+
+    <div class="translations-section">
+      <div class="lang-row">
+        <div class="lang-label"><span class="lang-flag">🇷🇺</span>RU</div>
+        <div>
+          <div class="translation-text" id="transRU">—</div>
+          <div class="translation-alts" id="transRUalt"></div>
+        </div>
+      </div>
+      <div class="lang-row">
+        <div class="lang-label"><span class="lang-flag">🇬🇧</span>EN</div>
+        <div>
+          <div class="translation-text" id="transEN">—</div>
+          <div class="translation-alts" id="transENalt"></div>
+        </div>
+      </div>
+      <div class="plural-row" id="pluralRow" style="display:none">
+        <div class="plural-label">Forme</div>
+        <div class="plural-forms" id="pluralForms"></div>
+      </div>
+    </div>
+
+    <div class="definition-section">
+      <div class="section-label">Definizione</div>
+      <div class="definition-text" id="definitionText">—</div>
+      <div class="example-text" id="exampleText" style="display:none"></div>
+    </div>
+
+    <!-- Conjugation (shown only for verbs) -->
+    <div class="conjugation-section" id="conjugationSection" style="display:none">
+      <div class="conjugation-header" id="conjToggle">
+        <div class="conj-title">
+          <div class="conj-icon">V</div>
+          Coniugazione completa
+        </div>
+        <div class="toggle-arrow" id="toggleArrow">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </div>
+      </div>
+      <div class="conjugation-body" id="conjBody">
+        <div class="tense-tabs" id="tenseTabs"></div>
+        <div class="conj-table-wrap" id="conjTableWrap"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Favourites overlay + panel -->
+<div class="fav-overlay" id="favOverlay" onclick="closeFavPanel()"></div>
+<div class="fav-panel" id="favPanel">
+  <div class="fav-panel-header">
+    <div class="fav-panel-title">⭐ Избранное</div>
+    <button class="fav-close" onclick="closeFavPanel()">✕</button>
+  </div>
+  <div class="fav-tabs">
+    <button class="fav-tab active" id="favTabWords" onclick="switchFavTab('words')">📖 Слова</button>
+    <button class="fav-tab" id="favTabGram" onclick="switchFavTab('grammar')">📐 Грамматика</button>
+  </div>
+  <div class="fav-list" id="favList"></div>
+</div>
+
+<!-- Floating favorites button (mobile) -->
+<button class="fav-float-btn" id="favFloatBtn" onclick="favFloatClick()" title="Избранное">
+  <span id="favFloatIcon">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" style="display:block">
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+    </svg>
+  </span>
+  <span id="favFloatBack" style="display:none">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block">
+      <polyline points="15 18 9 12 15 6"/>
+    </svg>
+  </span>
+</button>
+
+<!-- Static file input for mobile import -->
+<input type="file" id="globalImportInput" accept=".txt,.csv" style="position:fixed;top:-200px;left:-200px;opacity:0;width:1px;height:1px;">
+
+<!-- Custom dialog -->
+<div class="custom-dialog-overlay" id="customDialogOverlay">
+  <div class="custom-dialog" id="customDialog">
+    <div class="custom-dialog-title" id="customDialogTitle"></div>
+    <div class="custom-dialog-sub" id="customDialogSub"></div>
+    <input class="custom-dialog-input" id="customDialogInput" autocomplete="off">
+    <div class="custom-dialog-btns">
+      <button class="custom-dialog-cancel" id="customDialogCancel">Отмена</button>
+      <button class="custom-dialog-ok" id="customDialogOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Deck popup -->
+<div class="deck-popup-overlay" id="deckPopupOverlay" onclick="closeDeckPopup(event)">
+  <div class="deck-popup">
+    <div class="deck-popup-handle"></div>
+    <div class="deck-popup-title" id="deckPopupTitle">Добавить в колоду</div>
+    <div class="deck-popup-sub" id="deckPopupSub"></div>
+    <div class="deck-popup-list" id="deckPopupList"></div>
+    <div class="deck-popup-new">
+      <input class="deck-popup-input" id="deckPopupInput" placeholder="Новая колода…" autocomplete="off">
+      <button class="deck-popup-create" onclick="createDeckFromPopup()">+ Создать</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Конфигурация ─────────────────────────────────────────────────────────────
+const GEMINI_API_KEY = "AIzaSyA-n2dflc63NVqPbsv466HlhjsGDtsGk0g";
+const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
+
+// ── Supabase ──────────────────────────────────────────────────────────────────
+const SB_URL = "https://qmsgumhvbsefpbbkvxgs.supabase.co";
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtc2d1bWh2YnNlZnBiYmt2eGdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MjI2OTYsImV4cCI6MjA4ODk5ODY5Nn0.z30dHGdi0uhNH-t1cRS2mtGe4_liamy3FGSIJIrhhmc";
+const SB_H = {
+  "Content-Type": "application/json",
+  "apikey": SB_KEY,
+  "Authorization": `Bearer ${SB_KEY}`
+};
+
+async function sbGet(table, key) {
+  try {
+    const col = (table === 'grammar' || table === 'favorites_grammar') ? 'topic' : 'word';
+    const url = `${SB_URL}/rest/v1/${table}?${col}=eq.${encodeURIComponent(key)}&select=data`;
+    const getHeaders = {
+      "apikey": SB_KEY,
+      "Authorization": `Bearer ${SB_KEY}`,
+      "Accept": "application/json",
+      "Content-Type": "application/json"
+    };
+    const res = await fetch(url, { method: "GET", headers: getHeaders });
+    const text = await res.text();
+    console.log(`sbGet(${table}, "${key}") status=${res.status}:`, text.slice(0, 200));
+    if (!res.ok) return null;
+    const rows = JSON.parse(text);
+    if (Array.isArray(rows) && rows.length > 0) return rows[0].data;
+  } catch(e) { console.warn("Supabase sbGet exception:", e); }
+  return null;
+}
+
+// Keep sbGetTopic as alias for compatibility
+async function sbGetTopic(table, key) { return sbGet(table, key); }
+
+async function sbSave(table, keyCol, keyVal, data) {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/${table}`, {
+      method: "POST",
+      headers: { ...SB_H, "Prefer": "resolution=merge-duplicates" },
+      body: JSON.stringify({ [keyCol]: keyVal, data })
+    });
+    if (!res.ok) console.warn("Supabase sbSave error:", res.status, await res.text());
+  } catch(e) { console.warn("Supabase sbSave exception:", e); }
+}
+
+function showCacheBadge() {
+  if (!document.getElementById('cacheStyle')) {
+    const s = document.createElement('style');
+    s.id = 'cacheStyle';
+    s.textContent = `
+      @keyframes toastIn { from{opacity:0;transform:translateX(12px)} to{opacity:1;transform:translateX(0)} }
+      @keyframes toastOut { from{opacity:1} to{opacity:0} }
+      .cache-toast {
+        position:fixed; top:20px; right:20px; z-index:9999;
+        background: #1e3a1e; border: 1px solid rgba(80,180,80,0.4);
+        color: #7ed87e; font-family:'JetBrains Mono',monospace; font-size:11px;
+        padding:6px 14px; border-radius:20px; letter-spacing:0.08em;
+        pointer-events:none;
+        animation: toastIn 0.25s ease, toastOut 0.4s ease 2s forwards;
+      }
+    `;
+    document.head.appendChild(s);
+  }
+  const t = document.createElement('div');
+  t.className = 'cache-toast';
+  t.textContent = '⚡ из кэша';
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+// ── Состояние ────────────────────────────────────────────────────────────────
+let currentLang = 'it';
+let currentMode = 'dict'; // 'dict' | 'grammar'
+let currentConjugations = {};
+
+const $ = id => document.getElementById(id);
+
+// ── Переключение режима (Словарь / Грамматика) ────────────────────────────────
+function switchMode(mode, skipRender = false) {
+  currentMode = mode;
+  const isGram = mode === 'grammar';
+  const isFav = mode === 'favorites';
+  const isCarte = mode === 'carte';
+
+  document.body.classList.toggle('mode-grammar', isGram);
+  $('navDict').classList.toggle('active', mode === 'dict');
+  $('navGram').classList.toggle('active', isGram);
+  $('navCarte').classList.toggle('active', isCarte);
+  $('headerFavBtn').classList.toggle('active', isFav);
+  updateFavFloat(mode);
+
+
+  if (isCarte) {
+    $('headerOrnament').textContent = 'Colonne di studio';
+    $('headerTitle').innerHTML = 'Le <em>Carte</em>';
+    $('headerSubtitle').textContent = 'Колоды · Карточки · Заучивание';
+    document.querySelector('.lang-toggle').style.display = 'none';
+    document.querySelector('.search-area').style.display = 'none';
+    showState('carte');
+    if (!skipRender) renderCarteScreen();
+    return;
+  }
+
+  if (isFav) {
+    $('headerOrnament').textContent = 'Сохранённые статьи';
+    $('headerTitle').innerHTML = 'Pre<em>feriti</em>';
+    $('headerSubtitle').textContent = 'Словарь · Грамматика';
+    document.querySelector('.lang-toggle').style.display = 'none';
+    document.querySelector('.search-area').style.display = 'none';
+    // restore dict colors
+    $('headerOrnament').style.color = '';
+    $('headerTitle').style.color = '';
+    showState('favorites');
+    renderFavList(currentFavTab);
+    updateFavCount();
+    return;
+  }
+
+  document.querySelector('.search-area').style.display = 'block';
+
+  if (isGram) {
+    $('headerOrnament').textContent = 'Справочник правил';
+    $('headerTitle').innerHTML = 'La Gram<em>matica</em>';
+    $('headerSubtitle').textContent = 'Правила итальянского языка на русском';
+    $('searchInput').placeholder = 'Найти правило: pronomi, congiuntivo…';
+    // Hide dict lang toggle
+    document.querySelector('.lang-toggle').style.display = 'none';
+  } else {
+    $('headerOrnament').textContent = 'Vocabolario completo';
+    $('headerTitle').innerHTML = 'Diziona<em>rio</em>';
+    $('headerSubtitle').textContent = 'Italiano · Russo · Inglese';
+    $('searchInput').placeholder = currentLang === 'ru' ? 'Введите русское слово…' : 'Cerca una parola italiana…';
+    document.querySelector('.lang-toggle').style.display = 'flex';
+  }
+
+  $('searchInput').value = '';
+  showState('initial');
+  updateInitialMsg();
+}
+
+function updateInitialMsg() {
+  if (currentMode === 'grammar') {
+    $('initialMsgText').textContent = 'Введите тему для поиска правила';
+    $('initialMsgSub').textContent = 'Например: pronomi, articoli, congiuntivo, passato prossimo…';
+  } else if (currentLang === 'ru') {
+    $('initialMsgText').textContent = 'Введите русское слово для поиска';
+    $('initialMsgSub').textContent = 'Будет показан список итальянских переводов';
+  } else {
+    $('initialMsgText').textContent = 'Inserisci una parola italiana per iniziare';
+    $('initialMsgSub').textContent = 'Введите итальянское слово для поиска';
+  }
+}
+
+// ── Переключение языка в словаре ─────────────────────────────────────────────
+function setLang(lang) {
+  currentLang = lang;
+  $('btnIT').classList.toggle('active', lang === 'it');
+  $('btnRU').classList.toggle('active', lang === 'ru');
+  $('searchInput').placeholder = lang === 'ru' ? 'Введите русское слово…' : 'Cerca una parola italiana…';
+  updateInitialMsg();
+  showState('initial');
+  $('searchInput').value = '';
+  $('searchInput').focus();
+}
+
+// ── Управление состояниями ────────────────────────────────────────────────────
+// ── Navigation history ───────────────────────────────────────────────────────
+const navHistory = [];
+let _currentState = 'initial';
+let _suppressHistory = false;
+
+function pushHistory(state, restoreFn) {
+  navHistory.push({ state, restoreFn });
+  updateBackBtn();
+}
+
+function goBack() {
+  if (navHistory.length === 0) return;
+  const prev = navHistory.pop();
+  _suppressHistory = true;
+  if (prev.restoreFn) prev.restoreFn();
+  _suppressHistory = false;
+  updateBackBtn();
+}
+
+function updateBackBtn() {
+  const btn = $('backBtn');
+  if (!btn) return;
+  btn.classList.toggle('visible', navHistory.length > 0);
+}
+
+// States that should be tracked in history (not loading/error/initial)
+const TRACKABLE = ['result','rulist','grammar','favorites','carte'];
+
+function showState(state) {
+  // Auto-push history when moving between trackable states
+  if (!_suppressHistory && TRACKABLE.includes(state) && TRACKABLE.includes(_currentState) && state !== _currentState) {
+    const savedState = _currentState;
+    const savedMode = currentMode;
+    // Capture current content for restoration
+    if (savedState === 'result' && currentDictEntry) {
+      const e = currentDictEntry; const w = currentDictWord;
+      pushHistory(savedState, () => {
+        switchMode(savedMode, true);
+        renderEntry(e); showState('result');
+        currentDictEntry = e; currentDictWord = w;
+        $('searchInput').value = e.word || w;
+        checkIfStarred('dict', w);
+      });
+    } else if (savedState === 'grammar' && currentGramEntry) {
+      const g = currentGramEntry; const t = currentGramTopic;
+      pushHistory(savedState, () => {
+        switchMode(savedMode, true);
+        renderGrammar(g); showState('grammar');
+      });
+    } else if (savedState === 'rulist') {
+      const el = $('ruResults').innerHTML;
+      pushHistory(savedState, () => {
+        switchMode(savedMode, true);
+        $('ruResults').innerHTML = el;
+        showState('rulist');
+      });
+    } else if (savedState === 'carte') {
+      const savedDeckId = currentDeckId;
+      const savedDeckName = currentDeckName;
+      if (savedDeckId) {
+        pushHistory(savedState, () => {
+          switchMode('carte', true);
+          openDeckView(savedDeckId, savedDeckName);
+        });
+      } else {
+        pushHistory(savedState, () => {
+          switchMode('carte', true);
+          renderCarteScreen();
+        });
+      }
+    } else if (savedState === 'favorites') {
+      const tab = currentFavTab;
+      pushHistory(savedState, () => {
+        switchMode('favorites', true);
+        renderFavList(tab);
+      });
+    }
+  }
+
+  _currentState = state;
+  ['initialMsg','loadingMsg','errorMsg','resultCard','ruResults','grammarCard','favScreen','carteScreen','flashcardScreen','writeScreen']
+    .forEach(id => $(id).classList.remove('active'));
+  if (state === 'initial')        $('initialMsg').classList.add('active');
+  else if (state === 'loading')   $('loadingMsg').classList.add('active');
+  else if (state === 'error')     $('errorMsg').classList.add('active');
+  else if (state === 'result')    $('resultCard').classList.add('active');
+  else if (state === 'rulist')    $('ruResults').classList.add('active');
+  else if (state === 'grammar')   $('grammarCard').classList.add('active');
+  else if (state === 'favorites') $('favScreen').classList.add('active');
+  else if (state === 'carte')     $('carteScreen').classList.add('active');
+  updateBackBtn();
+}
+
+// ── Gemini API ────────────────────────────────────────────────────────────────
+async function callGemini(prompt) {
+  const response = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.2 }
+    })
+  });
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message);
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const objStart = text.indexOf('{');
+  const arrStart = text.indexOf('[');
+  // Pick whichever comes first in the response
+  if (arrStart !== -1 && (objStart === -1 || arrStart < objStart)) {
+    const arrEnd = text.lastIndexOf(']');
+    if (arrEnd !== -1) return JSON.parse(text.slice(arrStart, arrEnd + 1));
+  }
+  if (objStart !== -1) {
+    const objEnd = text.lastIndexOf('}');
+    if (objEnd !== -1) return JSON.parse(text.slice(objStart, objEnd + 1));
+  }
+  throw new Error('No JSON found in: ' + text.slice(0, 200));
+}
+
+// ── Поиск итальянского слова ──────────────────────────────────────────────────
+async function lookupWord(word) {
+  if (!word.trim()) return;
+  showState('loading');
+  const prompt = `You are an expert Italian linguist. Given the Italian word "${word}", provide a complete dictionary entry in JSON format.
+Return ONLY valid JSON, no markdown, no explanation. Schema:
+{
+  "word": "canonical form",
+  "partOfSpeech": "sostantivo / verbo / aggettivo / avverbio / preposizione / congiunzione / pronome / articolo / interiezione",
+  "category": "cibo / natura / persone / lavoro / casa / viaggio / emozioni / tempo / corpo / cultura / altro",
+  "gender": "m. / f. / m./f. / null",
+  "phonetic": "IPA with ˈ before stressed syllable",
+  "singular": { "article": "il/lo/la/l'", "form": "word" },
+  "plural": { "article": "i/gli/le", "form": "plural form" },
+  "russian": { "main": "primary Russian translation", "alternatives": "2-3 alts semicolon-separated or empty" },
+  "english": { "main": "primary English translation", "alternatives": "2-3 alts semicolon-separated or empty" },
+  "definition": "Definition in Italian (1-2 sentences)",
+  "example": "Example sentence in Italian",
+  "isNoun": true/false,
+  "isVerb": true/false,
+  "conjugations": {
+    "Indicativo Presente": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
+    "Indicativo Passato Prossimo": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
+    "Indicativo Imperfetto": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
+    "Indicativo Trapassato Prossimo": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
+    "Indicativo Passato Remoto": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
+    "Indicativo Futuro Semplice": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
+    "Indicativo Futuro Anteriore": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
+    "Congiuntivo Presente": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
+    "Congiuntivo Passato": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
+    "Congiuntivo Imperfetto": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
+    "Congiuntivo Trapassato": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
+    "Condizionale Presente": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
+    "Condizionale Passato": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
+    "Imperativo": {"tu":"","lui/lei":"","noi":"","voi":"","loro":""},
+    "Infinito": {"Presente":"","Passato":""},
+    "Participio": {"Presente":"","Passato":""},
+    "Gerundio": {"Presente":"","Passato":""}
+  }
+}
+If isVerb false → conjugations null. If isNoun false → singular/plural null. If not a real Italian word → word null.`;
+  const cachedWord = await sbGet('dictionary', word.toLowerCase());
+  if (cachedWord) {
+    try { renderEntry(cachedWord); showState('result'); showCacheBadge(); }
+    catch(e) { console.error("renderEntry from cache failed:", e); /* fall through to Gemini */ }
+    return;
+  }
+
+  try {
+    const entry = await callGemini(prompt);
+    if (!entry.word) { $('errorText').textContent = `"${word}" — parola non trovata`; showState('error'); return; }
+    await sbSave('dictionary', 'word', (entry.word || word).toLowerCase(), entry);
+    renderEntry(entry);
+    showState('result');
+  } catch(err) {
+    console.error(err);
+    console.error("lookupWord error:", err);
+    const msg = err.message || '';
+    const isQuota = msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429');
+    $('errorText').textContent = isQuota
+      ? '⏳ Лимит Gemini исчерпан — попробуйте позже или смените ключ'
+      : 'Errore: ' + msg;
+    showState('error');
+  }
+}
+
+// ── Поиск русского слова ──────────────────────────────────────────────────────
+async function lookupRussian(word) {
+  if (!word.trim()) return;
+  showState('loading');
+  const prompt = `You are an expert Italian linguist. The user entered the Russian word "${word}".
+Find all meaningful Italian translations. Return ONLY a JSON array, no markdown. Each item:
+{"italian":"canonical form","partOfSpeech":"sostantivo/verbo/etc","gender":"m./f./null","shortDefinition":"краткое значение по-русски (4-8 слов)","register":"neutro/formale/colloquiale/letterario"}
+Return 1-8 items. If no translation exists, return [].`;
+  const cachedRu = await sbGet('russian_search', word.toLowerCase());
+  if (cachedRu) {
+    if (cachedRu.length === 1) { await lookupWord(cachedRu[0].italian); return; }
+    renderRuResults(word, cachedRu); showState('rulist'); showCacheBadge(); return;
+  }
+
+  try {
+    const results = await callGemini(prompt);
+    if (!Array.isArray(results) || results.length === 0) { $('errorText').textContent = `"${word}" — перевод не найден`; showState('error'); return; }
+    await sbSave('russian_search', 'word', word.toLowerCase(), results);
+    if (results.length === 1) { await lookupWord(results[0].italian); return; }
+    renderRuResults(word, results);
+    showState('rulist');
+  } catch(err) {
+    console.error(err);
+    console.error("lookupRussian error:", err);
+    $('errorText').textContent = 'Ошибка: ' + (err.message || 'соединение не удалось');
+    showState('error');
+  }
+}
+
+// ── Поиск грамматического правила ────────────────────────────────────────────
+const GRAMMAR_SUGGESTIONS = [
+  'articoli', 'pronomi personali', 'pronomi relativi', 'congiuntivo',
+  'condizionale', 'passato prossimo', 'imperfetto', 'futuro',
+  'imperativo', 'aggettivi', 'preposizioni', 'verbi modali',
+  'discorso indiretto', 'gerundio', 'participio', 'verbi riflessivi'
+];
+
+async function lookupGrammar(topic) {
+  if (!topic.trim()) return;
+  showState('loading');
+  const prompt = `Ты эксперт по итальянской грамматике. Пользователь ищет правило по теме: "${topic}".
+
+Составь подробную грамматическую статью на РУССКОМ языке. Верни ТОЛЬКО валидный JSON без markdown:
+{
+  "title": "Название темы по-итальянски",
+  "titleRu": "Название по-русски",
+  "category": "Категория (Глаголы / Существительные / Местоимения / Предлоги / Синтаксис / etc)",
+  "explanation": "Подробное объяснение на русском (3-5 предложений). Используй **жирный** для ключевых терминов и *курсив* для итальянских примеров прямо в тексте.",
+  "rules": [
+    { "text": "Правило 1 — подробно, с примерами **в тексте**. *Esempio: ...* — перевод" },
+    { "text": "Правило 2..." }
+  ],
+  "table": {
+    "headers": ["Колонка 1", "Колонка 2", "Колонка 3"],
+    "rows": [
+      ["ячейка", "*итал. форма*", "пример"],
+      ["ячейка", "*итал. форма*", "пример"]
+    ]
+  },
+  "examples": [
+    { "it": "Итальянское предложение", "ru": "Перевод на русский", "pair": null },
+    { "it": "Пример с местоимением", "ru": "Перевод", "pair": "prev" }
+  ],
+  "errors": [
+    { "wrong": "Неправильная форма", "right": "Правильная форма", "explain": "Почему так" }
+  ],
+  "relatedTopics": ["связанная тема 1", "связанная тема 2", "связанная тема 3"]
+}
+
+Правила:
+- rules: 3-6 пунктов
+- table: если есть что показать в таблице (формы, окончания, местоимения и т.д.) — обязательно заполни; если нет смысла — пустой объект {}
+- examples: 3-6 примеров. Если примеры логически связаны парами (например, с существительным и с местоимением), используй поле "pair": для второго примера пары укажи "pair": "prev", для первого "pair": null. Не все примеры должны быть парными.
+- errors: 2-4 типичные ошибки русскоязычных
+- Если тема не относится к итальянской грамматике — верни { "error": "not_grammar" }`;
+
+  const cachedGram = await sbGetTopic('grammar', topic.toLowerCase());
+  if (cachedGram) { renderGrammar(cachedGram); showState('grammar'); showCacheBadge(); return; }
+
+  try {
+    const g = await callGemini(prompt);
+    if (g.error === 'not_grammar') {
+      $('errorText').textContent = `"${topic}" — попробуйте другую грамматическую тему`;
+      showState('error'); return;
+    }
+    await sbSave('grammar', 'topic', (g.title || topic).toLowerCase(), g);
+    renderGrammar(g);
+    showState('grammar');
+  } catch(err) {
+    console.error(err);
+    console.error("lookupGrammar error:", err);
+    $('errorText').textContent = 'Ошибка: ' + (err.message || 'соединение не удалось');
+    showState('error');
+  }
+}
+
+// ── Рендер грамматической статьи ─────────────────────────────────────────────
+function parseInline(text) {
+  return (text || '')
+    .replace(/\\\*/g, '____STAR____')   // protect escaped \*
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*\n]+?)\*/g, '<em>$1</em>')
+    .replace(/____STAR____/g, '*');
+}
+
+function renderGrammar(g) {
+  currentGramEntry = g;
+  const card = $('grammarCard');
+  card.innerHTML = '';
+
+  // Hero
+  const hero = document.createElement('div');
+  hero.className = 'grammar-hero';
+  hero.innerHTML = `
+    <div class="hero-actions">
+      <button class="hero-action-btn refresh" id="gramRefreshBtn" title="Обновить статью" onclick="refreshEntry('grammar')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      </button>
+      <button class="hero-action-btn star" id="gramStarBtn" title="Добавить в избранное" onclick="toggleFav('grammar')">☆</button>
+    </div>
+    <div class="grammar-topic-badge">${g.category || 'Grammatica'}</div>
+    <div class="grammar-title">${formatGrammarTitle(g.title || '')}</div>
+    <div class="grammar-subtitle-text">${g.titleRu || ''}</div>
+  `;
+  card.appendChild(hero);
+
+  // Explanation
+  if (g.explanation) {
+    const sec = makeSec('Объяснение');
+    const p = document.createElement('div');
+    p.className = 'grammar-explanation';
+    p.innerHTML = parseInline(g.explanation);
+    sec.appendChild(p);
+    card.appendChild(sec);
+  }
+
+  // Rules
+  if (g.rules && g.rules.length > 0) {
+    const sec = makeSec('Правила');
+    const list = document.createElement('div');
+    list.className = 'grammar-rules';
+    g.rules.forEach((r, i) => {
+      const rule = document.createElement('div');
+      rule.className = 'grammar-rule';
+      rule.innerHTML = `
+        <div class="grammar-rule-num">${i + 1}</div>
+        <div class="grammar-rule-text">${parseInline(r.text)}</div>
+      `;
+      list.appendChild(rule);
+    });
+    sec.appendChild(list);
+    card.appendChild(sec);
+  }
+
+  // Table
+  if (g.table && g.table.headers && g.table.headers.length > 0) {
+    const sec = makeSec('Таблица форм');
+    const tbl = document.createElement('table');
+    tbl.className = 'grammar-table';
+    const thead = document.createElement('thead');
+    const hrow = document.createElement('tr');
+    g.table.headers.forEach(h => {
+      const th = document.createElement('th');
+      th.textContent = h;
+      hrow.appendChild(th);
+    });
+    thead.appendChild(hrow);
+    tbl.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    (g.table.rows || []).forEach(row => {
+      const tr = document.createElement('tr');
+      row.forEach(cell => {
+        const td = document.createElement('td');
+        td.innerHTML = parseInline(cell);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody);
+    const tblWrap = document.createElement('div');
+    tblWrap.className = 'grammar-table-wrap';
+    tblWrap.appendChild(tbl);
+    sec.appendChild(tblWrap);
+    card.appendChild(sec);
+  }
+
+  // Examples
+  if (g.examples && g.examples.length > 0) {
+    const sec = makeSec('Примеры');
+    const list = document.createElement('div');
+    list.className = 'grammar-examples';
+    let currentPair = null;
+    g.examples.forEach(ex => {
+      const el = document.createElement('div');
+      el.className = 'grammar-example';
+      el.innerHTML = `
+        <div class="grammar-example-it">${parseInline(ex.it)}</div>
+        <div class="grammar-example-ru">${parseInline(ex.ru)}</div>
+      `;
+      if (ex.pair === 'prev' && currentPair) {
+        // Add arrow connector and append to pair group
+        const arrow = document.createElement('div');
+        arrow.className = 'grammar-example-arrow';
+        arrow.textContent = '↓';
+        currentPair.appendChild(arrow);
+        currentPair.appendChild(el);
+      } else {
+        currentPair = document.createElement('div');
+        currentPair.className = 'grammar-example-group';
+        currentPair.appendChild(el);
+        list.appendChild(currentPair);
+      }
+    });
+    sec.appendChild(list);
+    card.appendChild(sec);
+  }
+
+  // Errors
+  if (g.errors && g.errors.length > 0) {
+    const sec = makeSec('Типичные ошибки');
+    const list = document.createElement('div');
+    list.className = 'grammar-errors';
+    g.errors.forEach(err => {
+      const wrong = document.createElement('div');
+      wrong.className = 'grammar-error wrong';
+      wrong.innerHTML = `<div class="grammar-error-mark">✗</div><div class="grammar-error-content"><div class="grammar-error-form">${parseInline(err.wrong)}</div><div class="grammar-error-explain">${parseInline(err.explain)}</div></div>`;
+      const right = document.createElement('div');
+      right.className = 'grammar-error right';
+      right.innerHTML = `<div class="grammar-error-mark">✓</div><div class="grammar-error-content"><div class="grammar-error-form">${parseInline(err.right)}</div></div>`;
+      const pair = document.createElement('div');
+      pair.className = 'grammar-error-pair';
+      pair.appendChild(wrong);
+      pair.appendChild(right);
+      list.appendChild(pair);
+    });
+    sec.appendChild(list);
+    card.appendChild(sec);
+  }
+
+  // Related topics
+  if (g.relatedTopics && g.relatedTopics.length > 0) {
+    const sec = makeSec('Смежные темы');
+    const sugg = document.createElement('div');
+    sugg.className = 'grammar-suggestions';
+    g.relatedTopics.forEach(t => {
+      const btn = document.createElement('button');
+      btn.className = 'grammar-suggestion';
+      btn.textContent = t;
+      btn.onclick = () => { $('searchInput').value = t; lookupGrammar(t); };
+      sugg.appendChild(btn);
+    });
+    sec.appendChild(sugg);
+    card.appendChild(sec);
+  }
+  currentGramEntry = g;
+  currentGramTopic = (g.title || '').toLowerCase();
+  setTimeout(() => checkIfStarred('grammar', currentGramTopic), 100);
+  updateFavCount();
+}
+
+function makeSec(label) {
+  const sec = document.createElement('div');
+  sec.className = 'grammar-section';
+  const lbl = document.createElement('div');
+  lbl.className = 'grammar-section-label';
+  lbl.textContent = label;
+  sec.appendChild(lbl);
+  return sec;
+}
+
+function formatGrammarTitle(title) {
+  // Italicize the last word for style
+  const words = title.trim().split(' ');
+  if (words.length <= 1) return `<em>${title}</em>`;
+  const last = words.pop();
+  return words.join(' ') + ' <em>' + last + '</em>';
+}
+
+// ── Рендер результатов поиска с русского ────────────────────────────────────
+function renderRuResults(query, results) {
+  const container = $('ruResults');
+  container.innerHTML = '';
+  const title = document.createElement('div');
+  title.className = 'ru-results-title';
+  title.textContent = `Переводы слова «${query}»`;
+  container.appendChild(title);
+  results.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'ru-word-card';
+    card.innerHTML = `
+      <div class="ru-word-left">
+        <div class="ru-word-italian">${item.italian}</div>
+        <div class="ru-word-meta">${item.partOfSpeech}${item.gender ? ' · ' + item.gender : ''} · ${item.shortDefinition}${item.register && item.register !== 'neutro' ? ' · <em>' + item.register + '</em>' : ''}</div>
+      </div>
+      <div class="ru-word-arrow">→</div>
+    `;
+    card.onclick = () => {
+      setLang('it'); $('searchInput').value = item.italian; lookupWord(item.italian);
+    };
+    container.appendChild(card);
+  });
+}
+
+// ── Рендер словарной статьи ───────────────────────────────────────────────────
+function highlightStress(phonetic) {
+  return (phonetic || '').replace(/ˈ([^ˌ\s.]+)/g, (m, syl) => `ˈ<span class="stress">${syl}</span>`);
+}
+
+function renderEntry(e) {
+  currentDictEntry = e;
+  currentDictWord = (e.word || '').toLowerCase();
+  checkIfStarred('dict', (e.word || '').toLowerCase());
+
+  // If entry is incomplete (from CSV import), show reload hint
+  const isIncomplete = !e.definition || (!e.english?.main && e.english?.main !== undefined);
+  const existingHint = document.getElementById('incompleteHint');
+  if (existingHint) existingHint.remove();
+  if (isIncomplete) {
+    const hint = document.createElement('div');
+    hint.id = 'incompleteHint';
+    hint.style.cssText = 'text-align:center;padding:10px;font-size:13px;font-style:italic;color:var(--muted);cursor:pointer;';
+    hint.innerHTML = '⟳ Неполная статья — <u>загрузить полностью</u>';
+    hint.onclick = () => refreshEntry('dict');
+    $('resultCard').appendChild(hint);
+  }
+  $('wordTitle').textContent = e.word;
+  $('wordPhonetic').innerHTML = highlightStress(e.phonetic);
+  $('wordType').textContent = e.partOfSpeech || '—';
+  // Category badge
+  const existingCat = document.getElementById('wordCategoryBadge');
+  if (existingCat) existingCat.remove();
+  if (e.category) {
+    const cat = document.createElement('span');
+    cat.id = 'wordCategoryBadge';
+    cat.className = 'word-category-badge cat-' + (e.category || 'altro').toLowerCase().replace(/[^a-z]/g,'').slice(0,8);
+    cat.textContent = e.category;
+    $('wordType').after(cat);
+  }
+  $('wordGender').textContent = e.gender || '';
+  $('transRU').textContent = e.russian?.main || '—';
+  $('transRUalt').textContent = e.russian?.alternatives || '';
+  $('transEN').textContent = e.english?.main || '—';
+  $('transENalt').textContent = e.english?.alternatives || '';
+
+  const pluralRow = $('pluralRow');
+  if (e.isNoun && e.singular && e.plural) {
+    pluralRow.style.display = 'grid';
+    $('pluralForms').innerHTML = `
+      <div class="plural-item">
+        <div class="plural-item-label">Singolare</div>
+        <div class="plural-item-form"><em>${e.singular.article}</em>${e.singular.form}</div>
+      </div>
+      <div class="plural-item">
+        <div class="plural-item-label">Plurale</div>
+        <div class="plural-item-form"><em>${e.plural.article}</em>${e.plural.form}</div>
+      </div>`;
+  } else {
+    pluralRow.style.display = 'none';
+  }
+
+  $('definitionText').textContent = e.definition || '—';
+  if (e.example) { $('exampleText').textContent = '« ' + e.example + ' »'; $('exampleText').style.display = 'block'; }
+  else { $('exampleText').style.display = 'none'; }
+
+  const conjSection = $('conjugationSection');
+  if (e.isVerb && e.conjugations) {
+    conjSection.style.display = 'block';
+    currentConjugations = e.conjugations;
+    renderTenseTabs(e.conjugations);
+    $('conjBody').classList.remove('open');
+    $('conjToggle').classList.remove('open');
+  } else {
+    conjSection.style.display = 'none';
+  }
+}
+
+// ── Спряжения ────────────────────────────────────────────────────────────────
+const TENSE_GROUPS = [
+  { label: 'Indicativo', tenses: ['Indicativo Presente','Indicativo Passato Prossimo','Indicativo Imperfetto','Indicativo Trapassato Prossimo','Indicativo Passato Remoto','Indicativo Futuro Semplice','Indicativo Futuro Anteriore'] },
+  { label: 'Congiuntivo', tenses: ['Congiuntivo Presente','Congiuntivo Passato','Congiuntivo Imperfetto','Congiuntivo Trapassato'] },
+  { label: 'Condizionale', tenses: ['Condizionale Presente','Condizionale Passato'] },
+  { label: 'Imperativo', tenses: ['Imperativo'] },
+  { label: 'Forme nominali', tenses: ['Infinito','Participio','Gerundio'] }
+];
+
+function renderTenseTabs(conj) {
+  const tabs = $('tenseTabs');
+  tabs.innerHTML = '';
+  const available = Object.keys(conj);
+  let firstBtn = null, firstTense = null;
+  TENSE_GROUPS.forEach(group => {
+    const groupTenses = group.tenses.filter(t => available.includes(t));
+    if (!groupTenses.length) return;
+    const groupEl = document.createElement('div'); groupEl.className = 'tense-group';
+    const labelEl = document.createElement('div'); labelEl.className = 'tense-group-label'; labelEl.textContent = group.label;
+    groupEl.appendChild(labelEl);
+    const btnsEl = document.createElement('div'); btnsEl.className = 'tense-group-buttons';
+    groupTenses.forEach(tense => {
+      const shortName = tense.replace(/^Indicativo |^Congiuntivo |^Condizionale /, '');
+      const btn = document.createElement('button');
+      btn.className = 'tense-tab'; btn.textContent = shortName; btn.dataset.tense = tense;
+      btn.onclick = () => { document.querySelectorAll('.tense-tab').forEach(t => t.classList.remove('active')); btn.classList.add('active'); renderConjTable(tense, conj[tense]); };
+      btnsEl.appendChild(btn);
+      if (!firstBtn) { firstBtn = btn; firstTense = tense; }
+    });
+    groupEl.appendChild(btnsEl); tabs.appendChild(groupEl);
+  });
+  if (firstBtn) { firstBtn.classList.add('active'); renderConjTable(firstTense, conj[firstTense]); }
+}
+
+function renderConjTable(tense, forms) {
+  const wrap = $('conjTableWrap'); wrap.innerHTML = '';
+  const title = document.createElement('div'); title.className = 'tense-title-display'; title.textContent = tense; wrap.appendChild(title);
+  const grid = document.createElement('div'); grid.className = 'conj-grid';
+  Object.entries(forms).forEach(([pronoun, form]) => {
+    const row = document.createElement('div'); row.className = 'conj-row';
+    row.innerHTML = `<div class="conj-pronoun">${pronoun}</div><div class="conj-form">${form}</div>`;
+    grid.appendChild(row);
+  });
+  wrap.appendChild(grid);
+}
+
+$('conjToggle').addEventListener('click', () => {
+  $('conjBody').classList.toggle('open');
+  $('conjToggle').classList.toggle('open');
+});
+
+// ── Обновление статьи ────────────────────────────────────────────────────────
+async function refreshEntry(mode) {
+  const btnId = mode === 'dict' ? 'dictRefreshBtn' : 'gramRefreshBtn';
+  const btn = document.getElementById(btnId);
+  if (btn) btn.classList.add('spinning');
+
+  try {
+    if (mode === 'dict') {
+      const word = currentDictWord || (currentDictEntry && currentDictEntry.word ? currentDictEntry.word.toLowerCase() : '');
+      console.log('refreshEntry dict, word:', word);
+      if (!word) { console.warn('No word to refresh'); return; }
+      const delRes = await fetch(`${SB_URL}/rest/v1/dictionary?word=eq.${encodeURIComponent(word)}`, { method: 'DELETE', headers: SB_H });
+      console.log('Delete status:', delRes.status);
+      await lookupWord(word);
+    } else if (mode === 'grammar') {
+      const topic = currentGramTopic || '';
+      if (!topic) return;
+      await fetch(`${SB_URL}/rest/v1/grammar?topic=eq.${encodeURIComponent(topic)}`, { method: 'DELETE', headers: SB_H });
+      await lookupGrammar(topic);
+    }
+  } finally {
+    if (btn) btn.classList.remove('spinning');
+  }
+}
+
+// ── Избранное ─────────────────────────────────────────────────────────────────
+let currentFavTab = 'words';
+let currentDictEntry = null;
+let currentGramEntry = null;
+let currentDictWord = '';
+let currentGramTopic = '';
+
+async function getFavorites(type) {
+  try {
+    const col = type === 'words' ? 'word' : 'topic';
+    const table = type === 'words' ? 'favorites_dict' : 'favorites_grammar';
+    const res = await fetch(`${SB_URL}/rest/v1/${table}?select=*&order=created_at.desc`, { headers: SB_H });
+    const rows = await res.json();
+    return Array.isArray(rows) ? rows : [];
+  } catch(e) { return []; }
+}
+
+async function toggleFav(mode) {
+  if (mode === 'dict') {
+    if (!currentDictEntry) return;
+    const btn = document.getElementById('dictStarBtn');
+    const isStarred = btn.classList.contains('starred');
+    if (isStarred) {
+      await fetch(`${SB_URL}/rest/v1/favorites_dict?word=eq.${encodeURIComponent(currentDictWord)}`, { method: 'DELETE', headers: SB_H });
+      btn.innerHTML = '☆'; btn.classList.remove('starred');
+    } else {
+      await fetch(`${SB_URL}/rest/v1/favorites_dict`, {
+        method: 'POST', headers: { ...SB_H, 'Prefer': 'resolution=merge-duplicates' },
+        body: JSON.stringify({ word: currentDictWord, data: currentDictEntry })
+      });
+      btn.innerHTML = '★'; btn.classList.add('starred');
+    }
+    updateFavCount();
+  } else {
+    if (!currentGramEntry) return;
+    const btn = document.getElementById('gramStarBtn');
+    const isStarred = btn.classList.contains('starred');
+    if (isStarred) {
+      await fetch(`${SB_URL}/rest/v1/favorites_grammar?topic=eq.${encodeURIComponent(currentGramTopic)}`, { method: 'DELETE', headers: SB_H });
+      btn.innerHTML = '☆'; btn.classList.remove('starred');
+    } else {
+      await fetch(`${SB_URL}/rest/v1/favorites_grammar`, {
+        method: 'POST', headers: { ...SB_H, 'Prefer': 'resolution=merge-duplicates' },
+        body: JSON.stringify({ topic: currentGramTopic, data: currentGramEntry })
+      });
+      btn.innerHTML = '★'; btn.classList.add('starred');
+    }
+    updateFavCount();
+  }
+}
+
+async function checkIfStarred(mode, key) {
+  try {
+    const table = mode === 'dict' ? 'favorites_dict' : 'favorites_grammar';
+    const col = mode === 'dict' ? 'word' : 'topic';
+    const btnId = mode === 'dict' ? 'dictStarBtn' : 'gramStarBtn';
+    const res = await fetch(`${SB_URL}/rest/v1/${table}?${col}=eq.${encodeURIComponent(key)}&select=${col}`, { headers: SB_H });
+    const rows = await res.json();
+    const btn = document.getElementById(btnId);
+    const starred = Array.isArray(rows) && rows.length > 0;
+    if (btn) {
+      btn.innerHTML = starred ? '★' : '☆';
+      btn.classList.toggle('starred', starred);
+    }
+  } catch(e) { console.warn('checkIfStarred error:', e); }
+}
+
+function updateFavCount() {} // badge removed
+
+function switchFavTab(tab) {
+  currentFavTab = tab;
+  $('favTabWords').classList.toggle('active', tab === 'words');
+  $('favTabGram').classList.toggle('active', tab === 'grammar');
+  const s = $('favSearch'); if (s) s.value = '';
+  cachedFavRows = [];
+  renderFavList(tab);
+}
+
+let cachedFavRows = [];
+
+async function renderFavList(tab) {
+  const list = $('favList');
+  const searchEl = $('favSearch');
+  if (searchEl) searchEl.value = '';
+  list.innerHTML = '<div class="fav-empty" style="font-style:italic;opacity:0.5">Загрузка…</div>';
+  const table = tab === 'words' ? 'favorites_dict' : 'favorites_grammar';
+  const keyCol = tab === 'words' ? 'word' : 'topic';
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/${table}?select=*&order=created_at.desc`, { headers: SB_H });
+    const rows = await res.json();
+    cachedFavRows = Array.isArray(rows) ? rows : [];
+    list.innerHTML = '';
+    if (cachedFavRows.length === 0) {
+      list.innerHTML = '<div class="fav-empty">Пока ничего не сохранено — нажмите ★ на любой статье</div>';
+      return;
+    }
+    renderFavRows(cachedFavRows, tab);
+  } catch(e) { list.innerHTML = '<div class="fav-empty">Ошибка загрузки</div>'; }
+}
+
+function filterFavList() {
+  const q = ($('favSearch')?.value || '').toLowerCase().trim();
+  if (!q) { renderFavRows(cachedFavRows, currentFavTab); return; }
+  const filtered = cachedFavRows.filter(row => {
+    const d = row.data;
+    const searchable = [
+      row.word || row.topic || '',
+      d?.word || d?.title || '',
+      d?.titleRu || '',
+      d?.russian?.main || '',
+      d?.category || '',
+      d?.partOfSpeech || '',
+    ].join(' ').toLowerCase();
+    return searchable.includes(q);
+  });
+  if (filtered.length === 0) {
+    $('favList').innerHTML = `<div class="fav-empty-search">Ничего не найдено по «${q}»</div>`;
+    return;
+  }
+  renderFavRows(filtered, currentFavTab);
+}
+
+function renderFavRows(rows, tab) {
+  const list = $('favList');
+  const keyCol = tab === 'words' ? 'word' : 'topic';
+  list.innerHTML = '';
+  rows.forEach(row => {
+      const key = row[keyCol];
+      const d = row.data;
+      const card = document.createElement('div');
+      card.className = 'fav-card';
+      if (tab === 'words') {
+        card.innerHTML = `
+          <div class="fav-card-left">
+            <div class="fav-card-word">${d.word || key}</div>
+            <div class="fav-card-meta">${d.partOfSpeech || ''}${d.gender ? ' · ' + d.gender : ''} · ${d.russian?.main || ''}</div>
+          </div>
+          <div class="fav-card-right">
+            <button class="fav-remove" title="Удалить" onclick="removeFav(event,'${tab}','${key.replace(/'/g,"\'")}')">✕</button>
+            <span class="fav-card-arrow">→</span>
+          </div>`;
+        card.onclick = (e) => {
+          if (e.target.classList.contains('fav-remove')) return;
+          switchMode('dict');
+          $('searchInput').value = key;
+          renderEntry(row.data);
+          showState('result');
+          currentDictEntry = row.data;
+          currentDictWord = key;
+          checkIfStarred('dict', key);
+        };
+      } else {
+        card.innerHTML = `
+          <div class="fav-card-left">
+            <div class="fav-card-word">${d.title || key}</div>
+            <div class="fav-card-meta">${d.titleRu || ''} · ${d.category || ''}</div>
+          </div>
+          <div class="fav-card-right">
+            <button class="fav-remove" title="Удалить" onclick="removeFav(event,'${tab}','${key.replace(/'/g,"\'")}')">✕</button>
+            <span class="fav-card-arrow">→</span>
+          </div>`;
+        card.onclick = (e) => {
+          if (e.target.classList.contains('fav-remove')) return;
+          switchMode('grammar');
+          $('searchInput').value = key;
+          renderGrammar(row.data);
+          showState('grammar');
+        };
+      }
+      list.appendChild(card);
+  });
+}
+
+async function removeFav(e, tab, key) {
+  e.stopPropagation();
+  const table = tab === 'words' ? 'favorites_dict' : 'favorites_grammar';
+  const col = tab === 'words' ? 'word' : 'topic';
+  await fetch(`${SB_URL}/rest/v1/${table}?${col}=eq.${encodeURIComponent(key)}`, { method: 'DELETE', headers: SB_H });
+  renderFavList(tab);
+  updateFavCount();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LE CARTE — DECKS, FLASHCARDS, WRITE MODE
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Custom dialog (replaces browser prompt/confirm) ──────────────────────────
+function showDialog({ title, sub = '', placeholder = '', okText = 'OK', okClass = '', hasInput = true, onOk }) {
+  $('customDialogTitle').textContent = title;
+  $('customDialogSub').textContent = sub;
+  const input = $('customDialogInput');
+  input.placeholder = placeholder;
+  input.value = '';
+  input.style.display = hasInput ? 'block' : 'none';
+  const okBtn = $('customDialogOk');
+  okBtn.textContent = okText;
+  okBtn.className = 'custom-dialog-ok' + (okClass ? ' ' + okClass : '');
+  $('customDialogOverlay').classList.add('open');
+  if (hasInput) setTimeout(() => input.focus(), 100);
+
+  // Remove old listeners
+  const newOk = okBtn.cloneNode(true);
+  okBtn.parentNode.replaceChild(newOk, okBtn);
+  const newCancel = $('customDialogCancel').cloneNode(true);
+  $('customDialogCancel').parentNode.replaceChild(newCancel, $('customDialogCancel'));
+
+  const close = () => $('customDialogOverlay').classList.remove('open');
+
+  $('customDialogOk').addEventListener('click', () => {
+    const val = hasInput ? $('customDialogInput').value.trim() : true;
+    close();
+    onOk(val);
+  });
+
+  $('customDialogCancel').addEventListener('click', close);
+
+  $('customDialogInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { $('customDialogOk').click(); }
+    if (e.key === 'Escape') close();
+  });
+}
+
+// ── Supabase deck helpers ─────────────────────────────────────────
+async function getDecks() {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/decks?select=*&order=created_at.desc`, { headers: SB_H });
+    const rows = await res.json();
+    return Array.isArray(rows) ? rows : [];
+  } catch(e) { return []; }
+}
+
+async function createDeck(name) {
+  const res = await fetch(`${SB_URL}/rest/v1/decks`, {
+    method: 'POST',
+    headers: { ...SB_H, 'Prefer': 'return=representation' },
+    body: JSON.stringify({ name })
+  });
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows[0] : rows;
+}
+
+async function deleteDeck(id) {
+  await fetch(`${SB_URL}/rest/v1/deck_cards?deck_id=eq.${id}`, { method: 'DELETE', headers: SB_H });
+  await fetch(`${SB_URL}/rest/v1/decks?id=eq.${id}`, { method: 'DELETE', headers: SB_H });
+}
+
+async function getDeckCards(deckId) {
+  const res = await fetch(`${SB_URL}/rest/v1/deck_cards?deck_id=eq.${deckId}&select=*&order=created_at.desc`, { headers: SB_H });
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows : [];
+}
+
+async function addCardToDeck(deckId, word, data) {
+  await fetch(`${SB_URL}/rest/v1/deck_cards`, {
+    method: 'POST',
+    headers: { ...SB_H, 'Prefer': 'resolution=merge-duplicates' },
+    body: JSON.stringify({ deck_id: deckId, word: word.toLowerCase(), data })
+  });
+}
+
+async function removeCardFromDeck(deckId, word) {
+  await fetch(`${SB_URL}/rest/v1/deck_cards?deck_id=eq.${deckId}&word=eq.${encodeURIComponent(word)}`, { method: 'DELETE', headers: SB_H });
+}
+
+async function getWordDecks(word) {
+  const res = await fetch(`${SB_URL}/rest/v1/deck_cards?word=eq.${encodeURIComponent(word.toLowerCase())}&select=deck_id`, { headers: SB_H });
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows.map(r => r.deck_id) : [];
+}
+
+// ── Deck popup ────────────────────────────────────────────────────
+async function openDeckPopup() {
+  if (!currentDictEntry) return;
+  const word = currentDictEntry.word || currentDictWord;
+  $('deckPopupTitle').textContent = 'Добавить в колоду';
+  $('deckPopupSub').textContent = '«' + word + '»';
+  $('deckPopupInput').value = '';
+  $('deckPopupOverlay').classList.add('open');
+
+  const [decks, wordDecks] = await Promise.all([getDecks(), getWordDecks(word)]);
+  const list = $('deckPopupList');
+  list.innerHTML = '';
+
+  if (decks.length === 0) {
+    list.innerHTML = '<div style="font-style:italic;color:var(--muted);font-size:14px;padding:8px 0">Колод пока нет — создайте первую</div>';
+    return;
+  }
+
+  decks.forEach(deck => {
+    const inDeck = wordDecks.includes(deck.id);
+    const item = document.createElement('div');
+    item.className = 'deck-popup-item' + (inDeck ? ' added' : '');
+    item.innerHTML = `
+      <div class="deck-popup-item-name">${deck.name}</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="deck-popup-item-check">✓</span>
+      </div>
+    `;
+    item.onclick = async () => {
+      if (item.classList.contains('added')) {
+        await removeCardFromDeck(deck.id, word);
+        item.classList.remove('added');
+      } else {
+        await addCardToDeck(deck.id, word, currentDictEntry);
+        item.classList.add('added');
+        // Auto close after short delay
+        setTimeout(() => closeDeckPopup(), 800);
+      }
+    };
+    list.appendChild(item);
+  });
+}
+
+function closeDeckPopup(e) {
+  if (e && e.target !== $('deckPopupOverlay')) return;
+  $('deckPopupOverlay').classList.remove('open');
+}
+
+async function createDeckFromPopup() {
+  const name = $('deckPopupInput').value.trim();
+  if (!name) return;
+  await createDeck(name);
+  $('deckPopupInput').value = '';
+  await openDeckPopup(); // refresh list
+}
+
+// ── Le Carte screen ───────────────────────────────────────────────
+let currentDeckId = null;
+let currentDeckName = '';
+
+async function renderCarteScreen() {
+  const screen = $('carteScreen');
+  screen.innerHTML = '<div class="state-msg active" style="display:block">Загрузка…</div>';
+
+  const decks = await getDecks();
+
+  // Get card counts
+  const counts = {};
+  await Promise.all(decks.map(async d => {
+    const res = await fetch(`${SB_URL}/rest/v1/deck_cards?deck_id=eq.${d.id}&select=word`, { headers: SB_H });
+    const rows = await res.json();
+    counts[d.id] = Array.isArray(rows) ? rows.length : 0;
+  }));
+
+  screen.innerHTML = '';
+
+  const header = document.createElement('div');
+  header.className = 'carte-header';
+  header.innerHTML = `
+    <div class="carte-title">Le <em>Carte</em></div>
+    <button class="carte-new-btn" onclick="createNewDeckDialog()">+ Nuova colonna</button>
+  `;
+  screen.appendChild(header);
+
+  if (decks.length === 0) {
+    screen.innerHTML += '<div class="fav-empty">Колод пока нет — создайте первую!</div>';
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'decks-grid';
+
+  decks.forEach(deck => {
+    const card = document.createElement('div');
+    card.className = 'deck-card';
+    card.innerHTML = `
+      <button class="deck-card-del" title="Удалить колоду" onclick="deleteDeckConfirm(event,'${deck.id}')">✕</button>
+      <div class="deck-card-name">${deck.name}</div>
+      <div class="deck-card-meta">${counts[deck.id] || 0} слов</div>
+      <div class="deck-card-actions">
+        <button class="deck-action-btn" onclick="openDeckView('${deck.id}','${deck.name.replace(/'/g,"\'")}')">Управление</button>
+        <button class="deck-action-btn primary" onclick="startStudy('${deck.id}','${deck.name.replace(/'/g,"\'")}','flash')">▶ Учить</button>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+
+  screen.appendChild(grid);
+}
+
+async function createNewDeckDialog() {
+  showDialog({
+    title: 'Nuova colonna',
+    sub: 'Придумайте название для колоды',
+    placeholder: 'Например: Еда, Путешествия…',
+    okText: 'Создать',
+    okClass: 'sage',
+    onOk: async (name) => {
+      if (!name) return;
+      await createDeck(name);
+      renderCarteScreen();
+    }
+  });
+}
+
+async function deleteDeckConfirm(e, id) {
+  e.stopPropagation();
+  showDialog({
+    title: 'Удалить колоду?',
+    sub: 'Все слова в ней тоже удалятся. Это нельзя отменить.',
+    hasInput: false,
+    okText: 'Удалить',
+    okClass: 'danger',
+    onOk: async () => {
+      await deleteDeck(id);
+      renderCarteScreen();
+    }
+  });
+}
+
+// ── Deck view (manage words) ──────────────────────────────────────
+async function openDeckView(deckId, deckName) {
+  currentDeckId = deckId;
+  currentDeckName = deckName;
+  const screen = $('carteScreen');
+  screen.innerHTML = '<div class="state-msg active" style="display:block">Загрузка…</div>';
+
+  const cards = await getDeckCards(deckId);
+
+  screen.innerHTML = '';
+
+  // Header
+  const hdr = document.createElement('div');
+  hdr.className = 'deck-view-header';
+  hdr.innerHTML = `
+    <button class="deck-back-btn" onclick="renderCarteScreen()">← Назад</button>
+    <div class="deck-view-title">${deckName}</div>
+  `;
+  screen.appendChild(hdr);
+
+  // Study buttons
+  const studyBtns = document.createElement('div');
+  studyBtns.className = 'study-mode-btns';
+  studyBtns.innerHTML = `
+    <button class="study-btn" onclick="startStudy('${deckId}','${deckName.replace(/'/g,"\'")}','flash')">
+      <span class="study-btn-icon">🃏</span>
+      Карточки
+      <span class="study-btn-label">свайп влево/вправо</span>
+    </button>
+    <button class="study-btn" onclick="startStudy('${deckId}','${deckName.replace(/'/g,"\'")}','write')">
+      <span class="study-btn-icon">✍️</span>
+      Заучивание
+      <span class="study-btn-label">ввод слова</span>
+    </button>
+  `;
+  screen.appendChild(studyBtns);
+
+  // Import area — global static input for mobile compatibility
+  const importArea = document.createElement('label');
+  importArea.className = 'deck-import-area';
+  importArea.setAttribute('for', 'globalImportInput');
+  importArea.innerHTML = '📄 Импортировать слова из .txt или .csv';
+  // Set handler each time deck view opens
+  const gInput = $('globalImportInput');
+  if (gInput) {
+    gInput.value = '';
+    // Remove old listeners by cloning
+    const newInput = gInput.cloneNode(true);
+    gInput.parentNode.replaceChild(newInput, gInput);
+    newInput.addEventListener('change', (e) => handleImport(e, deckId));
+  }
+  screen.appendChild(importArea);
+
+  // Word list
+  const listDiv = document.createElement('div');
+  listDiv.className = 'deck-word-list';
+
+  if (cards.length === 0) {
+    listDiv.innerHTML = '<div class="fav-empty">Слов пока нет. Добавьте через 🃏 на карточке слова или импортируйте файл.</div>';
+  } else {
+    cards.forEach(card => {
+      const d = card.data;
+      const item = document.createElement('div');
+      item.className = 'deck-word-item';
+      const wordKey = card.word;
+      const entry = d;
+      item.innerHTML = `
+        <div class="deck-word-item-left" style="cursor:pointer" title="Открыть в словаре">
+          <div class="deck-word-item-word">${d.word || card.word}</div>
+          <div class="deck-word-item-meta">${d.russian?.main || ''}</div>
+        </div>
+        <button class="deck-word-remove" onclick="removeFromDeckView('${deckId}','${card.word}',this)">✕</button>
+      `;
+      item.querySelector('.deck-word-item-left').addEventListener('click', () => {
+        switchMode('dict');
+        const w = entry.word || wordKey;
+        $('searchInput').value = w;
+        if (entry.definition) {
+          renderEntry(entry);
+          showState('result');
+          currentDictEntry = entry;
+          currentDictWord = (entry.word || wordKey).toLowerCase();
+          checkIfStarred('dict', currentDictWord);
+        } else {
+          lookupWord(w);
+        }
+      });
+      listDiv.appendChild(item);
+    });
+  }
+
+  screen.appendChild(listDiv);
+}
+
+async function removeFromDeckView(deckId, word, btn) {
+  await removeCardFromDeck(deckId, word);
+  btn.closest('.deck-word-item').remove();
+}
+
+// ── Import words ──────────────────────────────────────────────────
+function parseCSV(text) {
+  // Parse CSV with quoted fields
+  const rows = [];
+  const lines = text.replace(/\r/g, '').split('\n');
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const cols = [];
+    let col = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        inQuotes = !inQuotes;
+      } else if (ch === ',' && !inQuotes) {
+        cols.push(col.trim());
+        col = '';
+      } else {
+        col += ch;
+      }
+    }
+    cols.push(col.trim());
+    rows.push(cols);
+  }
+  return rows;
+}
+
+function csvRowToEntry(cols, headers) {
+  // Map: Front, Transcription, Example, Back, Meaning
+  const idx = (name) => headers.findIndex(h => h.toLowerCase().includes(name.toLowerCase()));
+  const frontIdx     = idx('front') !== -1 ? idx('front') : 0;
+  const transIdx     = idx('transcription') !== -1 ? idx('transcription') : 1;
+  const exampleIdx   = idx('example') !== -1 ? idx('example') : 2;
+  const backIdx      = idx('back') !== -1 ? idx('back') : 3;
+  const meaningIdx   = idx('meaning') !== -1 ? idx('meaning') : 4;
+
+  const word = cols[frontIdx] || '';
+  if (!word) return null;
+
+  return {
+    word: word,
+    partOfSpeech: null,
+    category: null,
+    gender: null,
+    phonetic: cols[transIdx] || '',
+    singular: null,
+    plural: null,
+    russian: { main: cols[backIdx] || '', alternatives: '' },
+    english: { main: '', alternatives: '' },
+    definition: cols[meaningIdx] || '',
+    example: cols[exampleIdx] || '',
+    isNoun: false,
+    isVerb: false,
+    conjugations: null,
+    _fromCSV: true
+  };
+}
+
+async function handleImport(e, deckId) {
+  const file = e.target.files[0];
+  // Show debug toast
+  const dbg = document.createElement('div');
+  dbg.style.cssText = 'position:fixed;top:60px;left:16px;right:16px;background:#1a3a1a;color:#7ed87e;padding:12px 16px;border-radius:6px;font-size:14px;font-family:monospace;z-index:9999;line-height:1.6;';
+  dbg.id = 'importDebug';
+  document.body.appendChild(dbg);
+  const log = (msg) => { dbg.innerHTML += msg + '<br>'; console.log('IMPORT:', msg); };
+
+  if (!file) { log('❌ файл не выбран'); return; }
+  log('✓ файл: ' + file.name + ' (' + file.size + ' байт)');
+  log('✓ deckId: ' + deckId);
+
+  let text;
+  try { text = await file.text(); log('✓ текст прочитан: ' + text.length + ' символов'); }
+  catch(err) { log('❌ ошибка чтения: ' + err.message); return; }
+
+  const isCSV = file.name.toLowerCase().endsWith('.csv');
+  log('isCSV: ' + isCSV);
+  log('первые 100 символов: ' + JSON.stringify(text.slice(0, 100)));
+
+  let entries = [];
+
+  if (isCSV) {
+    const rows = parseCSV(text);
+    if (rows.length < 2) return;
+    const headers = rows[0];
+    const dataRows = rows.slice(1);
+
+    // Check if it's our format (has Front/Back columns)
+    const hasStructure = headers.some(h => /front|back/i.test(h));
+
+    if (hasStructure) {
+      // Direct import — no Gemini needed!
+      entries = dataRows.map(cols => csvRowToEntry(cols, headers)).filter(Boolean);
+      const screen = $('carteScreen');
+      const progressDiv = document.createElement('div');
+      progressDiv.style.cssText = 'padding:20px;font-style:italic;color:var(--muted);text-align:center;font-size:16px;';
+      screen.insertBefore(progressDiv, screen.firstChild);
+
+      let done = 0;
+      for (const entry of entries) {
+        progressDiv.textContent = `Импортирую ${done + 1} / ${entries.length}: ${entry.word}…`;
+        try {
+          await sbSave('dictionary', 'word', entry.word.toLowerCase(), entry);
+          await addCardToDeck(deckId, entry.word.toLowerCase(), entry);
+        } catch(err) { console.warn('Import error:', err); }
+        done++;
+      }
+      progressDiv.remove();
+      openDeckView(deckId, currentDeckName);
+      return;
+    } else {
+      // CSV but no structure — treat first column as word list
+      entries = dataRows.map(r => r[0]).filter(w => w && w.length < 80);
+    }
+  } else {
+    // Plain .txt — one word per line
+    entries = text.split(/\r?\n|\r/).map(l => l.trim()).filter(l => l.length > 0 && l.length < 80);
+  }
+
+  if (entries.length === 0) { log('❌ слов не найдено'); return; }
+  log('✓ найдено слов: ' + entries.length + ', начинаю генерацию...');
+  setTimeout(() => { const d = $('importDebug'); if(d) d.remove(); }, 4000);
+
+  const screen = $('carteScreen');
+  const progressDiv = document.createElement('div');
+  progressDiv.style.cssText = 'padding:20px;font-style:italic;color:var(--muted);text-align:center;font-size:16px;';
+  progressDiv.id = 'importProgress';
+  screen.insertBefore(progressDiv, screen.firstChild);
+
+  let done = 0;
+  for (const word of entries) {
+    progressDiv.textContent = `Генерирую ${done + 1} / ${entries.length}: ${word}…`;
+    try {
+      let entry = await sbGet('dictionary', word.toLowerCase());
+      if (!entry) {
+        entry = await generateWordEntry(word);
+        if (entry && entry.word) {
+          await sbSave('dictionary', 'word', entry.word.toLowerCase(), entry);
+        }
+      }
+      if (entry && entry.word) {
+        await addCardToDeck(deckId, entry.word.toLowerCase(), entry);
+      }
+    } catch(err) { console.warn('Import error for', word, err); }
+    done++;
+  }
+
+  progressDiv.remove();
+  openDeckView(deckId, currentDeckName);
+}
+
+async function generateWordEntry(word) {
+  // Use the same full prompt as lookupWord for consistency
+  const prompt = `You are an expert Italian linguist. Given the Italian word "${word}", provide a complete dictionary entry in JSON format.
+Return ONLY valid JSON, no markdown, no explanation. Schema:
+{
+  "word": "canonical form",
+  "partOfSpeech": "sostantivo / verbo / aggettivo / avverbio / preposizione / congiunzione / pronome / articolo / interiezione",
+  "category": "cibo / natura / persone / lavoro / casa / viaggio / emozioni / tempo / corpo / cultura / altro",
+  "gender": "m. / f. / m./f. / null",
+  "phonetic": "IPA with ˈ before stressed syllable",
+  "singular": { "article": "il/lo/la/l'", "form": "word" },
+  "plural": { "article": "i/gli/le", "form": "plural form" },
+  "russian": { "main": "primary Russian translation", "alternatives": "2-3 alts or empty" },
+  "english": { "main": "primary English translation", "alternatives": "2-3 alts or empty" },
+  "definition": "Definition in Italian (1-2 sentences)",
+  "example": "Example sentence in Italian",
+  "isNoun": true/false,
+  "isVerb": true/false,
+  "conjugations": null
+}
+If not a real Italian word, set word to null.`;
+  return await callGemini(prompt);
+}
+
+// ── Study: Flashcard mode ─────────────────────────────────────────
+let studyCards = [];
+let studyIndex = 0;
+let studyDeckId = '';
+let studyDeckName = '';
+let studyMode = 'flash';
+let cardFlipped = false;
+
+async function startStudy(deckId, deckName, mode) {
+  studyDeckId = deckId;
+  studyDeckName = deckName;
+  studyMode = mode;
+  const cards = await getDeckCards(deckId);
+  if (cards.length === 0) { alert('В колоде нет слов!'); return; }
+
+  // Each word generates 2 cards: IT→RU and RU→IT
+  studyCards = [];
+  cards.forEach(c => {
+    studyCards.push({ ...c, direction: 'it-ru' });
+    studyCards.push({ ...c, direction: 'ru-it' });
+  });
+  // Fisher-Yates shuffle
+  for (let i = studyCards.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [studyCards[i], studyCards[j]] = [studyCards[j], studyCards[i]];
+  }
+  studyIndex = 0;
+
+  if (mode === 'flash') renderFlashcard();
+  else renderWriteCard();
+}
+
+function renderFlashcard() {
+  const screen = $('flashcardScreen');
+  // Hide other screens
+  ['carteScreen','writeScreen'].forEach(id => $(id).classList.remove('active'));
+  screen.classList.add('active');
+  cardFlipped = false;
+
+  const card = studyCards[studyIndex];
+  const d = card.data;
+  const isItRu = card.direction === 'it-ru';
+
+  // IT→RU: front = итальянское слово + транскрипция + пример, back = русский перевод
+  // RU→IT: front = русский перевод, back = итальянское слово + транскрипция
+  const itWord = d.word || card.word;
+  const ruWord = d.russian?.main || '';
+  const phonetic = d.phonetic ? `/${d.phonetic}/` : '';
+  const example = d.example || '';
+
+  screen.innerHTML = `
+    <div class="flashcard-top">
+      <div class="flashcard-progress">${studyIndex + 1} / ${studyCards.length}</div>
+      <button class="flashcard-exit" onclick="exitStudy()">Выйти</button>
+    </div>
+    <div class="flashcard-wrap">
+      <div class="flashcard" id="theCard" onclick="flipCard()">
+        <div class="flashcard-front">
+          <div class="flashcard-hint">нажми чтобы открыть</div>
+          ${isItRu ? `
+            <div class="flashcard-word">${itWord}</div>
+            ${phonetic ? `<div class="flashcard-phonetic">${phonetic}</div>` : ''}
+            ${example ? `<div class="flashcard-example">${example}</div>` : ''}
+          ` : `
+            <div class="flashcard-word" style="font-family:'PT Serif',serif">${ruWord}</div>
+          `}
+        </div>
+        <div class="flashcard-back">
+          <div class="flashcard-hint">ОТВЕТ</div>
+          ${isItRu ? `
+            <div class="flashcard-word" style="font-family:'PT Serif',serif">${ruWord}</div>
+            ${d.english?.main ? `<div class="flashcard-sub">${d.english.main}</div>` : ''}
+          ` : `
+            <div class="flashcard-word">${itWord}</div>
+            ${phonetic ? `<div class="flashcard-phonetic">${phonetic}</div>` : ''}
+            ${example ? `<div class="flashcard-example">${example}</div>` : ''}
+          `}
+        </div>
+      </div>
+    </div>
+    <div class="flashcard-actions" id="fcActions" style="display:none">
+      <button class="fc-btn dont-know" onclick="nextCard(false)">✗ Не знаю</button>
+      <button class="fc-btn know" onclick="nextCard(true)">✓ Знаю</button>
+    </div>
+    <div class="flashcard-swipe-hint">Нажми на карточку чтобы перевернуть</div>
+  `;
+}
+
+function flipCard() {
+  const card = document.getElementById('theCard');
+  cardFlipped = !cardFlipped;
+  card.classList.toggle('flipped', cardFlipped);
+  $('fcActions').style.display = cardFlipped ? 'flex' : 'none';
+}
+
+function nextCard(knew) {
+  if (!knew && studyIndex < studyCards.length - 1) {
+    // Move to end if didn't know
+    studyCards.push(studyCards[studyIndex]);
+  }
+  studyIndex++;
+  if (studyIndex >= studyCards.length) {
+    showStudyComplete();
+    return;
+  }
+  renderFlashcard();
+}
+
+function showStudyComplete() {
+  $('flashcardScreen').innerHTML = `
+    <div style="text-align:center;padding:60px 20px">
+      <div style="font-size:48px;margin-bottom:20px">🎉</div>
+      <div style="font-family:'Playfair Display',serif;font-size:28px;color:var(--ink);margin-bottom:8px">Complimenti!</div>
+      <div style="font-style:italic;color:var(--muted);font-size:17px;margin-bottom:32px">Все карточки пройдены</div>
+      <button onclick="startStudy('${studyDeckId}','${studyDeckName}','${studyMode}')" style="padding:14px 28px;background:var(--sage);color:white;border:none;border-radius:4px;font-family:'Playfair Display',serif;font-size:17px;cursor:pointer;margin-right:12px">Ещё раз</button>
+      <button onclick="exitStudy()" style="padding:14px 28px;background:transparent;border:1.5px solid var(--border);border-radius:4px;font-family:'Playfair Display',serif;font-size:17px;cursor:pointer;color:var(--stone)">Выйти</button>
+    </div>
+  `;
+}
+
+function exitStudy() {
+  $('flashcardScreen').classList.remove('active');
+  $('writeScreen').classList.remove('active');
+  $('carteScreen').classList.add('active');
+  openDeckView(studyDeckId, studyDeckName);
+}
+
+// ── Study: Write mode ─────────────────────────────────────────────
+function renderWriteCard() {
+  const screen = $('writeScreen');
+  ['carteScreen','flashcardScreen'].forEach(id => $(id).classList.remove('active'));
+  screen.classList.add('active');
+
+  const card = studyCards[studyIndex];
+  const d = card.data;
+  const isItRu = card.direction === 'it-ru';
+  // Show Russian, type Italian — or show Italian, type Russian
+  const prompt = isItRu ? (d.russian?.main || '') : (d.word || card.word);
+  const promptLang = isItRu ? 'Переведите на итальянский:' : 'Переведите на русский:';
+  const answer = isItRu ? (d.word || card.word) : (d.russian?.main || '');
+
+  screen.innerHTML = `
+    <div class="flashcard-top">
+      <div class="flashcard-progress">${studyIndex + 1} / ${studyCards.length}</div>
+      <button class="flashcard-exit" onclick="exitStudy()">Выйти</button>
+    </div>
+    <div class="write-prompt">
+      <div class="write-prompt-hint">${promptLang}</div>
+      <div class="write-prompt-word">${prompt}</div>
+      <div class="write-prompt-sub">${isItRu ? (d.partOfSpeech || '') : (d.english?.main || '')}</div>
+    </div>
+    <div class="write-answer-area">
+      <input class="write-input" id="writeInput" placeholder="Введите ответ…" autocomplete="off" autocorrect="off" spellcheck="false">
+      <button class="write-check-btn" id="writeCheckBtn" onclick="checkWriteAnswer('${answer.replace(/'/g,"\'")}')">Проверить</button>
+      <div class="write-result" id="writeResult"></div>
+      <button class="write-next-btn" id="writeNextBtn" onclick="nextWriteCard()">Следующее →</button>
+    </div>
+  `;
+
+  const input = $('writeInput');
+  input.focus();
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') checkWriteAnswer(answer); });
+}
+
+function checkWriteAnswer(answer) {
+  const input = $('writeInput');
+  const result = $('writeResult');
+  const userAnswer = input.value.trim().toLowerCase();
+  const correctAnswer = answer.trim().toLowerCase();
+
+  // Allow minor variations
+  const isCorrect = userAnswer === correctAnswer ||
+    userAnswer.replace(/[àáâäãåā]/g,'a').replace(/[èéêëē]/g,'e')
+      .replace(/[ìíîïī]/g,'i').replace(/[òóôöõō]/g,'o')
+      .replace(/[ùúûüū]/g,'u') ===
+    correctAnswer.replace(/[àáâäãåā]/g,'a').replace(/[èéêëē]/g,'e')
+      .replace(/[ìíîïī]/g,'i').replace(/[òóôöõō]/g,'o')
+      .replace(/[ùúûüū]/g,'u');
+
+  input.classList.add(isCorrect ? 'correct' : 'wrong');
+  result.classList.add('show', isCorrect ? 'ok' : 'fail');
+  result.textContent = isCorrect ? '✓ Правильно!' : `✗ Правильный ответ: ${answer}`;
+  $('writeCheckBtn').style.display = 'none';
+  $('writeNextBtn').classList.add('show');
+
+  if (!isCorrect) {
+    // Put at end of queue
+    studyCards.push(studyCards[studyIndex]);
+  }
+}
+
+function nextWriteCard() {
+  studyIndex++;
+  if (studyIndex >= studyCards.length) {
+    $('writeScreen').innerHTML = `
+      <div style="text-align:center;padding:60px 20px">
+        <div style="font-size:48px;margin-bottom:20px">🎉</div>
+        <div style="font-family:'Playfair Display',serif;font-size:28px;color:var(--ink);margin-bottom:8px">Complimenti!</div>
+        <div style="font-style:italic;color:var(--muted);font-size:17px;margin-bottom:32px">Все слова пройдены</div>
+        <button onclick="startStudy('${studyDeckId}','${studyDeckName}','write')" style="padding:14px 28px;background:var(--sage);color:white;border:none;border-radius:4px;font-family:'Playfair Display',serif;font-size:17px;cursor:pointer;margin-right:12px">Ещё раз</button>
+        <button onclick="exitStudy()" style="padding:14px 28px;background:transparent;border:1.5px solid var(--border);border-radius:4px;font-family:'Playfair Display',serif;font-size:17px;cursor:pointer;color:var(--stone)">Выйти</button>
+      </div>
+    `;
+    return;
+  }
+  renderWriteCard();
+}
+
+// ── Диспетчер поиска ──────────────────────────────────────────────────────────
+function doSearch() {
+  const val = $('searchInput').value.trim();
+  if (!val) return;
+  if (currentMode === 'grammar') lookupGrammar(val);
+  else if (currentLang === 'ru') lookupRussian(val);
+  else lookupWord(val);
+}
+
+$('searchBtn').addEventListener('click', doSearch);
+$('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+// ── Floating fav button logic ─────────────────────────────────────────────────
+function favFloatClick() {
+  if (currentMode === 'favorites') {
+    // Go back — restore previous mode
+    switchMode(favFloatPrevMode || 'dict');
+  } else {
+    favFloatPrevMode = currentMode;
+    switchMode('favorites');
+  }
+}
+
+let favFloatPrevMode = 'dict';
+
+function updateFavFloat(mode) {
+  const icon = $('favFloatIcon');
+  const back = $('favFloatBack');
+  if (!icon || !back) return;
+  if (mode === 'favorites') {
+    icon.style.display = 'none';
+    back.style.display = 'block';
+  } else {
+    icon.style.display = 'block';
+    back.style.display = 'none';
+  }
+}
+
+// ── Floating fav button scroll behavior ──────────────────────────────────────
+(function() {
+  let lastScrollY = 0;
+  let ticking = false;
+
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      requestAnimationFrame(() => {
+        const btn = $('favFloatBtn');
+        if (!btn) { ticking = false; return; }
+        const currentY = window.scrollY;
+        if (currentY > lastScrollY + 8) {
+          btn.classList.add('hidden');
+        } else if (currentY < lastScrollY - 8) {
+          btn.classList.remove('hidden');
+        }
+        lastScrollY = currentY;
+        ticking = false;
+      });
+      ticking = true;
+    }
+  });
+})();
+
+// ── Подсказки тем в режиме грамматики ────────────────────────────────────────
+const GRAMMAR_SUGGESTIONS_LIST = [
+  'articoli','pronomi personali','pronomi relativi','congiuntivo',
+  'condizionale','passato prossimo','imperfetto','futuro semplice',
+  'imperativo','aggettivi','preposizioni','verbi modali',
+  'discorso indiretto','gerundio','participio','verbi riflessivi'
+];
+</script>
+</body>
+</html>
