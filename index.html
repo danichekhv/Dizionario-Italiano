@@ -634,7 +634,7 @@
   .hero-action-btn.star:hover { color: var(--gold); background: none; }
   .hero-action-btn.star.starred { color: #d4a017; filter: drop-shadow(0 0 6px rgba(212,160,23,0.5)); }
   .hero-action-btn.refresh:hover { color: var(--stone); transform: rotate(30deg) scale(1.1); background: none; }
-  .hero-action-btn.deck:hover { color: var(--sage); background: none; }
+
 
   body.mode-grammar .hero-action-btn { color: rgba(107,154,240,0.2); }
   body.mode-grammar .hero-action-btn:hover { color: #6b9af0; background: none; }
@@ -2067,259 +2067,15 @@
   .cat-cultura    { background: rgba(155,89,182,0.15); color: #7d3c98; border: 1px solid rgba(155,89,182,0.4); }
   .cat-altro      { background: rgba(127,140,141,0.15);color: #566573; border: 1px solid rgba(127,140,141,0.4); }
 
-  /* ── Deck button ─────────────────────────────────────────── */
-  /* deck-btn now uses .hero-action-btn */
-
-  .hero-action-btn.deck.in-deck { color: var(--sage); }
-
   @media (max-width: 640px) {
     .hero-actions { top: 14px; right: 14px; gap: 2px; }
     .hero-action-btn { width: 28px; height: 28px; font-size: 16px; }
   }
 
-  /* ── Deck popup ──────────────────────────────────────────── */
-  .deck-popup-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(26,18,8,0.4);
-    z-index: 1000;
-    align-items: flex-end;
-    justify-content: center;
-  }
-
-  .deck-popup-overlay.open { display: flex; }
-
-  .deck-popup {
-    background: var(--cream);
-    border-radius: 16px 16px 0 0;
-    width: 100%;
-    max-width: 560px;
-    padding: 24px 24px 40px;
-    animation: slideUp 0.3s ease;
-    max-height: 80vh;
-    overflow-y: auto;
-  }
-
-  @keyframes slideUp {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
-  }
-
-  .deck-popup-handle {
-    width: 40px; height: 4px;
-    background: var(--border);
-    border-radius: 2px;
-    margin: 0 auto 20px;
-  }
-
-  .deck-popup-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 20px;
-    color: var(--ink);
-    margin-bottom: 6px;
-  }
-
-  .deck-popup-sub {
-    font-size: 14px;
-    color: var(--muted);
-    font-style: italic;
-    margin-bottom: 20px;
-  }
-
-  .deck-popup-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-bottom: 16px;
-  }
-
-  .deck-popup-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 18px;
-    background: var(--parchment);
-    border: 1.5px solid var(--border);
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .deck-popup-item:hover { border-color: var(--sage); }
-  .deck-popup-item.added { border-color: var(--sage); background: rgba(74,94,58,0.06); }
-
-  .deck-popup-item-name {
-    font-family: 'Playfair Display', serif;
-    font-size: 17px;
-    color: var(--ink);
-  }
-
-  .deck-popup-item-count {
-    font-size: 12px;
-    color: var(--muted);
-    font-family: 'JetBrains Mono', monospace;
-  }
-
-  .deck-popup-item-check {
-    color: var(--sage);
-    font-size: 18px;
-    opacity: 0;
-    transition: opacity 0.2s;
-  }
-
-  .deck-popup-item.added .deck-popup-item-check { opacity: 1; }
-
-  .deck-popup-new {
-    display: flex;
-    gap: 8px;
-    margin-top: 8px;
-  }
-
-  .deck-popup-input {
-    flex: 1;
-    padding: 10px 14px;
-    font-family: 'Crimson Pro', serif;
-    font-size: 16px;
-    font-style: italic;
-    background: var(--parchment);
-    border: 1.5px solid var(--border);
-    border-radius: 4px;
-    color: var(--ink);
-    outline: none;
-  }
-
-  .deck-popup-input:focus { border-color: var(--sage); }
-
-  .deck-popup-create {
-    padding: 10px 18px;
-    background: var(--sage);
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-family: 'Crimson Pro', serif;
-    font-size: 15px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.2s;
-  }
-
-  .deck-popup-create:hover { background: #3a4d2e; }
 
 
 
 
-
-
-
-
-
-  /* ── Custom dialog ───────────────────────────────────────── */
-  .custom-dialog-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(26,18,8,0.45);
-    z-index: 2000;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-  }
-
-  .custom-dialog-overlay.open { display: flex; }
-
-  .custom-dialog {
-    background: var(--cream);
-    border: 1.5px solid var(--border);
-    border-radius: 8px;
-    padding: 28px 28px 24px;
-    width: 100%;
-    max-width: 400px;
-    box-shadow: 0 8px 40px rgba(26,18,8,0.2);
-    animation: fadeUp 0.2s ease;
-  }
-
-  body.mode-grammar .custom-dialog {
-    background: #1a2540;
-    border-color: rgba(107,154,240,0.25);
-  }
-
-  .custom-dialog-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 20px;
-    color: var(--ink);
-    margin-bottom: 6px;
-  }
-
-  body.mode-grammar .custom-dialog-title { color: #e8edf8; }
-
-  .custom-dialog-sub {
-    font-size: 14px;
-    color: var(--muted);
-    font-style: italic;
-    margin-bottom: 18px;
-  }
-
-  .custom-dialog-input {
-    width: 100%;
-    padding: 11px 14px;
-    font-family: 'Playfair Display', serif;
-    font-size: 17px;
-    font-style: italic;
-    background: var(--parchment);
-    border: 1.5px solid var(--border);
-    border-radius: 4px;
-    color: var(--ink);
-    outline: none;
-    margin-bottom: 16px;
-    transition: border-color 0.2s;
-  }
-
-  .custom-dialog-input:focus { border-color: var(--terracotta); }
-
-  body.mode-grammar .custom-dialog-input {
-    background: #111c36;
-    border-color: rgba(107,154,240,0.25);
-    color: #e8edf8;
-  }
-
-  .custom-dialog-btns {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-  }
-
-  .custom-dialog-cancel {
-    padding: 9px 20px;
-    background: transparent;
-    border: 1.5px solid var(--border);
-    border-radius: 4px;
-    font-family: 'Crimson Pro', serif;
-    font-size: 15px;
-    cursor: pointer;
-    color: var(--stone);
-    transition: all 0.2s;
-  }
-
-  .custom-dialog-cancel:hover { border-color: var(--stone); color: var(--ink); }
-
-  .custom-dialog-ok {
-    padding: 9px 24px;
-    background: var(--terracotta);
-    border: none;
-    border-radius: 4px;
-    font-family: 'Crimson Pro', serif;
-    font-size: 15px;
-    cursor: pointer;
-    color: white;
-    transition: background 0.2s;
-  }
-
-  .custom-dialog-ok:hover { background: #a8411e; }
-  .custom-dialog-ok.danger { background: #c0392b; }
-  .custom-dialog-ok.danger:hover { background: #a93226; }
-  .custom-dialog-ok.sage { background: var(--sage); }
-  .custom-dialog-ok.sage:hover { background: #3a4d2e; }
 
 
   /* ── Back button ─────────────────────────────────────────── */
@@ -2344,12 +2100,214 @@
   body.mode-grammar .back-btn { border-color: rgba(107,154,240,0.25); color: #6b7fa8; }
   body.mode-grammar .back-btn:hover { border-color: #6b9af0; color: #6b9af0; }
 
+  /* ── API Key setup screen ──────────────────────────────────── */
+  .apikey-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: var(--cream);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(196,82,42,0.04) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 20%, rgba(184,134,11,0.05) 0%, transparent 50%);
+  }
+  .apikey-overlay.open { display: flex; }
+
+  .apikey-box {
+    width: 100%;
+    max-width: 480px;
+    text-align: center;
+  }
+
+  .apikey-ornament {
+    font-size: 13px;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    color: var(--terracotta);
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    margin-bottom: 12px;
+    opacity: 0.8;
+  }
+
+  .apikey-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(32px, 6vw, 52px);
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+
+  .apikey-title em { color: var(--terracotta); font-style: italic; }
+
+  .apikey-subtitle {
+    font-size: 16px;
+    color: var(--muted);
+    font-style: italic;
+    margin-bottom: 32px;
+  }
+
+  .apikey-rule {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 36px;
+  }
+  .apikey-rule::before, .apikey-rule::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--gold), transparent);
+  }
+  .apikey-rule-diamond {
+    width: 8px; height: 8px;
+    background: var(--terracotta);
+    transform: rotate(45deg);
+    flex-shrink: 0;
+  }
+
+  .apikey-label {
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    text-align: left;
+    margin-bottom: 8px;
+  }
+
+  .apikey-input-wrap { position: relative; margin-bottom: 12px; }
+
+  .apikey-input {
+    width: 100%;
+    padding: 16px 48px 16px 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    background: var(--parchment);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    color: var(--ink);
+    outline: none;
+    transition: all 0.3s;
+    letter-spacing: 0.05em;
+  }
+  .apikey-input::placeholder { color: var(--stone); opacity: 0.5; font-style: italic; font-family: 'Crimson Pro', serif; font-size: 15px; letter-spacing: 0; }
+  .apikey-input:focus { border-color: var(--terracotta); box-shadow: 0 4px 20px rgba(196,82,42,0.12); }
+
+  .apikey-eye {
+    position: absolute;
+    right: 12px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none;
+    cursor: pointer;
+    color: var(--stone);
+    opacity: 0.5;
+    font-size: 16px;
+    padding: 4px;
+    transition: opacity 0.2s;
+  }
+  .apikey-eye:hover { opacity: 1; }
+
+  .apikey-btn {
+    width: 100%;
+    padding: 16px;
+    background: var(--terracotta);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-style: italic;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-bottom: 20px;
+  }
+  .apikey-btn:hover { background: #a8411e; }
+
+  .apikey-error {
+    display: none;
+    color: var(--terracotta);
+    font-size: 14px;
+    font-style: italic;
+    margin-bottom: 12px;
+  }
+  .apikey-error.visible { display: block; }
+
+  .apikey-hint {
+    font-size: 13px;
+    color: var(--muted);
+    font-style: italic;
+    line-height: 1.6;
+  }
+  .apikey-hint a {
+    color: var(--terracotta);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(196,82,42,0.3);
+  }
+  .apikey-hint a:hover { border-bottom-color: var(--terracotta); }
+
+  .apikey-change-btn {
+    position: fixed;
+    bottom: 28px;
+    left: 28px;
+    background: none;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    padding: 7px 14px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 13px;
+    font-style: italic;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 50;
+  }
+  .apikey-change-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
+
+  @media (max-width: 640px) {
+    .apikey-change-btn { bottom: 90px; left: 16px; }
+  }
+
 </style>
 </head>
 <body>
+
+<!-- API Key setup screen -->
+<div class="apikey-overlay" id="apikeyOverlay">
+  <div class="apikey-box">
+    <div class="apikey-ornament">Configurazione · Настройка</div>
+    <div class="apikey-title">Diziona<em>rio</em></div>
+    <p class="apikey-subtitle">Italiano · Russo · Inglese</p>
+    <div class="apikey-rule"><div class="apikey-rule-diamond"></div></div>
+    <div class="apikey-label">Gemini API Key</div>
+    <div class="apikey-input-wrap">
+      <input class="apikey-input" id="apikeyInput" type="password"
+        placeholder="AIzaSy…"
+        autocomplete="off" spellcheck="false"
+        onkeydown="if(event.key==='Enter') saveApiKey()"
+      />
+      <button class="apikey-eye" id="apikeyEye" onclick="toggleApiKeyVisibility()" title="Показать/скрыть">👁</button>
+    </div>
+    <div class="apikey-error" id="apikeyError">Введите корректный ключ (начинается с AIza…)</div>
+    <button class="apikey-btn" onclick="saveApiKey()">Начать →</button>
+    <p class="apikey-hint">
+      Получить ключ бесплатно можно на<br>
+      <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a><br><br>
+      Ключ хранится только в вашем браузере и никуда не передаётся.
+    </p>
+  </div>
+</div>
+
+<!-- Кнопка смены ключа (показывается когда ключ уже есть) -->
+<button class="apikey-change-btn" id="apikeyChangeBtn" onclick="showApiKeyScreen()" title="Сменить API ключ">🔑 API key</button>
+
 <div class="container">
   <header>
-    <button class="header-fav-btn" id="headerFavBtn" onclick="switchMode('favorites')" title="Избранное">
+    <button class="header-fav-btn" id="headerFavBtn" onclick="openFavorites()" title="Избранное">
       <span class="header-fav-star">★</span>
       <span id="headerFavLabel">Preferiti</span>
 
@@ -2534,25 +2492,56 @@
   </span>
 </button>
 
-<!-- Custom dialog -->
-<div class="custom-dialog-overlay" id="customDialogOverlay">
-  <div class="custom-dialog" id="customDialog">
-    <div class="custom-dialog-title" id="customDialogTitle"></div>
-    <div class="custom-dialog-sub" id="customDialogSub"></div>
-    <input class="custom-dialog-input" id="customDialogInput" autocomplete="off">
-    <div class="custom-dialog-btns">
-      <button class="custom-dialog-cancel" id="customDialogCancel">Отмена</button>
-      <button class="custom-dialog-ok" id="customDialogOk">OK</button>
-    </div>
-  </div>
-</div>
-
-
 
 <script>
 // ── Конфигурация ─────────────────────────────────────────────────────────────
-const GEMINI_API_KEY = "AIzaSyA-n2dflc63NVqPbsv466HlhjsGDtsGk0g";
-const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_MODEL_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent`;
+
+function getApiKey() {
+  return localStorage.getItem('dizionario_gemini_key') || '';
+}
+
+function getApiUrl() {
+  return `${GEMINI_MODEL_URL}?key=${getApiKey()}`;
+}
+
+// ── API Key screen logic ──────────────────────────────────────────────────────
+function showApiKeyScreen() {
+  $('apikeyOverlay').classList.add('open');
+  $('apikeyChangeBtn').style.display = 'none';
+  const existing = getApiKey();
+  if (existing) $('apikeyInput').value = existing;
+  setTimeout(() => $('apikeyInput').focus(), 100);
+}
+
+function hideApiKeyScreen() {
+  $('apikeyOverlay').classList.remove('open');
+  $('apikeyChangeBtn').style.display = 'block';
+}
+
+function toggleApiKeyVisibility() {
+  const inp = $('apikeyInput');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+function saveApiKey() {
+  const val = $('apikeyInput').value.trim();
+  const err = $('apikeyError');
+  if (!val.startsWith('AIza') || val.length < 20) {
+    err.classList.add('visible');
+    return;
+  }
+  err.classList.remove('visible');
+  localStorage.setItem('dizionario_gemini_key', val);
+  hideApiKeyScreen();
+}
+
+// Показать экран ввода ключа при первом запуске
+window.addEventListener('DOMContentLoaded', () => {
+  if (!getApiKey()) {
+    showApiKeyScreen();
+  }
+});
 
 // ── Supabase ──────────────────────────────────────────────────────────────────
 const SB_URL = "https://qmsgumhvbsefpbbkvxgs.supabase.co";
@@ -2629,54 +2618,57 @@ let currentConjugations = {};
 
 const $ = id => document.getElementById(id);
 
-// ── Переключение режима (Словарь / Грамматика) ────────────────────────────────
-function switchMode(mode, skipRender = false) {
-  currentMode = mode;
+// ── Обновление шапки и nav под текущий режим ────────────────────────────────
+function applyModeUI(mode) {
   const isGram = mode === 'grammar';
-  const isFav = mode === 'favorites';
-
+  const isFav  = mode === 'favorites';
   document.body.classList.toggle('mode-grammar', isGram);
   $('navDict').classList.toggle('active', mode === 'dict');
   $('navGram').classList.toggle('active', isGram);
   $('headerFavBtn').classList.toggle('active', isFav);
   updateFavFloat(mode);
-
-
   if (isFav) {
     $('headerOrnament').textContent = 'Сохранённые статьи';
     $('headerTitle').innerHTML = 'Pre<em>feriti</em>';
     $('headerSubtitle').textContent = 'Словарь · Грамматика';
     document.querySelector('.lang-toggle').style.display = 'none';
     document.querySelector('.search-area').style.display = 'none';
-    // restore dict colors
-    $('headerOrnament').style.color = '';
-    $('headerTitle').style.color = '';
-    showState('favorites');
-    renderFavList(currentFavTab);
-    updateFavCount();
-    return;
-  }
-
-  document.querySelector('.search-area').style.display = 'block';
-
-  if (isGram) {
+  } else if (isGram) {
     $('headerOrnament').textContent = 'Справочник правил';
     $('headerTitle').innerHTML = 'La Gram<em>matica</em>';
     $('headerSubtitle').textContent = 'Правила итальянского языка на русском';
     $('searchInput').placeholder = 'Найти правило: pronomi, congiuntivo…';
-    // Hide dict lang toggle
     document.querySelector('.lang-toggle').style.display = 'none';
+    document.querySelector('.search-area').style.display = 'block';
   } else {
     $('headerOrnament').textContent = 'Vocabolario completo';
     $('headerTitle').innerHTML = 'Diziona<em>rio</em>';
     $('headerSubtitle').textContent = 'Italiano · Russo · Inglese';
     $('searchInput').placeholder = currentLang === 'ru' ? 'Введите русское слово…' : 'Cerca una parola italiana…';
     document.querySelector('.lang-toggle').style.display = 'flex';
+    document.querySelector('.search-area').style.display = 'block';
   }
+}
 
-  $('searchInput').value = '';
-  showState('initial');
-  updateInitialMsg();
+// ── Переключение режима (Словарь / Грамматика / Избранное) ──────────────────
+function switchMode(mode, skipHistoryClear = false) {
+  currentMode = mode;
+  if (!skipHistoryClear) {
+    navHistory.length = 0;
+    _currentState = 'initial';
+  }
+  applyModeUI(mode);
+  if (mode === 'favorites' && !skipHistoryClear) {
+    showState('favorites');
+    renderFavList(currentFavTab);
+    updateFavCount();
+    return;
+  }
+  if (!skipHistoryClear) {
+    $('searchInput').value = '';
+    showState('initial');
+    updateInitialMsg();
+  }
 }
 
 function updateInitialMsg() {
@@ -2710,16 +2702,16 @@ const navHistory = [];
 let _currentState = 'initial';
 let _suppressHistory = false;
 
-function pushHistory(state, restoreFn) {
-  navHistory.push({ state, restoreFn });
+function pushHistory(restoreFn) {
+  navHistory.push(restoreFn);
   updateBackBtn();
 }
 
 function goBack() {
   if (navHistory.length === 0) return;
-  const prev = navHistory.pop();
+  const restoreFn = navHistory.pop();
   _suppressHistory = true;
-  if (prev.restoreFn) prev.restoreFn();
+  restoreFn();
   _suppressHistory = false;
   updateBackBtn();
 }
@@ -2730,43 +2722,76 @@ function updateBackBtn() {
   btn.classList.toggle('visible', navHistory.length > 0);
 }
 
-// States that should be tracked in history (not loading/error/initial)
-const TRACKABLE = ['result','rulist','grammar','favorites'];
+// States that should be tracked in history
+const TRACKABLE = ['result','rulist','grammar','favorites','initial'];
 
 function showState(state) {
-  // Auto-push history when moving between trackable states
-  if (!_suppressHistory && TRACKABLE.includes(state) && TRACKABLE.includes(_currentState) && state !== _currentState) {
+  // Push history when moving away from a meaningful state to another
+  // Don't push if we're going to loading/error (transient states), or if suppressed
+  const pushable = ['result','rulist','grammar','favorites','initial'];
+  if (!_suppressHistory && state !== _currentState && pushable.includes(_currentState)) {
     const savedState = _currentState;
     const savedMode = currentMode;
-    // Capture current content for restoration
+
     if (savedState === 'result' && currentDictEntry) {
-      const e = currentDictEntry; const w = currentDictWord;
-      pushHistory(savedState, () => {
-        switchMode(savedMode, true);
-        renderEntry(e); showState('result');
+      const e = currentDictEntry; const w = currentDictWord; const m = savedMode;
+      const savedLang = currentLang;
+      pushHistory(() => {
+        currentMode = m;
+        currentLang = savedLang;
+        applyModeUI(m);
+        $('btnIT').classList.toggle('active', savedLang === 'it');
+        $('btnRU').classList.toggle('active', savedLang === 'ru');
+        renderEntry(e);
+        _suppressHistory = true; showState('result'); _suppressHistory = false;
         currentDictEntry = e; currentDictWord = w;
         $('searchInput').value = e.word || w;
         checkIfStarred('dict', w);
       });
     } else if (savedState === 'grammar' && currentGramEntry) {
-      const g = currentGramEntry; const t = currentGramTopic;
-      pushHistory(savedState, () => {
-        switchMode(savedMode, true);
-        renderGrammar(g); showState('grammar');
+      const g = currentGramEntry; const m = savedMode;
+      pushHistory(() => {
+        currentMode = m;
+        applyModeUI(m);
+        renderGrammar(g);
+        _suppressHistory = true; showState('grammar'); _suppressHistory = false;
       });
-    } else if (savedState === 'rulist') {
-      const el = $('ruResults').innerHTML;
-      pushHistory(savedState, () => {
-        switchMode(savedMode, true);
-        $('ruResults').innerHTML = el;
-        showState('rulist');
+    } else if (savedState === 'rulist' && currentRuResults.length > 0) {
+      const query = currentRuQuery;
+      const results = currentRuResults;
+      const searchVal = $('searchInput').value;
+      const savedLang = currentLang;
+      const m = savedMode;
+      pushHistory(() => {
+        currentMode = m;
+        currentLang = savedLang;
+        applyModeUI(m);
+        // восстанавливаем кнопки языка
+        $('btnIT').classList.toggle('active', savedLang === 'it');
+        $('btnRU').classList.toggle('active', savedLang === 'ru');
+        $('searchInput').value = searchVal;
+        renderRuResults(query, results);
+        _suppressHistory = true; showState('rulist'); _suppressHistory = false;
       });
     } else if (savedState === 'favorites') {
       const tab = currentFavTab;
-      pushHistory(savedState, () => {
-        switchMode('favorites', true);
+      pushHistory(() => {
+        currentMode = 'favorites';
+        applyModeUI('favorites');
+        _suppressHistory = true; showState('favorites'); _suppressHistory = false;
+        currentFavTab = tab;
         renderFavList(tab);
       });
+    } else if (savedState === 'initial') {
+      if (['result','rulist','grammar'].includes(state)) {
+        const m = savedMode;
+        pushHistory(() => {
+          currentMode = m;
+          applyModeUI(m);
+          updateInitialMsg();
+          _suppressHistory = true; showState('initial'); _suppressHistory = false;
+        });
+      }
     }
   }
 
@@ -2786,7 +2811,7 @@ function showState(state) {
 
 // ── Gemini API ────────────────────────────────────────────────────────────────
 async function callGemini(prompt) {
-  const response = await fetch(API_URL, {
+  const response = await fetch(getApiUrl(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -2866,15 +2891,23 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
     renderEntry(entry);
     showState('result');
   } catch(err) {
-    console.error(err);
     console.error("lookupWord error:", err);
     const msg = err.message || '';
-    const isQuota = msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429');
-    $('errorText').textContent = isQuota
-      ? '⏳ Лимит Gemini исчерпан — попробуйте позже или смените ключ'
-      : 'Errore: ' + msg;
-    showState('error');
+    handleApiError(msg);
   }
+}
+
+function handleApiError(msg) {
+  const isQuota = msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429');
+  const isBadKey = msg.includes('API key') || msg.includes('API_KEY') || msg.includes('leaked') || msg.includes('invalid') || msg.includes('403');
+  if (isBadKey) {
+    $('errorText').innerHTML = '🔑 Проблема с API ключом — <u style="cursor:pointer" onclick="showApiKeyScreen()">сменить ключ</u>';
+  } else if (isQuota) {
+    $('errorText').innerHTML = '⏳ Лимит Gemini исчерпан — попробуйте позже или <u style="cursor:pointer" onclick="showApiKeyScreen()">смените ключ</u>';
+  } else {
+    $('errorText').textContent = 'Errore: ' + msg;
+  }
+  showState('error');
 }
 
 // ── Поиск русского слова ──────────────────────────────────────────────────────
@@ -2899,10 +2932,8 @@ Return 1-8 items. If no translation exists, return [].`;
     renderRuResults(word, results);
     showState('rulist');
   } catch(err) {
-    console.error(err);
     console.error("lookupRussian error:", err);
-    $('errorText').textContent = 'Ошибка: ' + (err.message || 'соединение не удалось');
-    showState('error');
+    handleApiError(err.message || '');
   }
 }
 
@@ -2966,10 +2997,8 @@ async function lookupGrammar(topic) {
     renderGrammar(g);
     showState('grammar');
   } catch(err) {
-    console.error(err);
     console.error("lookupGrammar error:", err);
-    $('errorText').textContent = 'Ошибка: ' + (err.message || 'соединение не удалось');
-    showState('error');
+    handleApiError(err.message || '');
   }
 }
 
@@ -3157,6 +3186,8 @@ function formatGrammarTitle(title) {
 
 // ── Рендер результатов поиска с русского ────────────────────────────────────
 function renderRuResults(query, results) {
+  currentRuQuery = query;
+  currentRuResults = results;
   const container = $('ruResults');
   container.innerHTML = '';
   const title = document.createElement('div');
@@ -3335,6 +3366,8 @@ let currentDictEntry = null;
 let currentGramEntry = null;
 let currentDictWord = '';
 let currentGramTopic = '';
+let currentRuQuery = '';
+let currentRuResults = [];
 
 async function getFavorites(type) {
   try {
@@ -3472,12 +3505,16 @@ function renderFavRows(rows, tab) {
           </div>`;
         card.onclick = (e) => {
           if (e.target.classList.contains('fav-remove')) return;
-          switchMode('dict');
+          currentMode = 'dict';
+          currentLang = 'it';
+          applyModeUI('dict');
+          $('btnIT').classList.add('active');
+          $('btnRU').classList.remove('active');
           $('searchInput').value = key;
-          renderEntry(row.data);
-          showState('result');
           currentDictEntry = row.data;
           currentDictWord = key;
+          renderEntry(row.data);
+          showState('result');
           checkIfStarred('dict', key);
         };
       } else {
@@ -3492,7 +3529,8 @@ function renderFavRows(rows, tab) {
           </div>`;
         card.onclick = (e) => {
           if (e.target.classList.contains('fav-remove')) return;
-          switchMode('grammar');
+          currentMode = 'grammar';
+          applyModeUI('grammar');
           $('searchInput').value = key;
           renderGrammar(row.data);
           showState('grammar');
@@ -3511,47 +3549,6 @@ async function removeFav(e, tab, key) {
   updateFavCount();
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// LE CARTE — DECKS, FLASHCARDS, WRITE MODE
-// ═══════════════════════════════════════════════════════════════════
-
-// ── Custom dialog (replaces browser prompt/confirm) ──────────────────────────
-function showDialog({ title, sub = '', placeholder = '', okText = 'OK', okClass = '', hasInput = true, onOk }) {
-  $('customDialogTitle').textContent = title;
-  $('customDialogSub').textContent = sub;
-  const input = $('customDialogInput');
-  input.placeholder = placeholder;
-  input.value = '';
-  input.style.display = hasInput ? 'block' : 'none';
-  const okBtn = $('customDialogOk');
-  okBtn.textContent = okText;
-  okBtn.className = 'custom-dialog-ok' + (okClass ? ' ' + okClass : '');
-  $('customDialogOverlay').classList.add('open');
-  if (hasInput) setTimeout(() => input.focus(), 100);
-
-  // Remove old listeners
-  const newOk = okBtn.cloneNode(true);
-  okBtn.parentNode.replaceChild(newOk, okBtn);
-  const newCancel = $('customDialogCancel').cloneNode(true);
-  $('customDialogCancel').parentNode.replaceChild(newCancel, $('customDialogCancel'));
-
-  const close = () => $('customDialogOverlay').classList.remove('open');
-
-  $('customDialogOk').addEventListener('click', () => {
-    const val = hasInput ? $('customDialogInput').value.trim() : true;
-    close();
-    onOk(val);
-  });
-
-  $('customDialogCancel').addEventListener('click', close);
-
-  $('customDialogInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') { $('customDialogOk').click(); }
-    if (e.key === 'Escape') close();
-  });
-}
-
-// ── Supabase deck helpers ─────────────────────────────────────────
 // ── Диспетчер поиска ──────────────────────────────────────────────────────────
 function doSearch() {
   const val = $('searchInput').value.trim();
@@ -3565,17 +3562,26 @@ $('searchBtn').addEventListener('click', doSearch);
 $('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
 
 // ── Floating fav button logic ─────────────────────────────────────────────────
+function openFavorites() {
+  // showState должен вызываться ДО смены currentMode —
+  // тогда он правильно захватит savedMode = 'dict'/'grammar' в историю
+  showState('favorites');
+  currentMode = 'favorites';
+  applyModeUI('favorites');
+  renderFavList(currentFavTab);
+  updateFavCount();
+}
+
 function favFloatClick() {
   if (currentMode === 'favorites') {
-    // Go back — restore previous mode
-    switchMode(favFloatPrevMode || 'dict');
+    goBack();
   } else {
-    favFloatPrevMode = currentMode;
-    switchMode('favorites');
+    openFavorites();
   }
 }
 
-let favFloatPrevMode = 'dict';
+
+
 
 function updateFavFloat(mode) {
   const icon = $('favFloatIcon');
@@ -3614,13 +3620,7 @@ function updateFavFloat(mode) {
   });
 })();
 
-// ── Подсказки тем в режиме грамматики ────────────────────────────────────────
-const GRAMMAR_SUGGESTIONS_LIST = [
-  'articoli','pronomi personali','pronomi relativi','congiuntivo',
-  'condizionale','passato prossimo','imperfetto','futuro semplice',
-  'imperativo','aggettivi','preposizioni','verbi modali',
-  'discorso indiretto','gerundio','participio','verbi riflessivi'
-];
+
 </script>
 </body>
 </html>
