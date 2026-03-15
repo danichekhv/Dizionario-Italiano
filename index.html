@@ -261,8 +261,8 @@
 
   .word-main {
     display: flex;
-    align-items: baseline;
-    gap: 20px;
+    align-items: flex-end;
+    gap: 14px;
     flex-wrap: wrap;
     margin-bottom: 10px;
   }
@@ -275,15 +275,30 @@
     line-height: 1;
   }
 
+  .speak-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    margin-bottom: 3px;
+    color: rgba(139,115,85,0.35);
+    transition: color 0.2s, transform 0.15s;
+    flex-shrink: 0;
+    display: flex;
+    align-items: flex-end;
+    line-height: 1;
+  }
+  .speak-btn:hover { color: var(--terracotta); transform: scale(1.15); }
+  .speak-btn.speaking { color: var(--terracotta); animation: pulse 1s infinite; }
+  .speak-btn svg { display: block; }
+
   .word-phonetic {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 16px;
+    font-size: 20px;
     color: var(--stone);
-    background: rgba(139,115,85,0.1);
-    padding: 4px 12px;
-    border-radius: 3px;
-    border: 1px solid var(--border);
+    padding-bottom: 2px;
     white-space: nowrap;
+    letter-spacing: 0.02em;
   }
 
   /* Stress highlight */
@@ -903,9 +918,11 @@
     /* Word card */
     .word-hero, .translations-section, .definition-section,
     .conjugation-header, .conjugation-body { padding-left: 16px; padding-right: 16px; }
-    .word-title { font-size: 30px; }
-    .word-phonetic { font-size: 12px; padding: 3px 8px; }
-    .word-main { gap: 10px; flex-wrap: wrap; }
+    .word-title { font-size: 28px; }
+    .word-phonetic { font-size: 14px; }
+    .word-main { gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+    .speak-btn svg { width: 20px; height: 20px; }
+    .speak-btn { margin-bottom: 1px; }
     .lang-row { grid-template-columns: 48px 1fr; gap: 8px; }
     .translation-text { font-size: 15px; }
     .translation-alts { font-size: 12px; }
@@ -1542,6 +1559,118 @@
     color: #e8edf8;
   }
 
+  /* ── Speak button ────────────────────────────────────────── */
+  .speak-btn.speaking { animation: pulse 1s infinite; }
+
+  /* ── Related words (словарь) ─────────────────────────────── */
+  .related-words-section {
+    background: var(--parchment);
+    border: 1.5px solid var(--border);
+    border-top: none;
+    padding: 20px 40px;
+    border-radius: 0 0 6px 6px;
+  }
+  .related-words-section.has-conj {
+    border-radius: 0 0 6px 6px;
+  }
+  /* Если есть спряжение — убираем нижние скругления у conjugation-section */
+  .conjugation-section.has-related {
+    border-radius: 0;
+  }
+  .related-words {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .related-word-btn {
+    padding: 5px 14px;
+    background: rgba(196,82,42,0.07);
+    border: 1px solid rgba(196,82,42,0.2);
+    border-radius: 3px;
+    font-size: 14px;
+    color: var(--terracotta);
+    cursor: pointer;
+    font-style: italic;
+    font-family: 'Crimson Pro', serif;
+    transition: all 0.2s;
+  }
+  .related-word-btn:hover { background: rgba(196,82,42,0.15); }
+
+  @media (max-width: 640px) {
+    .related-words-section { padding: 16px; }
+  }
+
+  /* ── Clickable words in example/definition ───────────────── */
+  .clickable-word {
+    cursor: pointer;
+    border-bottom: 1px dotted var(--terracotta);
+    color: inherit;
+    transition: color 0.15s;
+  }
+  .clickable-word:hover { color: var(--terracotta); }
+
+  /* ── Search history ──────────────────────────────────────── */
+  .history-section {
+    margin-bottom: 32px;
+    animation: fadeUp 0.3s ease;
+  }
+  .history-label {
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .history-clear {
+    font-size: 10px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.1em;
+    transition: color 0.2s;
+    padding: 0;
+  }
+  .history-clear:hover { color: var(--terracotta); }
+  .history-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .history-chip {
+    padding: 5px 12px;
+    background: var(--parchment);
+    border: 1.5px solid var(--border);
+    border-radius: 3px;
+    font-size: 14px;
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    color: var(--stone);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .history-chip:hover { border-color: var(--terracotta); color: var(--ink); }
+
+  body.mode-grammar .history-label { color: #6b7fa8; }
+  body.mode-grammar .history-clear { color: #6b7fa8; }
+  body.mode-grammar .history-clear:hover { color: #6b9af0; }
+  body.mode-grammar .history-chip {
+    background: rgba(59,100,180,0.12);
+    border-color: rgba(107,154,240,0.25);
+    color: #8aa4d4;
+  }
+  body.mode-grammar .history-chip:hover {
+    border-color: #6b9af0;
+    color: #e8edf8;
+    background: rgba(59,100,180,0.25);
+  }
+
   @media (max-width: 640px) {
     .grammar-hero, .grammar-section { padding-left: 24px; padding-right: 24px; }
     .app-nav-btn { padding: 8px 16px; font-size: 14px; }
@@ -1876,36 +2005,37 @@
     transition: all 0.2s;
   }
 
-  .header-fav-btn:hover {
-    border-color: var(--gold);
-    color: var(--gold);
-  }
+  .header-fav-btn:hover { border-color: var(--gold); color: var(--gold); }
+  .header-fav-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(184,134,11,0.06); }
 
-  .header-fav-btn.active {
-    border-color: var(--gold);
-    color: var(--gold);
-    background: rgba(184,134,11,0.06);
-  }
-
-  body.mode-grammar .header-fav-btn {
-    border-color: rgba(107,154,240,0.25);
-    color: #6b7fa8;
-  }
-
-  body.mode-grammar .header-fav-btn:hover {
-    border-color: #6b9af0;
-    color: #6b9af0;
-  }
-
-  body.mode-grammar .header-fav-btn.active {
-    border-color: #6b9af0;
-    color: #6b9af0;
-    background: rgba(107,154,240,0.08);
-  }
+  body.mode-grammar .header-fav-btn { border-color: rgba(107,154,240,0.25); color: #6b7fa8; }
+  body.mode-grammar .header-fav-btn:hover { border-color: #6b9af0; color: #6b9af0; }
+  body.mode-grammar .header-fav-btn.active { border-color: #6b9af0; color: #6b9af0; background: rgba(107,154,240,0.08); }
 
   .header-fav-star { font-size: 16px; }
 
+  /* ── Settings button (зеркало header-fav-btn, слева) ────── */
+  .header-settings-btn {
+    position: absolute;
+    top: 0; left: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: none;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 14px;
+    font-style: italic;
+    color: var(--stone);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
 
+  .header-settings-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
+  body.mode-grammar .header-settings-btn { border-color: rgba(107,154,240,0.25); color: #6b7fa8; }
+  body.mode-grammar .header-settings-btn:hover { border-color: #6b9af0; color: #6b9af0; }
 
   header { position: relative; }
 
@@ -1918,6 +2048,12 @@
     }
     .header-fav-star { font-size: 12px; }
     .header-fav-badge { width: 14px; height: 14px; font-size: 9px; }
+    .header-settings-btn {
+      padding: 5px 10px;
+      font-size: 11px;
+      top: 0; left: 0;
+      border-radius: 3px;
+    }
   }
 
 
@@ -1968,42 +2104,53 @@
     display: none;
   }
 
+  /* ── Floating settings button (mobile only) ─────────────── */
+  .settings-float-btn {
+    display: none;
+  }
+
   @media (max-width: 640px) {
-    .fav-float-btn {
+    /* ── Общий стиль плавающих кнопок ── */
+    .fav-float-btn,
+    .settings-float-btn {
       display: flex;
       align-items: center;
       justify-content: center;
       position: fixed;
       bottom: 28px;
-      right: 16px;
       z-index: 999;
       width: 52px;
       height: 52px;
       border-radius: 50%;
-      background: var(--terracotta);
-      color: white;
-      font-size: 22px;
-      border: none;
+      background: var(--parchment);
+      color: var(--stone);
+      border: 1.5px solid var(--border);
       cursor: pointer;
-      box-shadow: 0 4px 16px rgba(196,82,42,0.4);
-      transition: transform 0.3s ease, opacity 0.3s ease, box-shadow 0.2s;
+      box-shadow: 0 4px 16px rgba(26,18,8,0.1);
+      transition: transform 0.3s ease, opacity 0.3s ease;
     }
 
-    body.mode-grammar .fav-float-btn {
-      background: #3b64b4;
-      box-shadow: 0 4px 16px rgba(59,100,180,0.4);
+    body.mode-grammar .fav-float-btn,
+    body.mode-grammar .settings-float-btn {
+      background: #1a2540;
+      border-color: rgba(107,154,240,0.25);
+      color: #6b7fa8;
+      box-shadow: 0 4px 16px rgba(0,0,20,0.3);
     }
 
-    .fav-float-btn.hidden {
+    .fav-float-btn { right: 16px; }
+    .settings-float-btn { left: 16px; }
+
+    .fav-float-btn.hidden,
+    .settings-float-btn.hidden {
       transform: translateY(80px);
       opacity: 0;
       pointer-events: none;
     }
 
-
-
-    /* Hide header fav button on mobile */
+    /* Hide header buttons on mobile */
     .header-fav-btn { display: none; }
+    .header-settings-btn { display: none; }
   }
 
 
@@ -2250,27 +2397,22 @@
   }
   .apikey-hint a:hover { border-bottom-color: var(--terracotta); }
 
-  .apikey-change-btn {
-    position: fixed;
-    bottom: 28px;
-    left: 28px;
-    background: none;
-    border: 1.5px solid var(--border);
-    border-radius: 4px;
-    padding: 7px 14px;
-    font-family: 'Crimson Pro', serif;
-    font-size: 13px;
-    font-style: italic;
-    color: var(--muted);
-    cursor: pointer;
-    transition: all 0.2s;
-    z-index: 50;
+  /* ── Inline history (under articles) ────────────────────── */
+  .inline-history {
+    margin-top: 32px;
+    animation: fadeUp 0.3s ease;
   }
-  .apikey-change-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
 
-  @media (max-width: 640px) {
-    .apikey-change-btn { bottom: 90px; left: 16px; }
+  body.mode-grammar .inline-history .history-label { color: #6b7fa8; }
+  body.mode-grammar .inline-history .history-clear { color: #6b7fa8; }
+  body.mode-grammar .inline-history .history-clear:hover { color: #6b9af0; }
+
+  /* ── Кликабельный заголовок ──────────────────────────────── */
+  h1.clickable {
+    cursor: pointer;
+    transition: opacity 0.2s;
   }
+  h1.clickable:hover { opacity: 0.75; }
 
 </style>
 </head>
@@ -2303,17 +2445,18 @@
 </div>
 
 <!-- Кнопка смены ключа (показывается когда ключ уже есть) -->
-<button class="apikey-change-btn" id="apikeyChangeBtn" onclick="showApiKeyScreen()" title="Сменить API ключ">🔑 API key</button>
-
 <div class="container">
   <header>
+    <button class="header-settings-btn" id="headerSettingsBtn" onclick="showApiKeyScreen()" title="Настройки API">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span>API key</span>
+    </button>
     <button class="header-fav-btn" id="headerFavBtn" onclick="openFavorites()" title="Избранное">
       <span class="header-fav-star">★</span>
       <span id="headerFavLabel">Preferiti</span>
-
     </button>
     <div class="header-ornament" id="headerOrnament">Vocabolario completo</div>
-    <h1 id="headerTitle">Diziona<em>rio</em></h1>
+    <h1 id="headerTitle" class="clickable" onclick="goHome()" title="На главную">Diziona<em>rio</em></h1>
     <p class="subtitle" id="headerSubtitle">Italiano · Russo · Inglese</p>
     <div class="header-rule"><div class="rule-diamond"></div></div>
   </header>
@@ -2327,7 +2470,6 @@
       <span class="nav-icon">📐</span>
       <span>La <span class="nav-label-it">Grammatica</span></span>
     </button>
-
   </nav>
 
   <div class="search-area">
@@ -2360,6 +2502,9 @@
   </button>
 
   <!-- States -->
+  <!-- Search history -->
+  <div class="history-section" id="historySection" style="display:none"></div>
+
   <div class="state-msg active" id="initialMsg">
     <div id="initialMsgText">Inserisci una parola italiana per iniziare</div>
     <div style="font-size:13px;margin-top:8px;color:var(--stone)" id="initialMsgSub">Введите итальянское слово для поиска</div>
@@ -2370,6 +2515,8 @@
 
   <!-- Grammar result -->
   <div class="grammar-card" id="grammarCard"></div>
+  <!-- Recent under grammar -->
+  <div class="inline-history" id="inlineHistoryGrammar" style="display:none"></div>
 
   <!-- Favorites screen -->
   <div class="fav-screen" id="favScreen">
@@ -2410,6 +2557,9 @@
       <div class="word-type-badge" id="wordType">—</div>
       <div class="word-main">
         <div class="word-title" id="wordTitle">—</div>
+        <button class="speak-btn" id="dictSpeakBtn" title="Произнести" onclick="speakWord()">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        </button>
         <div class="word-phonetic" id="wordPhonetic">—</div>
       </div>
       <div class="word-gender" id="wordGender"></div>
@@ -2461,35 +2611,38 @@
       </div>
     </div>
 
+    <!-- Related words -->
+    <div class="related-words-section" id="relatedWordsSection" style="display:none">
+      <div class="section-label">Parole correlate</div>
+      <div class="related-words" id="relatedWordsList"></div>
+    </div>
+
   </div>
 </div>
 
-<!-- Favourites overlay + panel -->
-<div class="fav-overlay" id="favOverlay" onclick="closeFavPanel()"></div>
-<div class="fav-panel" id="favPanel">
-  <div class="fav-panel-header">
-    <div class="fav-panel-title">⭐ Избранное</div>
-    <button class="fav-close" onclick="closeFavPanel()">✕</button>
-  </div>
-  <div class="fav-tabs">
-    <button class="fav-tab active" id="favTabWords" onclick="switchFavTab('words')">📖 Слова</button>
-    <button class="fav-tab" id="favTabGram" onclick="switchFavTab('grammar')">📐 Грамматика</button>
-  </div>
-  <div class="fav-list" id="favList"></div>
-</div>
+<!-- Recent under dict result -->
+<div class="inline-history" id="inlineHistoryDict" style="display:none"></div>
 
 <!-- Floating favorites button (mobile) -->
 <button class="fav-float-btn" id="favFloatBtn" onclick="favFloatClick()" title="Избранное">
   <span id="favFloatIcon">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" style="display:block">
-      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
     </svg>
   </span>
   <span id="favFloatBack" style="display:none">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block">
       <polyline points="15 18 9 12 15 6"/>
     </svg>
   </span>
+</button>
+
+<!-- Floating settings button (mobile) -->
+<button class="settings-float-btn" id="settingsFloatBtn" onclick="showApiKeyScreen()" title="API key">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
 </button>
 
 
@@ -2508,7 +2661,7 @@ function getApiUrl() {
 // ── API Key screen logic ──────────────────────────────────────────────────────
 function showApiKeyScreen() {
   $('apikeyOverlay').classList.add('open');
-  $('apikeyChangeBtn').style.display = 'none';
+  $('headerSettingsBtn').style.visibility = 'hidden';
   const existing = getApiKey();
   if (existing) $('apikeyInput').value = existing;
   setTimeout(() => $('apikeyInput').focus(), 100);
@@ -2516,7 +2669,7 @@ function showApiKeyScreen() {
 
 function hideApiKeyScreen() {
   $('apikeyOverlay').classList.remove('open');
-  $('apikeyChangeBtn').style.display = 'block';
+  $('headerSettingsBtn').style.visibility = 'visible';
 }
 
 function toggleApiKeyVisibility() {
@@ -2668,6 +2821,7 @@ function switchMode(mode, skipHistoryClear = false) {
     $('searchInput').value = '';
     showState('initial');
     updateInitialMsg();
+    renderHistory();
   }
 }
 
@@ -2798,13 +2952,13 @@ function showState(state) {
   _currentState = state;
   ['initialMsg','loadingMsg','errorMsg','resultCard','ruResults','grammarCard','favScreen']
     .forEach(id => $(id).classList.remove('active'));
-  if (state === 'initial')        $('initialMsg').classList.add('active');
-  else if (state === 'loading')   $('loadingMsg').classList.add('active');
-  else if (state === 'error')     $('errorMsg').classList.add('active');
-  else if (state === 'result')    $('resultCard').classList.add('active');
-  else if (state === 'rulist')    $('ruResults').classList.add('active');
-  else if (state === 'grammar')   $('grammarCard').classList.add('active');
-  else if (state === 'favorites') $('favScreen').classList.add('active');
+  if (state === 'initial')        { $('initialMsg').classList.add('active'); renderHistory(); hideInlineHistory(); }
+  else if (state === 'loading')   { $('loadingMsg').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
+  else if (state === 'error')     { $('errorMsg').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
+  else if (state === 'result')    { $('resultCard').classList.add('active'); $('historySection').style.display='none'; renderInlineHistory('dict'); }
+  else if (state === 'rulist')    { $('ruResults').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
+  else if (state === 'grammar')   { $('grammarCard').classList.add('active'); $('historySection').style.display='none'; renderInlineHistory('grammar'); }
+  else if (state === 'favorites') { $('favScreen').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
 
   updateBackBtn();
 }
@@ -2856,6 +3010,7 @@ Return ONLY valid JSON, no markdown, no explanation. Schema:
   "example": "Example sentence in Italian",
   "isNoun": true/false,
   "isVerb": true/false,
+  "relatedWords": ["слово1", "слово2", "слово3"],
   "conjugations": {
     "Indicativo Presente": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
     "Indicativo Passato Prossimo": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
@@ -2876,11 +3031,11 @@ Return ONLY valid JSON, no markdown, no explanation. Schema:
     "Gerundio": {"Presente":"","Passato":""}
   }
 }
-If isVerb false → conjugations null. If isNoun false → singular/plural null. If not a real Italian word → word null.`;
+If isVerb false → conjugations null. If isNoun false → singular/plural null. If not a real Italian word → word null. relatedWords: 3-5 semantically related Italian words (synonyms, antonyms, thematic).`;
   const cachedWord = await sbGet('dictionary', word.toLowerCase());
   if (cachedWord) {
-    try { renderEntry(cachedWord); showState('result'); showCacheBadge(); }
-    catch(e) { console.error("renderEntry from cache failed:", e); /* fall through to Gemini */ }
+    try { renderEntry(cachedWord); showState('result'); showCacheBadge(); addToHistory(cachedWord.word || word, 'dict'); }
+    catch(e) { console.error("renderEntry from cache failed:", e); }
     return;
   }
 
@@ -2890,6 +3045,7 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
     await sbSave('dictionary', 'word', (entry.word || word).toLowerCase(), entry);
     renderEntry(entry);
     showState('result');
+    addToHistory(entry.word || word, 'dict');
   } catch(err) {
     console.error("lookupWord error:", err);
     const msg = err.message || '';
@@ -2985,7 +3141,7 @@ async function lookupGrammar(topic) {
 - Если тема не относится к итальянской грамматике — верни { "error": "not_grammar" }`;
 
   const cachedGram = await sbGetTopic('grammar', topic.toLowerCase());
-  if (cachedGram) { renderGrammar(cachedGram); showState('grammar'); showCacheBadge(); return; }
+  if (cachedGram) { renderGrammar(cachedGram); showState('grammar'); showCacheBadge(); addToHistory(cachedGram.title || topic, 'grammar'); return; }
 
   try {
     const g = await callGemini(prompt);
@@ -2996,6 +3152,7 @@ async function lookupGrammar(topic) {
     await sbSave('grammar', 'topic', (g.title || topic).toLowerCase(), g);
     renderGrammar(g);
     showState('grammar');
+    addToHistory(g.title || topic, 'grammar');
   } catch(err) {
     console.error("lookupGrammar error:", err);
     handleApiError(err.message || '');
@@ -3268,13 +3425,37 @@ function renderEntry(e) {
     pluralRow.style.display = 'none';
   }
 
-  $('definitionText').textContent = e.definition || '—';
-  if (e.example) { $('exampleText').textContent = '« ' + e.example + ' »'; $('exampleText').style.display = 'block'; }
-  else { $('exampleText').style.display = 'none'; }
+  $('definitionText').innerHTML = makeClickable(e.definition || '—');
+  if (e.example) {
+    $('exampleText').innerHTML = '« ' + makeClickable(e.example) + ' »';
+    $('exampleText').style.display = 'block';
+  } else {
+    $('exampleText').style.display = 'none';
+  }
+
+  // Related words
+  const relSec = $('relatedWordsSection');
+  const relList = $('relatedWordsList');
+  if (e.relatedWords && e.relatedWords.length > 0) {
+    relList.innerHTML = '';
+    e.relatedWords.forEach(w => {
+      const btn = document.createElement('button');
+      btn.className = 'related-word-btn';
+      btn.textContent = w;
+      btn.onclick = () => { $('searchInput').value = w; lookupWord(w); };
+      relList.appendChild(btn);
+    });
+    // rounded bottom only if no conjugation
+    relSec.className = 'related-words-section' + (e.isVerb ? ' has-conj' : '');
+    relSec.style.display = 'block';
+  } else {
+    relSec.style.display = 'none';
+  }
 
   const conjSection = $('conjugationSection');
   if (e.isVerb && e.conjugations) {
     conjSection.style.display = 'block';
+    conjSection.classList.toggle('has-related', !!(e.relatedWords && e.relatedWords.length > 0));
     currentConjugations = e.conjugations;
     renderTenseTabs(e.conjugations);
     $('conjBody').classList.remove('open');
@@ -3344,20 +3525,41 @@ async function refreshEntry(mode) {
   try {
     if (mode === 'dict') {
       const word = currentDictWord || (currentDictEntry && currentDictEntry.word ? currentDictEntry.word.toLowerCase() : '');
-      console.log('refreshEntry dict, word:', word);
-      if (!word) { console.warn('No word to refresh'); return; }
-      const delRes = await fetch(`${SB_URL}/rest/v1/dictionary?word=eq.${encodeURIComponent(word)}`, { method: 'DELETE', headers: SB_H });
-      console.log('Delete status:', delRes.status);
+      if (!word) return;
+      await fetch(`${SB_URL}/rest/v1/dictionary?word=eq.${encodeURIComponent(word)}`, { method: 'DELETE', headers: SB_H });
       await lookupWord(word);
+      // Если слово есть в избранном — обновляем и там
+      await updateFavIfStarred('dict', word);
     } else if (mode === 'grammar') {
       const topic = currentGramTopic || '';
       if (!topic) return;
       await fetch(`${SB_URL}/rest/v1/grammar?topic=eq.${encodeURIComponent(topic)}`, { method: 'DELETE', headers: SB_H });
       await lookupGrammar(topic);
+      // Если тема есть в избранном — обновляем и там
+      await updateFavIfStarred('grammar', topic);
     }
   } finally {
     if (btn) btn.classList.remove('spinning');
   }
+}
+
+async function updateFavIfStarred(mode, key) {
+  try {
+    const table = mode === 'dict' ? 'favorites_dict' : 'favorites_grammar';
+    const col   = mode === 'dict' ? 'word' : 'topic';
+    // Проверяем — есть ли в избранном
+    const res = await fetch(`${SB_URL}/rest/v1/${table}?${col}=eq.${encodeURIComponent(key)}&select=${col}`, { headers: SB_H });
+    const rows = await res.json();
+    if (!Array.isArray(rows) || rows.length === 0) return; // не в избранном
+    // Обновляем с новыми данными
+    const newData = mode === 'dict' ? currentDictEntry : currentGramEntry;
+    if (!newData) return;
+    await fetch(`${SB_URL}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: { ...SB_H, 'Prefer': 'resolution=merge-duplicates' },
+      body: JSON.stringify({ [col]: key, data: newData })
+    });
+  } catch(e) { console.warn('updateFavIfStarred error:', e); }
 }
 
 // ── Избранное ─────────────────────────────────────────────────────────────────
@@ -3549,7 +3751,146 @@ async function removeFav(e, tab, key) {
   updateFavCount();
 }
 
-// ── Диспетчер поиска ──────────────────────────────────────────────────────────
+// ── Озвучка (Google TTS + fallback Web Speech) ───────────────────────────────
+let _ttsAudio = null;
+
+function speakWord() {
+  if (!currentDictEntry) return;
+  const btn = $('dictSpeakBtn');
+  const word = currentDictEntry.word || '';
+
+  // Останавливаем если уже играет
+  if (_ttsAudio && !_ttsAudio.paused) {
+    _ttsAudio.pause();
+    _ttsAudio.currentTime = 0;
+    btn.classList.remove('speaking');
+    return;
+  }
+
+  // Пробуем Google TTS
+  const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=it&client=tw-ob&q=${encodeURIComponent(word)}`;
+  _ttsAudio = new Audio(url);
+  _ttsAudio.onplay  = () => btn.classList.add('speaking');
+  _ttsAudio.onended = () => { btn.classList.remove('speaking'); _ttsAudio = null; };
+  _ttsAudio.onerror = () => {
+    btn.classList.remove('speaking');
+    _ttsAudio = null;
+    speakWebSpeech(word, btn);
+  };
+  _ttsAudio.play().catch(() => {
+    btn.classList.remove('speaking');
+    _ttsAudio = null;
+    speakWebSpeech(word, btn);
+  });
+}
+
+function speakWebSpeech(word, btn) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(word);
+  utt.lang = 'it-IT';
+  utt.rate = 0.85;
+  // Ищем итальянский голос
+  const voices = window.speechSynthesis.getVoices();
+  const itVoice = voices.find(v => v.lang === 'it-IT')
+    || voices.find(v => v.lang.startsWith('it'))
+    || voices.find(v => v.name.toLowerCase().includes('italian'));
+  if (itVoice) utt.voice = itVoice;
+  utt.onstart = () => btn.classList.add('speaking');
+  utt.onend   = () => btn.classList.remove('speaking');
+  utt.onerror = () => btn.classList.remove('speaking');
+  window.speechSynthesis.speak(utt);
+}
+
+if (window.speechSynthesis) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+}
+
+// ── История поиска ────────────────────────────────────────────────────────────
+const HISTORY_KEY = 'dizionario_history';
+const HISTORY_MAX = 10;
+
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+  catch { return []; }
+}
+
+function addToHistory(word, mode) {
+  if (!word) return;
+  const h = getHistory().filter(i => !(i.word === word && i.mode === mode));
+  h.unshift({ word, mode });
+  if (h.length > HISTORY_MAX) h.length = HISTORY_MAX;
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+  renderHistory();
+}
+
+function clearHistory() {
+  localStorage.removeItem(HISTORY_KEY);
+  renderHistory();
+}
+
+function renderHistory() {
+  const sec = $('historySection');
+  if (!sec) return;
+  // Показываем историю только на начальном экране в нужном режиме
+  if (_currentState !== 'initial') { sec.style.display = 'none'; return; }
+  const h = getHistory().filter(i => i.mode === currentMode);
+  if (h.length === 0) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+  sec.innerHTML = `
+    <div class="history-label">
+      <span>Недавние</span>
+      <button class="history-clear" onclick="clearHistory()">очистить</button>
+    </div>
+    <div class="history-chips">
+      ${h.map(i => `<button class="history-chip" onclick="historyClick('${i.word.replace(/'/g,"\\'")}','${i.mode}')">${i.word}</button>`).join('')}
+    </div>`;
+}
+
+function renderInlineHistory(mode) {
+  const id = mode === 'dict' ? 'inlineHistoryDict' : 'inlineHistoryGrammar';
+  const sec = $(id);
+  if (!sec) return;
+  const h = getHistory().filter(i => i.mode === mode);
+  if (h.length === 0) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+  sec.innerHTML = `
+    <div class="history-label">
+      <span>Недавние</span>
+      <button class="history-clear" onclick="clearHistory()">очистить</button>
+    </div>
+    <div class="history-chips">
+      ${h.map(i => `<button class="history-chip" onclick="historyClick('${i.word.replace(/'/g,"\\'")}','${i.mode}')">${i.word}</button>`).join('')}
+    </div>`;
+}
+
+function hideInlineHistory() {
+  const d = $('inlineHistoryDict');
+  const g = $('inlineHistoryGrammar');
+  if (d) d.style.display = 'none';
+  if (g) g.style.display = 'none';
+}
+  $('searchInput').value = word;
+  if (mode === 'grammar') lookupGrammar(word);
+  else lookupWord(word);
+}
+
+// ── Кликабельные слова в примерах ─────────────────────────────────────────────
+function makeClickable(text) {
+  if (!text) return '';
+  // Разбиваем по словам, каждое итальянское слово делаем кликабельным
+  return text.replace(/([A-Za-zÀ-öø-ÿ']+)/g, (match) => {
+    const clean = match.replace(/'/g, '');
+    if (clean.length < 3) return match; // короткие слова (la, il, di) не кликаем
+    return `<span class="clickable-word" onclick="$('searchInput').value='${match.replace(/'/g,"\\'")}';lookupWord('${match.replace(/'/g,"\\'")}')">${match}</span>`;
+  });
+}
+
+// ── Клик по заголовку — на главный экран ──────────────────────────────────────
+function goHome() {
+  switchMode(currentMode);
+}
 function doSearch() {
   const val = $('searchInput').value.trim();
   if (!val) return;
@@ -3596,7 +3937,7 @@ function updateFavFloat(mode) {
   }
 }
 
-// ── Floating fav button scroll behavior ──────────────────────────────────────
+// ── Floating buttons scroll behavior ─────────────────────────────────────────
 (function() {
   let lastScrollY = 0;
   let ticking = false;
@@ -3604,13 +3945,15 @@ function updateFavFloat(mode) {
   window.addEventListener('scroll', () => {
     if (!ticking) {
       requestAnimationFrame(() => {
-        const btn = $('favFloatBtn');
-        if (!btn) { ticking = false; return; }
+        const favBtn = $('favFloatBtn');
+        const setBtn = $('settingsFloatBtn');
         const currentY = window.scrollY;
         if (currentY > lastScrollY + 8) {
-          btn.classList.add('hidden');
+          if (favBtn) favBtn.classList.add('hidden');
+          if (setBtn) setBtn.classList.add('hidden');
         } else if (currentY < lastScrollY - 8) {
-          btn.classList.remove('hidden');
+          if (favBtn) favBtn.classList.remove('hidden');
+          if (setBtn) setBtn.classList.remove('hidden');
         }
         lastScrollY = currentY;
         ticking = false;
