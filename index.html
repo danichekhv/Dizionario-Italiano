@@ -3627,7 +3627,9 @@ function renderEntry(e) {
   currentDictEntry = e;
   currentDictWord = (e.word || '').toLowerCase();
   checkIfStarred('dict', (e.word || '').toLowerCase());
-  
+    $('wordTitle').textContent = e.word;
+  $('wordPhonetic').innerHTML = highlightStress(e.phonetic);
+  $('wordType').textContent = e.partOfSpeech || '—';
   // Category badge
   const existingCat = document.getElementById('wordCategoryBadge');
   if (existingCat) existingCat.remove();
