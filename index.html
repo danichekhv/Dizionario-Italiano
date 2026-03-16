@@ -3627,22 +3627,7 @@ function renderEntry(e) {
   currentDictEntry = e;
   currentDictWord = (e.word || '').toLowerCase();
   checkIfStarred('dict', (e.word || '').toLowerCase());
-
-  // If entry is incomplete (from CSV import), show reload hint
-  const isIncomplete = !e.definition || (!e.english?.main && e.english?.main !== undefined);
-  const existingHint = document.getElementById('incompleteHint');
-  if (existingHint) existingHint.remove();
-  if (isIncomplete) {
-    const hint = document.createElement('div');
-    hint.id = 'incompleteHint';
-    hint.style.cssText = 'text-align:center;padding:10px;font-size:13px;font-style:italic;color:var(--muted);cursor:pointer;';
-    hint.innerHTML = '⟳ Неполная статья — <u>загрузить полностью</u>';
-    hint.onclick = () => refreshEntry('dict');
-    $('resultCard').appendChild(hint);
-  }
-  $('wordTitle').textContent = e.word;
-  $('wordPhonetic').innerHTML = highlightStress(e.phonetic);
-  $('wordType').textContent = e.partOfSpeech || '—';
+  
   // Category badge
   const existingCat = document.getElementById('wordCategoryBadge');
   if (existingCat) existingCat.remove();
