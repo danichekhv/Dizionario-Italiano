@@ -403,6 +403,59 @@
     line-height: 1.7;
   }
 
+  /* Нумерованные значения */
+  .meanings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .meaning-item {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .meaning-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: white;
+    background: var(--terracotta);
+    min-width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 4px;
+  }
+
+  .meaning-body { flex: 1; }
+
+  .meaning-definition {
+    font-size: 20px;
+    color: var(--ink);
+    line-height: 1.75;
+    font-style: italic;
+  }
+
+  .meaning-example {
+    font-size: 17px;
+    color: var(--ink-light);
+    margin-top: 10px;
+    padding-left: 16px;
+    border-left: 2px solid rgba(196,82,42,0.4);
+    line-height: 1.7;
+  }
+
+  @media (max-width: 640px) {
+    .meaning-definition { font-size: 15px; }
+    .meaning-example { font-size: 13px; }
+    .meaning-num { min-width: 20px; height: 20px; font-size: 11px; }
+    .meaning-item { gap: 10px; }
+  }
+
   /* Conjugation section */
   .conjugation-section {
     background: white;
@@ -2399,13 +2452,29 @@
 
   /* ── Inline history (under articles) ────────────────────── */
   .inline-history {
-    margin-top: 32px;
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
     animation: fadeUp 0.3s ease;
+  }
+
+  body.mode-grammar .inline-history {
+    border-top-color: rgba(107,154,240,0.15);
   }
 
   body.mode-grammar .inline-history .history-label { color: #6b7fa8; }
   body.mode-grammar .inline-history .history-clear { color: #6b7fa8; }
   body.mode-grammar .inline-history .history-clear:hover { color: #6b9af0; }
+  body.mode-grammar .inline-history .history-chip {
+    background: rgba(59,100,180,0.12);
+    border-color: rgba(107,154,240,0.25);
+    color: #8aa4d4;
+  }
+  body.mode-grammar .inline-history .history-chip:hover {
+    border-color: #6b9af0;
+    color: #e8edf8;
+    background: rgba(59,100,180,0.25);
+  }
 
   /* ── Кликабельный заголовок ──────────────────────────────── */
   h1.clickable {
@@ -2413,6 +2482,175 @@
     transition: opacity 0.2s;
   }
   h1.clickable:hover { opacity: 0.75; }
+
+  /* ── Word preview popup ──────────────────────────────────── */
+  .word-preview {
+    position: fixed;
+    z-index: 5000;
+    background: var(--cream);
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 18px;
+    min-width: 200px;
+    max-width: 280px;
+    box-shadow: 0 8px 32px rgba(26,18,8,0.16);
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  .word-preview.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .word-preview::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--terracotta), var(--gold));
+    border-radius: 6px 6px 0 0;
+  }
+  .wp-word {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 2px;
+  }
+  .wp-phonetic {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--stone);
+    margin-bottom: 8px;
+  }
+  .wp-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .wp-badge {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 2px 8px;
+    border-radius: 2px;
+    background: rgba(196,82,42,0.08);
+    color: var(--terracotta);
+    border: 1px solid rgba(196,82,42,0.2);
+  }
+  .wp-translation {
+    font-size: 15px;
+    color: var(--ink);
+    font-family: 'PT Serif', serif;
+  }
+  .wp-translation em {
+    font-size: 13px;
+    color: var(--stone);
+    font-style: italic;
+  }
+  .wp-loading {
+    font-size: 13px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  /* grammar preview */
+  .word-preview.grammar-preview::before {
+    background: linear-gradient(90deg, #3b64b4, #6b9af0);
+  }
+  .grammar-preview .wp-word { color: #e8edf8; }
+  .grammar-preview .wp-phonetic { color: #6b7fa8; }
+  .grammar-preview .wp-badge { background: rgba(107,154,240,0.1); color: #6b9af0; border-color: rgba(107,154,240,0.2); }
+  .grammar-preview .wp-translation { color: #dde5f8; }
+  .grammar-preview .wp-translation em { color: #6b7fa8; }
+  .grammar-preview .wp-loading { color: #6b7fa8; }
+  .word-preview.grammar-preview {
+    background: #111c36;
+    border-color: rgba(107,154,240,0.2);
+    box-shadow: 0 8px 32px rgba(0,0,20,0.4);
+  }
+
+  /* ── Bottom sheet (mobile preview) ──────────────────────── */
+  .sheet-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(26,18,8,0.35);
+    z-index: 4000;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+  .sheet-overlay.open {
+    display: block;
+    opacity: 1;
+  }
+
+  .bottom-sheet {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 4001;
+    background: var(--cream);
+    border-radius: 16px 16px 0 0;
+    padding: 0 0 32px;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+    max-height: 75vh;
+    overflow-y: auto;
+  }
+  .bottom-sheet.open {
+    transform: translateY(0);
+  }
+  .bottom-sheet::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--terracotta), var(--gold), var(--terracotta));
+    border-radius: 16px 16px 0 0;
+  }
+  .bottom-sheet.grammar-sheet::before {
+    background: linear-gradient(90deg, #3b64b4, #6b9af0, #3b64b4);
+  }
+  .bottom-sheet.grammar-sheet {
+    background: #111c36;
+  }
+
+  .sheet-handle {
+    width: 40px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 14px auto 20px;
+  }
+  .grammar-sheet .sheet-handle { background: rgba(107,154,240,0.2); }
+
+  .sheet-content {
+    padding: 0 24px;
+  }
+
+  .sheet-open-btn {
+    display: block;
+    width: calc(100% - 48px);
+    margin: 20px 24px 0;
+    padding: 13px;
+    background: var(--terracotta);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    font-style: italic;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.2s;
+  }
+  .sheet-open-btn:hover { background: #a8411e; }
+  .grammar-sheet + .sheet-open-btn,
+  .grammar-sheet .sheet-open-btn {
+    background: #3b64b4;
+  }
 
 </style>
 </head>
@@ -2515,8 +2753,6 @@
 
   <!-- Grammar result -->
   <div class="grammar-card" id="grammarCard"></div>
-  <!-- Recent under grammar -->
-  <div class="inline-history" id="inlineHistoryGrammar" style="display:none"></div>
 
   <!-- Favorites screen -->
   <div class="fav-screen" id="favScreen">
@@ -2588,8 +2824,7 @@
 
     <div class="definition-section">
       <div class="section-label">Definizione</div>
-      <div class="definition-text" id="definitionText">—</div>
-      <div class="example-text" id="exampleText" style="display:none"></div>
+      <div id="meaningsContainer"></div>
     </div>
 
     <!-- Conjugation (shown only for verbs) -->
@@ -2618,10 +2853,23 @@
     </div>
 
   </div>
+
+  <!-- Недавние под статьёй словаря -->
+  <div class="inline-history" id="inlineHistoryDict" style="display:none"></div>
+  <!-- Недавние под статьёй грамматики -->
+  <div class="inline-history" id="inlineHistoryGrammar" style="display:none"></div>
+
 </div>
 
-<!-- Recent under dict result -->
-<div class="inline-history" id="inlineHistoryDict" style="display:none"></div>
+<!-- Bottom sheet overlay -->
+<div class="sheet-overlay" id="sheetOverlay" onclick="hideBottomSheet()"></div>
+
+<!-- Bottom sheet (mobile word preview) -->
+<div class="bottom-sheet" id="bottomSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-content" id="sheetContent"></div>
+  <button class="sheet-open-btn" id="sheetOpenBtn" onclick="sheetOpenFull()">Открыть полную статью →</button>
+</div>
 
 <!-- Floating favorites button (mobile) -->
 <button class="fav-float-btn" id="favFloatBtn" onclick="favFloatClick()" title="Избранное">
@@ -3006,8 +3254,10 @@ Return ONLY valid JSON, no markdown, no explanation. Schema:
   "plural": { "article": "i/gli/le", "form": "plural form" },
   "russian": { "main": "primary Russian translation", "alternatives": "2-3 alts semicolon-separated or empty" },
   "english": { "main": "primary English translation", "alternatives": "2-3 alts semicolon-separated or empty" },
-  "definition": "Definition in Italian (1-2 sentences)",
-  "example": "Example sentence in Italian",
+  "meanings": [
+    { "definition": "Definition in Italian (1 sentence)", "example": "Example sentence in Italian" },
+    { "definition": "Second meaning if exists", "example": "Example for second meaning" }
+  ],
   "isNoun": true/false,
   "isVerb": true/false,
   "relatedWords": ["слово1", "слово2", "слово3"],
@@ -3031,7 +3281,7 @@ Return ONLY valid JSON, no markdown, no explanation. Schema:
     "Gerundio": {"Presente":"","Passato":""}
   }
 }
-If isVerb false → conjugations null. If isNoun false → singular/plural null. If not a real Italian word → word null. relatedWords: 3-5 semantically related Italian words (synonyms, antonyms, thematic).`;
+If isVerb false → conjugations null. If isNoun false → singular/plural null. If not a real Italian word → word null. relatedWords: 3-5 semantically related Italian words (synonyms, antonyms, thematic). meanings: 1-4 items ordered from most frequent to least frequent usage. Always include at least 1 meaning.`;
   const cachedWord = await sbGet('dictionary', word.toLowerCase());
   if (cachedWord) {
     try { renderEntry(cachedWord); showState('result'); showCacheBadge(); addToHistory(cachedWord.word || word, 'dict'); }
@@ -3425,12 +3675,33 @@ function renderEntry(e) {
     pluralRow.style.display = 'none';
   }
 
-  $('definitionText').innerHTML = makeClickable(e.definition || '—');
-  if (e.example) {
-    $('exampleText').innerHTML = '« ' + makeClickable(e.example) + ' »';
-    $('exampleText').style.display = 'block';
+  // Definizione — поддержка нового формата meanings и старого definition/example
+  const mc = $('meaningsContainer');
+  if (e.meanings && e.meanings.length > 0) {
+    // Новый формат — массив значений
+    if (e.meanings.length === 1) {
+      // Одно значение — без номера
+      const m = e.meanings[0];
+      mc.innerHTML = `
+        <div class="definition-text">${makeClickable(m.definition || '—')}</div>
+        ${m.example ? `<div class="example-text">« ${makeClickable(m.example)} »</div>` : ''}`;
+    } else {
+      // Несколько значений — с нумерацией
+      mc.innerHTML = `<div class="meanings-list">${e.meanings.map((m, i) => `
+        <div class="meaning-item">
+          <div class="meaning-num">${i + 1}</div>
+          <div class="meaning-body">
+            <div class="meaning-definition">${makeClickable(m.definition || '')}</div>
+            ${m.example ? `<div class="meaning-example">« ${makeClickable(m.example)} »</div>` : ''}
+          </div>
+        </div>`).join('')}
+      </div>`;
+    }
   } else {
-    $('exampleText').style.display = 'none';
+    // Старый формат из кэша — definition + example
+    mc.innerHTML = `
+      <div class="definition-text">${makeClickable(e.definition || '—')}</div>
+      ${e.example ? `<div class="example-text">« ${makeClickable(e.example)} »</div>` : ''}`;
   }
 
   // Related words
@@ -3871,6 +4142,8 @@ function hideInlineHistory() {
   if (d) d.style.display = 'none';
   if (g) g.style.display = 'none';
 }
+
+function historyClick(word, mode) {
   $('searchInput').value = word;
   if (mode === 'grammar') lookupGrammar(word);
   else lookupWord(word);
@@ -3963,6 +4236,246 @@ function updateFavFloat(mode) {
   });
 })();
 
+// ── Word preview popup ────────────────────────────────────────────────────────
+const previewEl = document.createElement('div');
+previewEl.id = 'wordPreview';
+previewEl.className = 'word-preview';
+document.body.appendChild(previewEl);
+
+let _previewTimeout = null;
+let _longPressTimeout = null;
+const _previewCache = {}; // локальный кэш чтобы не дёргать Supabase дважды
+
+function highlightStressPreview(phonetic) {
+  return (phonetic || '').replace(/ˈ([^ˌ\s.]+)/g, (m, syl) => `ˈ<span style="color:var(--terracotta);font-weight:bold">${syl}</span>`);
+}
+
+function renderPreviewDict(popup, data) {
+  popup.innerHTML = `
+    <div class="wp-word">${data.word || ''}</div>
+    ${data.phonetic ? `<div class="wp-phonetic">${highlightStressPreview(data.phonetic)}</div>` : ''}
+    <div class="wp-badges">
+      ${data.partOfSpeech ? `<span class="wp-badge">${data.partOfSpeech}</span>` : ''}
+      ${data.category ? `<span class="wp-badge">${data.category}</span>` : ''}
+    </div>
+    <div class="wp-translation">
+      ${data.russian?.main || ''}
+      ${data.russian?.alternatives ? `<br><em>${data.russian.alternatives}</em>` : ''}
+    </div>`;
+}
+
+async function fetchPreviewData(word, isGrammar) {
+  const key = (isGrammar ? 'g:' : 'd:') + word.toLowerCase();
+  if (_previewCache[key] !== undefined) return _previewCache[key];
+  try {
+    const data = await sbGet(isGrammar ? 'grammar' : 'dictionary', word.toLowerCase());
+    _previewCache[key] = data || null;
+    return _previewCache[key];
+  } catch { _previewCache[key] = null; return null; }
+}
+
+function showPreview(el, word, isGrammar, x, y) {
+  clearTimeout(_previewTimeout);
+  const popup = $('wordPreview');
+  popup.className = 'word-preview' + (isGrammar ? ' grammar-preview' : '');
+  popup.innerHTML = `<div class="wp-loading">…</div>`;
+  positionPreview(popup, x, y);
+  popup.classList.add('visible');
+
+  _previewTimeout = setTimeout(async () => {
+    const data = await fetchPreviewData(word, isGrammar);
+    if (!popup.classList.contains('visible')) return;
+
+    if (!data) {
+      // Нет в кэше — запрашиваем Gemini (только для словаря)
+      if (isGrammar) { hidePreview(); return; }
+      popup.innerHTML = `<div class="wp-loading">Загрузка…</div>`;
+      try {
+        const prompt = `Italian word "${word}". Return ONLY valid JSON, no markdown:
+{"word":"canonical form","partOfSpeech":"sostantivo/verbo/aggettivo/etc","category":"cibo/natura/persone/lavoro/casa/viaggio/emozioni/tempo/corpo/cultura/altro","phonetic":"IPA with ˈ","russian":{"main":"перевод","alternatives":"alt1; alt2"}}
+If not a real Italian word return {"word":null}.`;
+        const result = await callGemini(prompt);
+        if (!popup.classList.contains('visible')) return;
+        if (!result || !result.word) { hidePreview(); return; }
+        // Сохраняем в локальный кэш превью (не в Supabase — это только мини-данные)
+        _previewCache['d:' + word.toLowerCase()] = result;
+        renderPreviewDict(popup, result);
+      } catch { hidePreview(); }
+      return;
+    }
+
+    if (isGrammar) {
+      popup.innerHTML = `
+        <div class="wp-word">${data.title || word}</div>
+        <div class="wp-badges">
+          ${data.category ? `<span class="wp-badge">${data.category}</span>` : ''}
+        </div>
+        <div class="wp-translation">${data.titleRu || ''}</div>`;
+    } else {
+      renderPreviewDict(popup, data);
+    }
+  }, 80);
+}
+
+function positionPreview(popup, x, y) {
+  popup.style.left = '0px'; popup.style.top = '0px';
+  requestAnimationFrame(() => {
+    const pw = popup.offsetWidth || 260;
+    const ph = popup.offsetHeight || 120;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let left = x + 12;
+    let top = y - ph / 2;
+    if (left + pw > vw - 12) left = x - pw - 12;
+    if (top < 8) top = 8;
+    if (top + ph > vh - 8) top = vh - ph - 8;
+    popup.style.left = left + 'px';
+    popup.style.top = top + 'px';
+  });
+}
+
+function hidePreview() {
+  clearTimeout(_previewTimeout);
+  const popup = $('wordPreview');
+  popup.classList.remove('visible');
+}
+
+// Навешиваем события на кликабельные слова через делегирование
+document.addEventListener('mouseover', (e) => {
+  const el = e.target.closest('.clickable-word, .related-word-btn, .history-chip');
+  if (!el) { hidePreview(); return; }
+  const word = el.textContent.trim();
+  if (!word || word.length < 3) return;
+  const isGrammar = el.classList.contains('history-chip') && currentMode === 'grammar';
+  showPreview(el, word, isGrammar, e.clientX, e.clientY);
+});
+
+document.addEventListener('mousemove', (e) => {
+  const popup = $('wordPreview');
+  if (popup.classList.contains('visible')) {
+    positionPreview(popup, e.clientX, e.clientY);
+  }
+});
+
+document.addEventListener('mouseout', (e) => {
+  const el = e.target.closest('.clickable-word, .related-word-btn, .history-chip');
+  if (el) hidePreview();
+});
+
+// ── Bottom sheet (mobile preview) ────────────────────────────────────────────
+let _sheetWord = null;
+let _sheetIsGrammar = false;
+const _isMobile = () => window.innerWidth <= 640;
+
+function showBottomSheet(word, isGrammar) {
+  _sheetWord = word;
+  _sheetIsGrammar = isGrammar;
+  const sheet = $('bottomSheet');
+  const overlay = $('sheetOverlay');
+  const content = $('sheetContent');
+  const openBtn = $('sheetOpenBtn');
+
+  sheet.className = 'bottom-sheet' + (isGrammar ? ' grammar-sheet' : '');
+  openBtn.textContent = isGrammar ? 'Открыть полную статью →' : 'Открыть полную статью →';
+  openBtn.style.background = isGrammar ? '#3b64b4' : '';
+
+  content.innerHTML = `<div class="wp-loading" style="padding:8px 0">Загрузка…</div>`;
+  overlay.classList.add('open');
+  requestAnimationFrame(() => sheet.classList.add('open'));
+
+  // Загружаем данные
+  fetchPreviewData(word, isGrammar).then(async data => {
+    if (!sheet.classList.contains('open')) return;
+    if (!data) {
+      if (isGrammar) { content.innerHTML = ''; return; }
+      // Gemini fallback
+      try {
+        const prompt = `Italian word "${word}". Return ONLY valid JSON, no markdown:
+{"word":"canonical form","partOfSpeech":"sostantivo/verbo/aggettivo/etc","category":"cibo/natura/persone/lavoro/casa/viaggio/emozioni/tempo/corpo/cultura/altro","phonetic":"IPA with ˈ","russian":{"main":"перевод","alternatives":"alt1; alt2"}}
+If not a real Italian word return {"word":null}.`;
+        const result = await callGemini(prompt);
+        if (!sheet.classList.contains('open')) return;
+        if (!result?.word) { content.innerHTML = ''; return; }
+        _previewCache['d:' + word.toLowerCase()] = result;
+        content.innerHTML = buildSheetContent(result, false);
+      } catch { content.innerHTML = ''; }
+      return;
+    }
+    content.innerHTML = buildSheetContent(data, isGrammar);
+  });
+}
+
+function buildSheetContent(data, isGrammar) {
+  if (isGrammar) {
+    return `
+      <div class="wp-word">${data.title || ''}</div>
+      <div class="wp-badges" style="margin:8px 0">
+        ${data.category ? `<span class="wp-badge">${data.category}</span>` : ''}
+      </div>
+      <div class="wp-translation" style="font-size:17px">${data.titleRu || ''}</div>
+      ${data.explanation ? `<div style="margin-top:12px;font-size:14px;color:#6b7fa8;line-height:1.6">${data.explanation.slice(0,200)}…</div>` : ''}`;
+  }
+  return `
+    <div class="wp-word">${data.word || ''}</div>
+    ${data.phonetic ? `<div class="wp-phonetic" style="margin-bottom:10px">${highlightStressPreview(data.phonetic)}</div>` : ''}
+    <div class="wp-badges" style="margin-bottom:10px">
+      ${data.partOfSpeech ? `<span class="wp-badge">${data.partOfSpeech}</span>` : ''}
+      ${data.category ? `<span class="wp-badge">${data.category}</span>` : ''}
+      ${data.gender ? `<span class="wp-badge">${data.gender}</span>` : ''}
+    </div>
+    <div class="wp-translation" style="font-size:18px;margin-bottom:4px">${data.russian?.main || ''}</div>
+    ${data.russian?.alternatives ? `<div class="wp-translation"><em>${data.russian.alternatives}</em></div>` : ''}
+    ${data.english?.main ? `<div style="margin-top:6px;font-size:14px;color:var(--stone)">${data.english.main}</div>` : ''}`;
+}
+
+function hideBottomSheet() {
+  $('bottomSheet').classList.remove('open');
+  $('sheetOverlay').classList.remove('open');
+  _sheetWord = null;
+}
+
+function sheetOpenFull() {
+  if (!_sheetWord) return;
+  hideBottomSheet();
+  if (_sheetIsGrammar) {
+    switchMode('grammar');
+    $('searchInput').value = _sheetWord;
+    lookupGrammar(_sheetWord);
+  } else {
+    switchMode('dict');
+    $('searchInput').value = _sheetWord;
+    lookupWord(_sheetWord);
+  }
+}
+
+// Тап на слово — на мобиле sheet, на десктопе hover (уже есть)
+document.addEventListener('click', (e) => {
+  if (!_isMobile()) return;
+  const el = e.target.closest('.clickable-word, .related-word-btn, .history-chip');
+  if (!el) return;
+  // Останавливаем обычный клик (переход к статье) — показываем sheet вместо
+  e.preventDefault();
+  e.stopPropagation();
+  const word = el.textContent.trim();
+  if (!word || word.length < 3) return;
+  const isGrammar = el.classList.contains('history-chip') && currentMode === 'grammar';
+  showBottomSheet(word, isGrammar);
+}, true); // capture phase чтобы перехватить до onclick
+
+// Свайп вниз для закрытия sheet
+(function() {
+  let startY = 0;
+  const sheet = () => $('bottomSheet');
+  document.addEventListener('touchstart', e => {
+    if (!sheet().classList.contains('open')) return;
+    startY = e.touches[0].clientY;
+  }, { passive: true });
+  document.addEventListener('touchend', e => {
+    if (!sheet().classList.contains('open')) return;
+    const dy = e.changedTouches[0].clientY - startY;
+    if (dy > 60) hideBottomSheet();
+  }, { passive: true });
+})();
 
 </script>
 </body>
