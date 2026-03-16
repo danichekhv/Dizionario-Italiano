@@ -340,10 +340,20 @@
     padding-top: 3px;
   }
 
-  .lang-flag {
+  .lang-flag img {
     display: inline-block;
-    margin-right: 6px;
-    font-size: 14px;
+    width: 18px;
+    height: 14px;
+    vertical-align: middle;
+    margin-right: 5px;
+  }
+
+  .lang-flag-ru img {
+    display: inline-block;
+    width: 22px;
+    height: 18px;
+    vertical-align: middle;
+    margin-right: 5px; 
   }
 
   .translation-text {
@@ -912,7 +922,7 @@
     font-family: 'JetBrains Mono', monospace;
     width: 18px; height: 18px;
     border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
+    align-items: center; justify-content: center;
     display: none;
   }
 
@@ -2575,17 +2585,17 @@
 
   /* ── Bottom sheet (mobile preview) ──────────────────────── */
   .sheet-overlay {
-    display: none;
     position: fixed;
     inset: 0;
     background: rgba(26,18,8,0.35);
     z-index: 4000;
     opacity: 0;
-    transition: opacity 0.25s ease;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
   }
   .sheet-overlay.open {
-    display: block;
     opacity: 1;
+    pointer-events: auto;
   }
 
   .bottom-sheet {
@@ -2594,14 +2604,21 @@
     z-index: 4001;
     background: var(--cream);
     border-radius: 16px 16px 0 0;
-    padding: 0 0 32px;
+    padding: 0 0 env(safe-area-inset-bottom, 24px);
     transform: translateY(100%);
-    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
-    max-height: 75vh;
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+    max-height: 70vh;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    will-change: transform;
+    box-shadow: 0 -8px 40px rgba(26,18,8,0.15);
+    touch-action: none;
   }
   .bottom-sheet.open {
     transform: translateY(0);
+  }
+  .bottom-sheet.dragging {
+    transition: none;
   }
   .bottom-sheet::before {
     content: '';
@@ -2616,40 +2633,124 @@
   }
   .bottom-sheet.grammar-sheet {
     background: #111c36;
+    box-shadow: 0 -8px 40px rgba(0,0,30,0.3);
+  }
+
+  .sheet-handle-area {
+    padding: 12px 0 8px;
+    cursor: grab;
+    display: flex;
+    justify-content: center;
+    flex-shrink: 0;
   }
 
   .sheet-handle {
     width: 40px; height: 4px;
     background: var(--border);
     border-radius: 2px;
-    margin: 14px auto 20px;
   }
-  .grammar-sheet .sheet-handle { background: rgba(107,154,240,0.2); }
+  .grammar-sheet .sheet-handle { background: rgba(107,154,240,0.3); }
 
   .sheet-content {
-    padding: 0 24px;
+    padding: 0 24px 8px;
   }
+
+  /* Sheet word preview content */
+  .sheet-wp-word {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .grammar-sheet .sheet-wp-word { color: #e8edf8; }
+
+  .sheet-wp-phonetic {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    color: var(--stone);
+    margin-bottom: 12px;
+  }
+  .grammar-sheet .sheet-wp-phonetic { color: #6b7fa8; }
+
+  .sheet-wp-badges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .sheet-wp-badge {
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 4px 10px;
+    border-radius: 3px;
+    background: rgba(196,82,42,0.08);
+    color: var(--terracotta);
+    border: 1px solid rgba(196,82,42,0.2);
+  }
+  .grammar-sheet .sheet-wp-badge {
+    background: rgba(107,154,240,0.1);
+    color: #6b9af0;
+    border-color: rgba(107,154,240,0.2);
+  }
+
+  .sheet-wp-translation {
+    font-size: 18px;
+    color: var(--ink);
+    font-family: 'PT Serif', serif;
+    line-height: 1.6;
+    margin-bottom: 4px;
+  }
+  .grammar-sheet .sheet-wp-translation { color: #dde5f8; }
+
+  .sheet-wp-alts {
+    font-size: 15px;
+    color: var(--stone);
+    font-style: italic;
+    font-family: 'PT Serif', serif;
+  }
+  .grammar-sheet .sheet-wp-alts { color: #6b7fa8; }
+
+  .sheet-wp-loading {
+    text-align: center;
+    padding: 24px 0;
+    font-style: italic;
+    color: var(--muted);
+    font-size: 16px;
+  }
+  .grammar-sheet .sheet-wp-loading { color: #6b7fa8; }
 
   .sheet-open-btn {
     display: block;
     width: calc(100% - 48px);
-    margin: 20px 24px 0;
-    padding: 13px;
+    margin: 16px 24px 8px;
+    padding: 14px;
     background: var(--terracotta);
     color: white;
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     font-family: 'Playfair Display', serif;
     font-size: 16px;
     font-style: italic;
     cursor: pointer;
     text-align: center;
-    transition: background 0.2s;
+    transition: background 0.2s, transform 0.1s;
+    min-height: 48px;
   }
+  .sheet-open-btn:active { transform: scale(0.98); }
   .sheet-open-btn:hover { background: #a8411e; }
-  .grammar-sheet + .sheet-open-btn,
   .grammar-sheet .sheet-open-btn {
     background: #3b64b4;
+  }
+  .grammar-sheet .sheet-open-btn:hover { background: #2a4d9c; }
+
+  /* Hide word preview popup on mobile */
+  @media (max-width: 768px) {
+    .word-preview {
+      display: none !important;
+    }
   }
 
 </style>
@@ -2712,8 +2813,16 @@
 
   <div class="search-area">
     <div class="lang-toggle">
-      <button class="lang-toggle-btn active" id="btnIT" onclick="setLang('it')"><span class="lang-flag">🇮🇹 </span>Italiano</button>
-      <button class="lang-toggle-btn" id="btnRU" onclick="setLang('ru')"><span class="lang-flag">🇷🇺 </span>Русский</button>
+      <button class="lang-toggle-btn active" id="btnIT" onclick="setLang('it')">
+    <span class="lang-flag">
+        <img src="https://flagpedia.net/data/flags/icon/72x54/it.png" alt="Итальянский флаг" class="flag-icon">
+    </span> Italiano
+</button>
+      <button class="lang-toggle-btn" id="btnRU" onclick="setLang('ru')">
+        <span class="lang-flag-ru">
+          <img src="https://flagpedia.net/data/flags/emoji/apple/160x160/ru.png" alt="Российский флаг" class="flag-icon">
+        </span>Русский
+      </button>
     </div>
     <div class="search-wrapper">
       <input
@@ -2803,14 +2912,22 @@
 
     <div class="translations-section">
       <div class="lang-row">
-        <div class="lang-label"><span class="lang-flag">🇷🇺</span>RU</div>
+        <div class="lang-label">
+          <span class="lang-flag-ru">
+            <img src="https://flagpedia.net/data/flags/emoji/apple/160x160/ru.png" alt="Российский флаг" class="flag-icon"> 
+          </span>RU
+        </div>
         <div>
           <div class="translation-text" id="transRU">—</div>
           <div class="translation-alts" id="transRUalt"></div>
         </div>
       </div>
       <div class="lang-row">
-        <div class="lang-label"><span class="lang-flag">🇬🇧</span>EN</div>
+        <div class="lang-label">
+          <span class="lang-flag-ru">
+            <img src="https://flagpedia.net/data/flags/emoji/apple/160x160/us.png" alt="Российский флаг" class="flag-icon">
+          </span>EN
+        </div>
         <div>
           <div class="translation-text" id="transEN">—</div>
           <div class="translation-alts" id="transENalt"></div>
@@ -2862,13 +2979,15 @@
 </div>
 
 <!-- Bottom sheet overlay -->
-<div class="sheet-overlay" id="sheetOverlay" onclick="hideBottomSheet()"></div>
+<div class="sheet-overlay" id="sheetOverlay"></div>
 
 <!-- Bottom sheet (mobile word preview) -->
 <div class="bottom-sheet" id="bottomSheet">
-  <div class="sheet-handle"></div>
+  <div class="sheet-handle-area" id="sheetHandleArea">
+    <div class="sheet-handle"></div>
+  </div>
   <div class="sheet-content" id="sheetContent"></div>
-  <button class="sheet-open-btn" id="sheetOpenBtn" onclick="sheetOpenFull()">Открыть полную статью →</button>
+  <button class="sheet-open-btn" id="sheetOpenBtn">Открыть полную статью →</button>
 </div>
 
 <!-- Floating favorites button (mobile) -->
@@ -3420,6 +3539,7 @@ function parseInline(text) {
 
 function renderGrammar(g) {
   currentGramEntry = g;
+  currentGramTopic = (g.title || '').toLowerCase();
   const card = $('grammarCard');
   card.innerHTML = '';
 
@@ -4139,12 +4259,22 @@ function historyClick(word, mode) {
 // ── Кликабельные слова в примерах ─────────────────────────────────────────────
 function makeClickable(text) {
   if (!text) return '';
-  // Разбиваем по словам, каждое итальянское слово делаем кликабельным
   return text.replace(/([A-Za-zÀ-öø-ÿ']+)/g, (match) => {
     const clean = match.replace(/'/g, '');
-    if (clean.length < 3) return match; // короткие слова (la, il, di) не кликаем
-    return `<span class="clickable-word" onclick="$('searchInput').value='${match.replace(/'/g,"\\'")}';lookupWord('${match.replace(/'/g,"\\'")}')">${match}</span>`;
+    if (clean.length < 3) return match;
+    const escaped = match.replace(/'/g, "\\'");
+    return `<span class="clickable-word" data-word="${match.replace(/"/g, '&quot;')}" onclick="handleWordClick('${escaped}')">${match}</span>`;
   });
+}
+
+function handleWordClick(word) {
+  if (isTouchDevice()) {
+    // On mobile, bottom sheet is handled by the click event listener
+    // This function is a no-op; the capturing listener handles it
+    return;
+  }
+  $('searchInput').value = word;
+  lookupWord(word);
 }
 
 // ── Клик по заголовку — на главный экран ──────────────────────────────────────
@@ -4328,7 +4458,11 @@ function hidePreview() {
 }
 
 // Навешиваем события на кликабельные слова через делегирование
+const isTouchDevice = () => 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+// Desktop: hover preview
 document.addEventListener('mouseover', (e) => {
+  if (isTouchDevice()) return;
   const el = e.target.closest('.clickable-word, .related-word-btn, .history-chip');
   if (!el) { hidePreview(); return; }
   const word = el.textContent.trim();
@@ -4338,6 +4472,7 @@ document.addEventListener('mouseover', (e) => {
 });
 
 document.addEventListener('mousemove', (e) => {
+  if (isTouchDevice()) return;
   const popup = $('wordPreview');
   if (popup.classList.contains('visible')) {
     positionPreview(popup, e.clientX, e.clientY);
@@ -4345,9 +4480,188 @@ document.addEventListener('mousemove', (e) => {
 });
 
 document.addEventListener('mouseout', (e) => {
+  if (isTouchDevice()) return;
   const el = e.target.closest('.clickable-word, .related-word-btn, .history-chip');
   if (el) hidePreview();
 });
+
+// ── Bottom sheet (mobile) ─────────────────────────────────────────────────────
+let _sheetWord = '';
+let _sheetIsGrammar = false;
+let _sheetDragStartY = 0;
+let _sheetDragCurrentY = 0;
+let _sheetIsDragging = false;
+
+function showBottomSheet(word, isGrammar) {
+  _sheetWord = word;
+  _sheetIsGrammar = isGrammar;
+  const sheet = $('bottomSheet');
+  const overlay = $('sheetOverlay');
+  const content = $('sheetContent');
+  const openBtn = $('sheetOpenBtn');
+
+  sheet.className = 'bottom-sheet' + (isGrammar ? ' grammar-sheet' : '');
+  content.innerHTML = `<div class="sheet-wp-loading">Загрузка…</div>`;
+  openBtn.style.display = 'block';
+
+  // Show
+  requestAnimationFrame(() => {
+    overlay.classList.add('open');
+    sheet.classList.add('open');
+  });
+
+  // Load data
+  loadSheetData(word, isGrammar, content);
+}
+
+async function loadSheetData(word, isGrammar, content) {
+  const data = await fetchPreviewData(word, isGrammar);
+  const sheet = $('bottomSheet');
+  if (!sheet.classList.contains('open')) return;
+
+  if (!data && !isGrammar) {
+    // Try Gemini for mini preview
+    content.innerHTML = `<div class="sheet-wp-loading">Ищем слово…</div>`;
+    try {
+      const prompt = `Italian word "${word}". Return ONLY valid JSON, no markdown:
+{"word":"canonical form","partOfSpeech":"sostantivo/verbo/aggettivo/etc","category":"cibo/natura/persone/lavoro/casa/viaggio/emozioni/tempo/corpo/cultura/altro","phonetic":"IPA with ˈ","russian":{"main":"перевод","alternatives":"alt1; alt2"}}
+If not a real Italian word return {"word":null}.`;
+      const result = await callGemini(prompt);
+      if (!sheet.classList.contains('open')) return;
+      if (!result || !result.word) {
+        content.innerHTML = `<div class="sheet-wp-loading">Слово не найдено</div>`;
+        return;
+      }
+      _previewCache['d:' + word.toLowerCase()] = result;
+      renderSheetDict(content, result);
+    } catch {
+      content.innerHTML = `<div class="sheet-wp-loading">Ошибка загрузки</div>`;
+    }
+    return;
+  }
+
+  if (!data) {
+    content.innerHTML = `<div class="sheet-wp-loading">Нет данных</div>`;
+    return;
+  }
+
+  if (isGrammar) {
+    content.innerHTML = `
+      <div class="sheet-wp-word">${data.title || word}</div>
+      <div class="sheet-wp-badges">
+        ${data.category ? `<span class="sheet-wp-badge">${data.category}</span>` : ''}
+      </div>
+      <div class="sheet-wp-translation">${data.titleRu || ''}</div>`;
+  } else {
+    renderSheetDict(content, data);
+  }
+}
+
+function renderSheetDict(container, data) {
+  container.innerHTML = `
+    <div class="sheet-wp-word">${data.word || ''}</div>
+    ${data.phonetic ? `<div class="sheet-wp-phonetic">${highlightStressPreview(data.phonetic)}</div>` : ''}
+    <div class="sheet-wp-badges">
+      ${data.partOfSpeech ? `<span class="sheet-wp-badge">${data.partOfSpeech}</span>` : ''}
+      ${data.category ? `<span class="sheet-wp-badge">${data.category}</span>` : ''}
+    </div>
+    <div class="sheet-wp-translation">${data.russian?.main || ''}</div>
+    ${data.russian?.alternatives ? `<div class="sheet-wp-alts">${data.russian.alternatives}</div>` : ''}
+  `;
+}
+
+function hideBottomSheet() {
+  const sheet = $('bottomSheet');
+  const overlay = $('sheetOverlay');
+  sheet.classList.remove('open');
+  sheet.classList.remove('dragging');
+  sheet.style.transform = '';
+  overlay.classList.remove('open');
+}
+
+function sheetOpenFull() {
+  hideBottomSheet();
+  if (_sheetWord) {
+    $('searchInput').value = _sheetWord;
+    if (_sheetIsGrammar) {
+      lookupGrammar(_sheetWord);
+    } else {
+      lookupWord(_sheetWord);
+    }
+  }
+}
+
+// Overlay click to close
+$('sheetOverlay').addEventListener('click', hideBottomSheet);
+$('sheetOpenBtn').addEventListener('click', sheetOpenFull);
+
+// ── Swipe-to-dismiss ──────────────────────────────────────────────────────────
+(function setupSheetSwipe() {
+  const sheet = $('bottomSheet');
+  const handleArea = $('sheetHandleArea');
+
+  function onTouchStart(e) {
+    if (!sheet.classList.contains('open')) return;
+    _sheetDragStartY = e.touches[0].clientY;
+    _sheetDragCurrentY = 0;
+    _sheetIsDragging = true;
+    sheet.classList.add('dragging');
+  }
+
+  function onTouchMove(e) {
+    if (!_sheetIsDragging) return;
+    const dy = e.touches[0].clientY - _sheetDragStartY;
+    // Only allow dragging downward
+    _sheetDragCurrentY = Math.max(0, dy);
+    sheet.style.transform = `translateY(${_sheetDragCurrentY}px)`;
+    // Dim overlay proportionally
+    const progress = Math.min(_sheetDragCurrentY / 250, 1);
+    $('sheetOverlay').style.opacity = 1 - progress * 0.7;
+    e.preventDefault();
+  }
+
+  function onTouchEnd() {
+    if (!_sheetIsDragging) return;
+    _sheetIsDragging = false;
+    sheet.classList.remove('dragging');
+    $('sheetOverlay').style.opacity = '';
+    // If dragged more than 100px or velocity was high — dismiss
+    if (_sheetDragCurrentY > 100) {
+      hideBottomSheet();
+    } else {
+      sheet.style.transform = '';
+    }
+  }
+
+  // Attach to the handle area for reliable dragging
+  handleArea.addEventListener('touchstart', onTouchStart, { passive: true });
+  document.addEventListener('touchmove', (e) => {
+    if (_sheetIsDragging) onTouchMove(e);
+  }, { passive: false });
+  document.addEventListener('touchend', onTouchEnd, { passive: true });
+
+  // Also allow swiping from anywhere on the sheet
+  sheet.addEventListener('touchstart', (e) => {
+    if (!sheet.classList.contains('open')) return;
+    // Only start drag if at scroll top
+    if (sheet.scrollTop <= 0) {
+      onTouchStart(e);
+    }
+  }, { passive: true });
+})();
+
+// ── Mobile: tap on clickable word → bottom sheet ──────────────────────────────
+document.addEventListener('click', (e) => {
+  if (!isTouchDevice()) return;
+  const el = e.target.closest('.clickable-word, .related-word-btn');
+  if (!el) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const word = el.textContent.trim();
+  if (!word || word.length < 3) return;
+  const isGrammar = currentMode === 'grammar';
+  showBottomSheet(word, isGrammar);
+}, true);
 
 </script>
 </body>
