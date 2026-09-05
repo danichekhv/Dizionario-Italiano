@@ -3866,11 +3866,21 @@ async function lookupWordHybrid(query, base) {
   showState('result');
   addToHistory(base.word, 'dict');
   try {
-    // Русский перевод из ru.wiktionary приходит за полсекунды — показываем его, не дожидаясь Gemini
-    const fastRu = await fetchRuWiktionary(base.word).catch(() => null);
-    if (fastRu && currentDictWord === key) renderEntry({ ...base, russian: fastRu, _pending: true });
-    const extra = await callGemini(fdCompletionPrompt(base, { skipRussian: !!fastRu }));
-    const entry = fdMergeCompletion(base, extra, fastRu);
+    // Русский перевод добываем параллельно с определениями: ru.wiktionary (~0.3 с) и крошечный
+    // запрос к Gemini (~1 с). Что пришло первым, то и показываем, не дожидаясь полного ответа.
+    let shownRu = null;
+    const takeRu = ru => {
+      if (!ru || !ru.main || shownRu) return;
+      shownRu = ru;
+      if (currentDictWord === key && currentDictEntry && currentDictEntry._pending) renderEntry({ ...currentDictEntry, russian: ru });
+    };
+    const ruJobs = [
+      fetchRuWiktionary(base.word).then(takeRu).catch(() => {}),
+      fetchGeminiRussian(base).then(takeRu).catch(() => {})
+    ];
+    const extra = await callGemini(fdCompletionPrompt(base));
+    await Promise.all(ruJobs);
+    const entry = fdMergeCompletion(base, extra, shownRu);
     const queryKey = query.toLowerCase();
     await sbSave('dictionary', 'word', key, entry);
     if (queryKey !== key) await sbSave('dictionary', 'word', queryKey, entry);
@@ -5054,15 +5064,25 @@ async function fetchPreviewData(word, isGrammar) {
 }
 
 // Только русский перевод, короткий промпт с опорой на английские глоссы Викисловаря
-async function fetchQuickRussian(d) {
-  // Сначала ru.wiktionary (быстро и без LLM), Gemini только если статьи там нет
-  const fast = await fetchRuWiktionary(d.word).catch(() => null);
-  if (fast && fast.main) return fast;
+// Крошечный запрос к Gemini только за русским переводом (ответ ~15 токенов, поэтому быстрый)
+async function fetchGeminiRussian(d) {
   const glosses = (d.senses || []).map(s => s.gloss).filter(Boolean).slice(0, 3).join('; ') || d.english?.main || '';
   const prompt = `Italian ${d.partOfSpeech || 'word'} "${d.word}"${glosses ? ` (English: ${glosses})` : ''}.
 Return ONLY valid JSON, no markdown: {"russian":{"main":"primary Russian translation","alternatives":"1-3 alternatives semicolon-separated or empty"}}`;
   const r = await callGemini(prompt);
-  return { main: r.russian?.main || '', alternatives: r.russian?.alternatives || '' };
+  const ru = { main: r.russian?.main || '', alternatives: r.russian?.alternatives || '' };
+  return ru.main ? ru : null;
+}
+
+// Для превью: ru.wiktionary и Gemini параллельно, берём первый непустой ответ
+function fetchQuickRussian(d) {
+  return new Promise((resolve, reject) => {
+    let pending = 2, done = false;
+    const ok = ru => { if (done) return; if (ru && ru.main) { done = true; resolve(ru); } else if (--pending === 0) reject(new Error('no translation')); };
+    const fail = () => { if (done) return; if (--pending === 0) reject(new Error('no translation')); };
+    fetchRuWiktionary(d.word).then(ok, fail);
+    fetchGeminiRussian(d).then(ok, fail);
+  });
 }
 
 // Дописывает русский перевод в данные превью и дёргает всех, кто ждёт обновления
