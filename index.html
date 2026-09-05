@@ -3201,7 +3201,6 @@ function showApiKeyScreen() {
   if (existing) $('apikeyInput').value = existing;
   $('fastProviderSelect').value = getFastProvider();
   $('fastKeyInput').value = getFastKey();
-  $('fastModelInput').value = getFastModel(true);
   onFastProviderChange();
   // Назад можно только если ключ уже сохранён — при первом запуске возвращаться некуда
   $('apikeyBackBtn').classList.toggle('visible', !!existing);
@@ -3212,9 +3211,11 @@ function showApiKeyScreen() {
 
 // Подстраиваем подсказки под выбранный быстрый провайдер
 function onFastProviderChange() {
-  const p = FAST_PROVIDERS[$('fastProviderSelect').value] || FAST_PROVIDERS.groq;
+  const id = $('fastProviderSelect').value;
+  const p = FAST_PROVIDERS[id] || FAST_PROVIDERS.groq;
   $('fastKeyInput').placeholder = p.keyHint;
   $('fastModelInput').placeholder = `модель, по умолчанию ${p.model}`;
+  $('fastModelInput').value = getFastModel(true, id); // у каждого провайдера своё сохранённое имя модели
   $('fastModels').innerHTML = p.models.map(m => `<option value="${m}">`).join('');
 }
 
@@ -3252,10 +3253,11 @@ function saveApiKey() {
   if (fk && fk.length < 20) { ferr.classList.add('visible'); return; }
   ferr.classList.remove('visible');
   localStorage.setItem('dizionario_gemini_key', val);
-  localStorage.setItem('dizionario_fast_provider', $('fastProviderSelect').value);
+  const providerId = $('fastProviderSelect').value;
+  localStorage.setItem('dizionario_fast_provider', providerId);
   if (fk) localStorage.setItem('dizionario_fast_key', fk); else localStorage.removeItem('dizionario_fast_key');
   const model = $('fastModelInput').value.trim();
-  if (model) localStorage.setItem('dizionario_fast_model', model); else localStorage.removeItem('dizionario_fast_model');
+  if (model) localStorage.setItem('dizionario_fast_model_' + providerId, model); else localStorage.removeItem('dizionario_fast_model_' + providerId);
   hideApiKeyScreen();
 }
 
@@ -3596,14 +3598,19 @@ try {
   if (!localStorage.getItem('dizionario_fast_key') && localStorage.getItem('dizionario_cerebras_key')) {
     localStorage.setItem('dizionario_fast_key', localStorage.getItem('dizionario_cerebras_key'));
     localStorage.setItem('dizionario_fast_provider', 'cerebras');
-    const m = localStorage.getItem('dizionario_cerebras_model'); if (m) localStorage.setItem('dizionario_fast_model', m);
+    const m = localStorage.getItem('dizionario_cerebras_model'); if (m) localStorage.setItem('dizionario_fast_model_cerebras', m);
   }
+  // Промежуточная версия хранила одну модель на всех провайдеров — переносим её только к Cerebras
+  const legacy = localStorage.getItem('dizionario_fast_model');
+  if (legacy) { if (!localStorage.getItem('dizionario_fast_model_cerebras')) localStorage.setItem('dizionario_fast_model_cerebras', legacy); localStorage.removeItem('dizionario_fast_model'); }
 } catch(e) {}
 function getFastProvider() { try { return FAST_PROVIDERS[localStorage.getItem('dizionario_fast_provider')] ? localStorage.getItem('dizionario_fast_provider') : 'groq'; } catch(e) { return 'groq'; } }
 function getFastKey() { try { return localStorage.getItem('dizionario_fast_key') || ''; } catch(e) { return ''; } }
-function getFastModel(raw) {
-  let m = ''; try { m = localStorage.getItem('dizionario_fast_model') || ''; } catch(e) {}
-  return raw ? m : (m || FAST_PROVIDERS[getFastProvider()].model);
+// Модель хранится отдельно для каждого провайдера: у Groq та же gpt-oss называется openai/gpt-oss-120b
+function getFastModel(raw, provider) {
+  const p = provider || getFastProvider();
+  let m = ''; try { m = localStorage.getItem('dizionario_fast_model_' + p) || ''; } catch(e) {}
+  return raw ? m : (m || FAST_PROVIDERS[p].model);
 }
 const useFastForDict = () => !!getFastKey();
 const fastLabel = () => `${FAST_PROVIDERS[getFastProvider()].name} · ${getFastModel()}`;
