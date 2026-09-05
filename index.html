@@ -2473,6 +2473,20 @@
     margin-left: 6px;
   }
   .apikey-model { padding-right: 20px; font-size: 13px; }
+  .apikey-select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 20px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 15px;
+    font-style: italic;
+    letter-spacing: 0;
+    cursor: pointer;
+    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position: calc(100% - 22px) 50%, calc(100% - 16px) 50%;
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+  }
   .apikey-hint-small {
     font-size: 13px;
     font-style: italic;
@@ -2898,34 +2912,38 @@
     </div>
     <div class="apikey-error" id="apikeyError">Введите корректный ключ (начинается с AIza…)</div>
 
-    <div class="apikey-label apikey-label-opt">Cerebras API Key <span>необязательно · быстрее, лимит выше</span></div>
+    <div class="apikey-label apikey-label-opt">Быстрый провайдер <span>необязательно · для словарных статей и подсказок</span></div>
     <div class="apikey-input-wrap">
-      <input class="apikey-input" id="cerebrasKeyInput" type="password"
-        placeholder="csk-…"
+      <select class="apikey-input apikey-select" id="fastProviderSelect" onchange="onFastProviderChange()">
+        <option value="groq">Groq · бесплатно, около 1000 запросов в день</option>
+        <option value="cerebras">Cerebras · требует привязки оплаты</option>
+        <option value="mistral">Mistral · бесплатно, нужен номер телефона</option>
+      </select>
+    </div>
+    <div class="apikey-input-wrap">
+      <input class="apikey-input" id="fastKeyInput" type="password"
+        placeholder="gsk_…"
         autocomplete="off" spellcheck="false"
         onkeydown="if(event.key==='Enter') saveApiKey()"
       />
-      <button class="apikey-eye" onclick="toggleKeyVisibility('cerebrasKeyInput')" title="Показать/скрыть">👁</button>
+      <button class="apikey-eye" onclick="toggleKeyVisibility('fastKeyInput')" title="Показать/скрыть">👁</button>
     </div>
     <div class="apikey-input-wrap">
-      <input class="apikey-input apikey-model" id="cerebrasModelInput" type="text" list="cerebrasModels"
-        placeholder="модель Cerebras, по умолчанию gpt-oss-120b"
+      <input class="apikey-input apikey-model" id="fastModelInput" type="text" list="fastModels"
+        placeholder="модель, по умолчанию openai/gpt-oss-120b"
         autocomplete="off" spellcheck="false"
       />
-      <datalist id="cerebrasModels">
-        <option value="gpt-oss-120b">
-        <option value="qwen-3-235b-a22b-instruct-2507">
-        <option value="llama-3.3-70b">
-      </datalist>
+      <datalist id="fastModels"></datalist>
     </div>
-    <div class="apikey-error" id="cerebrasKeyError">Ключ Cerebras выглядит некорректно (обычно начинается с csk-)</div>
-    <div class="apikey-hint-small">С ключом Cerebras словарные статьи и подсказки идут через него, грамматика и поиск с русского остаются на Gemini.</div>
+    <div class="apikey-error" id="fastKeyError">Ключ выглядит некорректно</div>
+    <div class="apikey-hint-small" id="fastHint">С ключом словарные статьи и подсказки идут через выбранный сервис, грамматика и поиск с русского остаются на Gemini. Если сервис отказывает, запрос уходит в Gemini.</div>
 
     <button class="apikey-btn" onclick="saveApiKey()">Начать →</button>
     <button class="apikey-back-btn" id="apikeyBackBtn" onclick="hideApiKeyScreen()">← Назад</button>
     <p class="apikey-hint">
-      Ключи бесплатны: Gemini на <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>,
-      Cerebras на <a href="https://cloud.cerebras.ai" target="_blank">cloud.cerebras.ai</a><br><br>
+      Ключи: Gemini на <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>,
+      Groq на <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a>,
+      Mistral на <a href="https://console.mistral.ai" target="_blank">console.mistral.ai</a><br><br>
       Ключи хранятся только в вашем браузере и никуда, кроме самих сервисов, не передаются.
     </p>
   </div>
@@ -3181,13 +3199,23 @@ function showApiKeyScreen() {
   $('headerSettingsBtn').style.visibility = 'hidden';
   const existing = getApiKey();
   if (existing) $('apikeyInput').value = existing;
-  $('cerebrasKeyInput').value = getCerebrasKey();
-  $('cerebrasModelInput').value = getCerebrasModel(true);
+  $('fastProviderSelect').value = getFastProvider();
+  $('fastKeyInput').value = getFastKey();
+  $('fastModelInput').value = getFastModel(true);
+  onFastProviderChange();
   // Назад можно только если ключ уже сохранён — при первом запуске возвращаться некуда
   $('apikeyBackBtn').classList.toggle('visible', !!existing);
   $('apikeyError').classList.remove('visible');
-  $('cerebrasKeyError').classList.remove('visible');
+  $('fastKeyError').classList.remove('visible');
   setTimeout(() => $('apikeyInput').focus(), 100);
+}
+
+// Подстраиваем подсказки под выбранный быстрый провайдер
+function onFastProviderChange() {
+  const p = FAST_PROVIDERS[$('fastProviderSelect').value] || FAST_PROVIDERS.groq;
+  $('fastKeyInput').placeholder = p.keyHint;
+  $('fastModelInput').placeholder = `модель, по умолчанию ${p.model}`;
+  $('fastModels').innerHTML = p.models.map(m => `<option value="${m}">`).join('');
 }
 
 function toggleKeyVisibility(id) {
@@ -3218,15 +3246,16 @@ function saveApiKey() {
     return;
   }
   err.classList.remove('visible');
-  // Cerebras необязателен: пустое поле — всё идёт через Gemini
-  const ck = $('cerebrasKeyInput').value.trim();
-  const cerr = $('cerebrasKeyError');
-  if (ck && ck.length < 20) { cerr.classList.add('visible'); return; }
-  cerr.classList.remove('visible');
+  // Быстрый провайдер необязателен: пустое поле ключа — всё идёт через Gemini
+  const fk = $('fastKeyInput').value.trim();
+  const ferr = $('fastKeyError');
+  if (fk && fk.length < 20) { ferr.classList.add('visible'); return; }
+  ferr.classList.remove('visible');
   localStorage.setItem('dizionario_gemini_key', val);
-  if (ck) localStorage.setItem('dizionario_cerebras_key', ck); else localStorage.removeItem('dizionario_cerebras_key');
-  const model = $('cerebrasModelInput').value.trim();
-  if (model) localStorage.setItem('dizionario_cerebras_model', model); else localStorage.removeItem('dizionario_cerebras_model');
+  localStorage.setItem('dizionario_fast_provider', $('fastProviderSelect').value);
+  if (fk) localStorage.setItem('dizionario_fast_key', fk); else localStorage.removeItem('dizionario_fast_key');
+  const model = $('fastModelInput').value.trim();
+  if (model) localStorage.setItem('dizionario_fast_model', model); else localStorage.removeItem('dizionario_fast_model');
   hideApiKeyScreen();
 }
 
@@ -3551,48 +3580,64 @@ async function callGemini(prompt) {
   return extractJson(text);
 }
 
-// ── Cerebras (OpenAI-совместимый API) — быстрый провайдер для словарных статей ─────
+// ── Быстрый провайдер (OpenAI-совместимый API: Groq / Cerebras / Mistral) ───────────
 // Используется только для словаря и подсказок и только если введён ключ; грамматика и поиск
 // с русского остаются на Gemini, где качество русского текста важнее скорости.
-const CEREBRAS_URL = 'https://api.cerebras.ai/v1/chat/completions';
-const CEREBRAS_DEFAULT_MODEL = 'gpt-oss-120b';
-function getCerebrasKey() { try { return localStorage.getItem('dizionario_cerebras_key') || ''; } catch(e) { return ''; } }
-function getCerebrasModel(raw) {
-  let m = ''; try { m = localStorage.getItem('dizionario_cerebras_model') || ''; } catch(e) {}
-  return raw ? m : (m || CEREBRAS_DEFAULT_MODEL);
+const FAST_PROVIDERS = {
+  groq:     { name: 'Groq',     url: 'https://api.groq.com/openai/v1/chat/completions', model: 'openai/gpt-oss-120b',
+              models: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'qwen/qwen3-32b'], keyHint: 'gsk_…' },
+  cerebras: { name: 'Cerebras', url: 'https://api.cerebras.ai/v1/chat/completions', model: 'gpt-oss-120b',
+              models: ['gpt-oss-120b', 'qwen-3-235b-a22b-instruct-2507', 'llama-3.3-70b'], keyHint: 'csk-…' },
+  mistral:  { name: 'Mistral',  url: 'https://api.mistral.ai/v1/chat/completions', model: 'mistral-small-latest',
+              models: ['mistral-small-latest', 'mistral-medium-latest'], keyHint: 'ключ Mistral' },
+};
+// Перенос настроек из прежней версии, где был только Cerebras
+try {
+  if (!localStorage.getItem('dizionario_fast_key') && localStorage.getItem('dizionario_cerebras_key')) {
+    localStorage.setItem('dizionario_fast_key', localStorage.getItem('dizionario_cerebras_key'));
+    localStorage.setItem('dizionario_fast_provider', 'cerebras');
+    const m = localStorage.getItem('dizionario_cerebras_model'); if (m) localStorage.setItem('dizionario_fast_model', m);
+  }
+} catch(e) {}
+function getFastProvider() { try { return FAST_PROVIDERS[localStorage.getItem('dizionario_fast_provider')] ? localStorage.getItem('dizionario_fast_provider') : 'groq'; } catch(e) { return 'groq'; } }
+function getFastKey() { try { return localStorage.getItem('dizionario_fast_key') || ''; } catch(e) { return ''; } }
+function getFastModel(raw) {
+  let m = ''; try { m = localStorage.getItem('dizionario_fast_model') || ''; } catch(e) {}
+  return raw ? m : (m || FAST_PROVIDERS[getFastProvider()].model);
 }
-const useCerebrasForDict = () => !!getCerebrasKey();
+const useFastForDict = () => !!getFastKey();
+const fastLabel = () => `${FAST_PROVIDERS[getFastProvider()].name} · ${getFastModel()}`;
 
-function cerebrasBody(prompt, stream) {
-  const model = getCerebrasModel();
+function fastBody(prompt, stream) {
+  const model = getFastModel();
   const body = {
-    model, stream, temperature: 0.2, max_completion_tokens: 2048,
+    model, stream, temperature: 0.2, max_tokens: 2048,
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: 'You are a precise Italian lexicographer. Answer with valid JSON only, no markdown.' },
       { role: 'user', content: prompt }
     ]
   };
-  if (/^gpt-oss/.test(model)) body.reasoning_effort = 'low'; // у reasoning-моделей иначе уходят секунды на размышления
+  if (/gpt-oss/.test(model)) body.reasoning_effort = 'low'; // у reasoning-моделей иначе уходят секунды на размышления
   return JSON.stringify(body);
 }
-const cerebrasHeaders = () => ({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${getCerebrasKey()}` });
-async function cerebrasError(response) {
+const fastHeaders = () => ({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${getFastKey()}` });
+async function fastError(response) {
   const data = await response.json().catch(() => ({}));
   const msg = data.error?.message || data.message || `HTTP ${response.status}`;
-  return new Error(`Cerebras: ${msg}`);
+  return new Error(`${FAST_PROVIDERS[getFastProvider()].name}: ${msg}`);
 }
 
-async function callCerebras(prompt) {
-  const response = await fetch(CEREBRAS_URL, { method: 'POST', headers: cerebrasHeaders(), body: cerebrasBody(prompt, false) });
-  if (!response.ok) throw await cerebrasError(response);
+async function callFast(prompt) {
+  const response = await fetch(FAST_PROVIDERS[getFastProvider()].url, { method: 'POST', headers: fastHeaders(), body: fastBody(prompt, false) });
+  if (!response.ok) throw await fastError(response);
   const data = await response.json();
   return extractJson(data.choices?.[0]?.message?.content || '');
 }
 
-async function callCerebrasStream(prompt, onText) {
-  const response = await fetch(CEREBRAS_URL, { method: 'POST', headers: cerebrasHeaders(), body: cerebrasBody(prompt, true) });
-  if (!response.ok || !response.body) throw await cerebrasError(response);
+async function callFastStream(prompt, onText) {
+  const response = await fetch(FAST_PROVIDERS[getFastProvider()].url, { method: 'POST', headers: fastHeaders(), body: fastBody(prompt, true) });
+  if (!response.ok || !response.body) throw await fastError(response);
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '', text = '';
@@ -3609,7 +3654,7 @@ async function callCerebrasStream(prompt, onText) {
       if (!payload || payload === '[DONE]') continue;
       let chunk;
       try { chunk = JSON.parse(payload); } catch { continue; }
-      if (chunk.error) throw new Error('Cerebras: ' + (chunk.error.message || 'stream error'));
+      if (chunk.error) throw new Error(`${FAST_PROVIDERS[getFastProvider()].name}: ` + (chunk.error.message || 'stream error'));
       const t = chunk.choices?.[0]?.delta?.content || '';
       if (t) { text += t; if (onText) { try { onText(text); } catch(e) {} } }
     }
@@ -3617,34 +3662,33 @@ async function callCerebrasStream(prompt, onText) {
   return extractJson(text);
 }
 
-// Маршрутизация по задачам: 'dict' — Cerebras при наличии ключа, всё остальное — Gemini.
-// У Cerebras на бесплатном тарифе всего 5 запросов в минуту: при отказе по лимиту или сбое
-// тот же запрос сразу уходит в Gemini. Ошибка ключа не маскируется, чтобы её было видно.
+// Маршрутизация по задачам: 'dict' — быстрый провайдер при наличии ключа, всё остальное — Gemini.
+// При отказе по лимиту или сбое тот же запрос сразу уходит в Gemini. Ошибка ключа не маскируется.
 let _lastDictLlm = 'Gemini';
 const isKeyError = msg => /401|403|Unauthorized|invalid_api_key|Wrong API Key|PERMISSION_DENIED/i.test(msg || '');
 // Причину отката показываем на экране (не чаще раза в 20 секунд), иначе непонятно, почему статью написал Gemini
 let _lastFallbackToastAt = 0;
-function noteCerebrasFallback(e) {
+function noteFastFallback(e) {
   const msg = (e && e.message) || String(e);
-  console.warn('Cerebras → Gemini:', msg);
+  console.warn('fast provider → Gemini:', msg);
   if (Date.now() - _lastFallbackToastAt > 20000) {
     _lastFallbackToastAt = Date.now();
-    showToast('⚠ ' + msg.replace(/^Cerebras:\s*/i, 'Cerebras: ').slice(0, 140) + ' → Gemini');
+    showToast('⚠ ' + msg.slice(0, 140) + ' → Gemini');
   }
 }
 async function llmJson(prompt, task) {
-  if (task === 'dict' && useCerebrasForDict()) {
-    try { const r = await callCerebras(prompt); _lastDictLlm = `Cerebras · ${getCerebrasModel()}`; return r; }
-    catch(e) { if (isKeyError(e.message)) throw e; noteCerebrasFallback(e); }
+  if (task === 'dict' && useFastForDict()) {
+    try { const r = await callFast(prompt); _lastDictLlm = fastLabel(); return r; }
+    catch(e) { if (isKeyError(e.message)) throw e; noteFastFallback(e); }
   }
   const r = await callGemini(prompt);
   if (task === 'dict') _lastDictLlm = 'Gemini';
   return r;
 }
 async function llmJsonStream(prompt, task, onText) {
-  if (task === 'dict' && useCerebrasForDict()) {
-    try { const r = await callCerebrasStream(prompt, onText); _lastDictLlm = `Cerebras · ${getCerebrasModel()}`; return r; }
-    catch(e) { if (isKeyError(e.message)) throw e; noteCerebrasFallback(e); }
+  if (task === 'dict' && useFastForDict()) {
+    try { const r = await callFastStream(prompt, onText); _lastDictLlm = fastLabel(); return r; }
+    catch(e) { if (isKeyError(e.message)) throw e; noteFastFallback(e); }
   }
   const r = await callGeminiStream(prompt, onText);
   if (task === 'dict') _lastDictLlm = 'Gemini';
@@ -4251,7 +4295,7 @@ const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&
 function describeApiError(msg) {
   const isQuota = /quota|RESOURCE_EXHAUSTED|429|rate limit/i.test(msg);
   const isBadKey = /API[ _]key|API_KEY|PERMISSION_DENIED|leaked|403|401|Unauthorized|invalid_api_key/i.test(msg);
-  const who = /^Cerebras/i.test(msg) ? 'Cerebras' : 'Gemini';
+  const who = (msg.match(/^(Groq|Cerebras|Mistral)/i) || [])[1] || 'Gemini';
   if (isBadKey) return `🔑 Проблема с ключом ${who} — <u style="cursor:pointer" onclick="showApiKeyScreen()">сменить ключ</u>`;
   if (isQuota)  return `⏳ Лимит ${who} исчерпан — попробуйте позже или <u style="cursor:pointer" onclick="showApiKeyScreen()">смените ключ</u>`;
   return 'Errore: ' + escapeHtml(msg);
