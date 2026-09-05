@@ -1,0 +1,10 @@
+// Настройки для Cloudflare Workers: сайт раздаётся как статические файлы из корня репозитория.
+// Имя должно совпадать с именем Worker в панели Cloudflare (dizio.<аккаунт>.workers.dev).
+{
+  "name": "dizio",
+  "compatibility_date": "2025-01-01",
+  "assets": {
+    "directory": "./",
+    "not_found_handling": "single-page-application"
+  }
+}
