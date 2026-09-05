@@ -3454,17 +3454,31 @@ function showState(state) {
 }
 
 // ── Gemini API ────────────────────────────────────────────────────────────────
+// У моделей Gemini 3 перед ответом включены «размышления» — для словарной задачи это лишние секунды.
+// Просим минимальный уровень; если модель не знает такой параметр, запоминаем и больше не шлём.
+let _geminiThinkingOff = (() => { try { return localStorage.getItem('dizionario_thinking_unsupported') !== '1'; } catch(e) { return true; } })();
+function markThinkingUnsupported() {
+  _geminiThinkingOff = false;
+  try { localStorage.setItem('dizionario_thinking_unsupported', '1'); } catch(e) {} // чтобы не тратить запрос на пробу при каждом заходе
+}
+function geminiRequestBody(prompt) {
+  const generationConfig = { temperature: 0.2, responseMimeType: 'application/json' };
+  if (_geminiThinkingOff) generationConfig.thinkingConfig = { thinkingLevel: 'minimal' };
+  return JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig });
+}
+const isThinkingParamError = msg => /thinking/i.test(msg || '');
+
 async function callGemini(prompt) {
   const response = await fetch(getApiUrl(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.2 }
-    })
+    body: geminiRequestBody(prompt)
   });
   const data = await response.json();
-  if (data.error) throw new Error(data.error.message);
+  if (data.error) {
+    if (_geminiThinkingOff && isThinkingParamError(data.error.message)) { markThinkingUnsupported(); return callGemini(prompt); }
+    throw new Error(data.error.message);
+  }
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   return extractJson(text);
 }
@@ -3491,14 +3505,13 @@ async function callGeminiStream(prompt, onText) {
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.2 }
-    })
+    body: geminiRequestBody(prompt)
   });
   if (!response.ok || !response.body) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.error?.message || `HTTP ${response.status}`);
+    const msg = data.error?.message || `HTTP ${response.status}`;
+    if (_geminiThinkingOff && isThinkingParamError(msg)) { markThinkingUnsupported(); return callGeminiStream(prompt, onText); }
+    throw new Error(msg);
   }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -3936,9 +3949,19 @@ async function lookupWordHybrid(query, base) {
       if (currentDictWord === key && currentDictEntry && currentDictEntry._pending) renderEntry({ ...currentDictEntry, russian: ru });
     };
     const wiktJob = fetchRuWiktionary(base.word).then(takeRu).catch(() => {});
+    let shownMeanings = 0;
     const extra = await callGeminiStream(fdCompletionPrompt(base), partial => {
       const m = partial.match(/"russian"\s*:\s*\{[^{}]*\}/);
       if (m) { try { takeRu(JSON.parse('{' + m[0] + '}').russian); } catch(e) {} }
+      // Определения показываем по одному, как только очередной объект в массиве meanings дописан
+      const mi = partial.indexOf('"meanings"');
+      if (mi === -1 || currentDictWord !== key || !currentDictEntry || !currentDictEntry._pending) return;
+      const objs = [...partial.slice(mi).matchAll(/\{\s*"definition"\s*:\s*"(?:[^"\\]|\\.)*"\s*(?:,\s*"example"\s*:\s*"(?:[^"\\]|\\.)*"\s*)?\}/g)];
+      if (objs.length <= shownMeanings) return;
+      const meanings = objs.map(o => { try { return JSON.parse(o[0]); } catch(e) { return null; } }).filter(Boolean);
+      if (!meanings.length) return;
+      shownMeanings = objs.length;
+      renderEntry({ ...currentDictEntry, meanings, _pending: true });
     });
     await wiktJob;
     const entry = fdMergeCompletion(base, extra, shownRu);
@@ -4385,6 +4408,8 @@ function highlightStress(phonetic) {
 }
 
 function renderEntry(e) {
+  // Повторный рендер того же слова (дозагрузка перевода/определений) не должен сбрасывать спряжения
+  const sameWord = currentDictWord === (e.word || '').toLowerCase() && currentConjugations === e.conjugations;
   currentDictEntry = e;
   currentDictWord = (e.word || '').toLowerCase();
   checkIfStarred('dict', (e.word || '').toLowerCase());
@@ -4477,6 +4502,8 @@ function renderEntry(e) {
         </div>`).join('')}
       </div>`;
     }
+    // Ответ ещё идёт потоком — следующие значения на подходе
+    if (e._pending) mc.insertAdjacentHTML('beforeend', '<div class="pending-note"><span class="pending-shimmer wide" style="width:60%"></span></div>');
   } else {
     // Старый формат из кэша — definition + example
     mc.innerHTML = `
@@ -4507,10 +4534,12 @@ function renderEntry(e) {
   if (e.isVerb && e.conjugations) {
     conjSection.style.display = 'block';
     conjSection.classList.toggle('has-related', !!(e.relatedWords && e.relatedWords.length > 0));
-    currentConjugations = e.conjugations;
-    renderTenseTabs(e.conjugations);
-    $('conjBody').classList.remove('open');
-    $('conjToggle').classList.remove('open');
+    if (!sameWord) {
+      currentConjugations = e.conjugations;
+      renderTenseTabs(e.conjugations);
+      $('conjBody').classList.remove('open');
+      $('conjToggle').classList.remove('open');
+    }
   } else {
     conjSection.style.display = 'none';
   }
