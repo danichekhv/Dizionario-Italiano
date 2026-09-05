@@ -2462,6 +2462,26 @@
     margin-bottom: 8px;
   }
 
+  .apikey-label-opt { margin-top: 22px; }
+  .apikey-label span {
+    text-transform: none;
+    letter-spacing: 0;
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--stone);
+    margin-left: 6px;
+  }
+  .apikey-model { padding-right: 20px; font-size: 13px; }
+  .apikey-hint-small {
+    font-size: 13px;
+    font-style: italic;
+    color: var(--muted);
+    text-align: left;
+    line-height: 1.5;
+    margin: -2px 0 18px;
+  }
+
   .apikey-input-wrap { position: relative; margin-bottom: 12px; }
 
   .apikey-input {
@@ -2877,12 +2897,36 @@
       <button class="apikey-eye" id="apikeyEye" onclick="toggleApiKeyVisibility()" title="Показать/скрыть">👁</button>
     </div>
     <div class="apikey-error" id="apikeyError">Введите корректный ключ (начинается с AIza…)</div>
+
+    <div class="apikey-label apikey-label-opt">Cerebras API Key <span>необязательно · быстрее, лимит выше</span></div>
+    <div class="apikey-input-wrap">
+      <input class="apikey-input" id="cerebrasKeyInput" type="password"
+        placeholder="csk-…"
+        autocomplete="off" spellcheck="false"
+        onkeydown="if(event.key==='Enter') saveApiKey()"
+      />
+      <button class="apikey-eye" onclick="toggleKeyVisibility('cerebrasKeyInput')" title="Показать/скрыть">👁</button>
+    </div>
+    <div class="apikey-input-wrap">
+      <input class="apikey-input apikey-model" id="cerebrasModelInput" type="text" list="cerebrasModels"
+        placeholder="модель Cerebras, по умолчанию gpt-oss-120b"
+        autocomplete="off" spellcheck="false"
+      />
+      <datalist id="cerebrasModels">
+        <option value="gpt-oss-120b">
+        <option value="qwen-3-235b-a22b-instruct-2507">
+        <option value="llama-3.3-70b">
+      </datalist>
+    </div>
+    <div class="apikey-error" id="cerebrasKeyError">Ключ Cerebras выглядит некорректно (обычно начинается с csk-)</div>
+    <div class="apikey-hint-small">С ключом Cerebras словарные статьи и подсказки идут через него, грамматика и поиск с русского остаются на Gemini.</div>
+
     <button class="apikey-btn" onclick="saveApiKey()">Начать →</button>
     <button class="apikey-back-btn" id="apikeyBackBtn" onclick="hideApiKeyScreen()">← Назад</button>
     <p class="apikey-hint">
-      Получить ключ бесплатно можно на<br>
-      <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a><br><br>
-      Ключ хранится только в вашем браузере и никуда не передаётся.
+      Ключи бесплатны: Gemini на <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>,
+      Cerebras на <a href="https://cloud.cerebras.ai" target="_blank">cloud.cerebras.ai</a><br><br>
+      Ключи хранятся только в вашем браузере и никуда, кроме самих сервисов, не передаются.
     </p>
   </div>
 </div>
@@ -3137,10 +3181,18 @@ function showApiKeyScreen() {
   $('headerSettingsBtn').style.visibility = 'hidden';
   const existing = getApiKey();
   if (existing) $('apikeyInput').value = existing;
+  $('cerebrasKeyInput').value = getCerebrasKey();
+  $('cerebrasModelInput').value = getCerebrasModel(true);
   // Назад можно только если ключ уже сохранён — при первом запуске возвращаться некуда
   $('apikeyBackBtn').classList.toggle('visible', !!existing);
   $('apikeyError').classList.remove('visible');
+  $('cerebrasKeyError').classList.remove('visible');
   setTimeout(() => $('apikeyInput').focus(), 100);
+}
+
+function toggleKeyVisibility(id) {
+  const inp = $(id);
+  inp.type = inp.type === 'password' ? 'text' : 'password';
 }
 
 function hideApiKeyScreen() {
@@ -3166,7 +3218,15 @@ function saveApiKey() {
     return;
   }
   err.classList.remove('visible');
+  // Cerebras необязателен: пустое поле — всё идёт через Gemini
+  const ck = $('cerebrasKeyInput').value.trim();
+  const cerr = $('cerebrasKeyError');
+  if (ck && ck.length < 20) { cerr.classList.add('visible'); return; }
+  cerr.classList.remove('visible');
   localStorage.setItem('dizionario_gemini_key', val);
+  if (ck) localStorage.setItem('dizionario_cerebras_key', ck); else localStorage.removeItem('dizionario_cerebras_key');
+  const model = $('cerebrasModelInput').value.trim();
+  if (model) localStorage.setItem('dizionario_cerebras_model', model); else localStorage.removeItem('dizionario_cerebras_model');
   hideApiKeyScreen();
 }
 
@@ -3489,6 +3549,96 @@ async function callGemini(prompt) {
   }
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   return extractJson(text);
+}
+
+// ── Cerebras (OpenAI-совместимый API) — быстрый провайдер для словарных статей ─────
+// Используется только для словаря и подсказок и только если введён ключ; грамматика и поиск
+// с русского остаются на Gemini, где качество русского текста важнее скорости.
+const CEREBRAS_URL = 'https://api.cerebras.ai/v1/chat/completions';
+const CEREBRAS_DEFAULT_MODEL = 'gpt-oss-120b';
+function getCerebrasKey() { try { return localStorage.getItem('dizionario_cerebras_key') || ''; } catch(e) { return ''; } }
+function getCerebrasModel(raw) {
+  let m = ''; try { m = localStorage.getItem('dizionario_cerebras_model') || ''; } catch(e) {}
+  return raw ? m : (m || CEREBRAS_DEFAULT_MODEL);
+}
+const useCerebrasForDict = () => !!getCerebrasKey();
+
+function cerebrasBody(prompt, stream) {
+  const model = getCerebrasModel();
+  const body = {
+    model, stream, temperature: 0.2, max_completion_tokens: 2048,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: 'You are a precise Italian lexicographer. Answer with valid JSON only, no markdown.' },
+      { role: 'user', content: prompt }
+    ]
+  };
+  if (/^gpt-oss/.test(model)) body.reasoning_effort = 'low'; // у reasoning-моделей иначе уходят секунды на размышления
+  return JSON.stringify(body);
+}
+const cerebrasHeaders = () => ({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${getCerebrasKey()}` });
+async function cerebrasError(response) {
+  const data = await response.json().catch(() => ({}));
+  const msg = data.error?.message || data.message || `HTTP ${response.status}`;
+  return new Error(`Cerebras: ${msg}`);
+}
+
+async function callCerebras(prompt) {
+  const response = await fetch(CEREBRAS_URL, { method: 'POST', headers: cerebrasHeaders(), body: cerebrasBody(prompt, false) });
+  if (!response.ok) throw await cerebrasError(response);
+  const data = await response.json();
+  return extractJson(data.choices?.[0]?.message?.content || '');
+}
+
+async function callCerebrasStream(prompt, onText) {
+  const response = await fetch(CEREBRAS_URL, { method: 'POST', headers: cerebrasHeaders(), body: cerebrasBody(prompt, true) });
+  if (!response.ok || !response.body) throw await cerebrasError(response);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '', text = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (!line.startsWith('data:')) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === '[DONE]') continue;
+      let chunk;
+      try { chunk = JSON.parse(payload); } catch { continue; }
+      if (chunk.error) throw new Error('Cerebras: ' + (chunk.error.message || 'stream error'));
+      const t = chunk.choices?.[0]?.delta?.content || '';
+      if (t) { text += t; if (onText) { try { onText(text); } catch(e) {} } }
+    }
+  }
+  return extractJson(text);
+}
+
+// Маршрутизация по задачам: 'dict' — Cerebras при наличии ключа, всё остальное — Gemini.
+// У Cerebras на бесплатном тарифе всего 5 запросов в минуту: при отказе по лимиту или сбое
+// тот же запрос сразу уходит в Gemini. Ошибка ключа не маскируется, чтобы её было видно.
+let _lastDictLlm = 'Gemini';
+const isKeyError = msg => /401|403|Unauthorized|invalid_api_key|Wrong API Key|PERMISSION_DENIED/i.test(msg || '');
+async function llmJson(prompt, task) {
+  if (task === 'dict' && useCerebrasForDict()) {
+    try { const r = await callCerebras(prompt); _lastDictLlm = `Cerebras · ${getCerebrasModel()}`; return r; }
+    catch(e) { if (isKeyError(e.message)) throw e; console.warn('Cerebras → Gemini:', e.message); }
+  }
+  const r = await callGemini(prompt);
+  if (task === 'dict') _lastDictLlm = 'Gemini';
+  return r;
+}
+async function llmJsonStream(prompt, task, onText) {
+  if (task === 'dict' && useCerebrasForDict()) {
+    try { const r = await callCerebrasStream(prompt, onText); _lastDictLlm = `Cerebras · ${getCerebrasModel()}`; return r; }
+    catch(e) { if (isKeyError(e.message)) throw e; console.warn('Cerebras → Gemini:', e.message); }
+  }
+  const r = await callGeminiStream(prompt, onText);
+  if (task === 'dict') _lastDictLlm = 'Gemini';
+  return r;
 }
 
 function extractJson(text) {
@@ -3936,7 +4086,8 @@ function fdMergeCompletion(base, extra, fastRu) {
       : { main: extra.russian?.main || '', alternatives: extra.russian?.alternatives || '' },
     category: extra.category || 'altro',
     meanings,
-    relatedWords: related
+    relatedWords: related,
+    llm: _lastDictLlm
   };
 }
 
@@ -3961,7 +4112,7 @@ async function lookupWordHybrid(query, base) {
     if (previewQ && previewQ.data && previewQ.data.russian && previewQ.data.russian.main) takeRu(previewQ.data.russian);
     const wiktJob = fetchRuWiktionary(base.word).then(takeRu).catch(() => {});
     let shownMeanings = 0;
-    const extra = await callGeminiStream(fdCompletionPrompt(base), partial => {
+    const extra = await llmJsonStream(fdCompletionPrompt(base), 'dict', partial => {
       const m = partial.match(/"russian"\s*:\s*\{[^{}]*\}/);
       if (m) { try { takeRu(JSON.parse('{' + m[0] + '}').russian); } catch(e) {} }
       // Определения показываем по одному, как только очередной объект в массиве meanings дописан
@@ -4068,7 +4219,7 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
 
   // 3. Fallback: слова нет в Викисловаре или таблица форм неполная — Gemini генерирует всё
   try {
-    const entry = await callGemini(prompt);
+    const entry = await llmJson(prompt, 'dict');
     if (!entry.word) { $('errorText').textContent = `"${word}" — parola non trovata`; showState('error'); return; }
     const canonicalKey = (entry.word || word).toLowerCase();
     const queryKey = word.toLowerCase();
@@ -4088,10 +4239,11 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 function describeApiError(msg) {
-  const isQuota = /quota|RESOURCE_EXHAUSTED|429/i.test(msg);
-  const isBadKey = /API[ _]key|API_KEY|PERMISSION_DENIED|leaked|403/i.test(msg);
-  if (isBadKey) return '🔑 Проблема с API ключом — <u style="cursor:pointer" onclick="showApiKeyScreen()">сменить ключ</u>';
-  if (isQuota)  return '⏳ Лимит Gemini исчерпан — попробуйте позже или <u style="cursor:pointer" onclick="showApiKeyScreen()">смените ключ</u>';
+  const isQuota = /quota|RESOURCE_EXHAUSTED|429|rate limit/i.test(msg);
+  const isBadKey = /API[ _]key|API_KEY|PERMISSION_DENIED|leaked|403|401|Unauthorized|invalid_api_key/i.test(msg);
+  const who = /^Cerebras/i.test(msg) ? 'Cerebras' : 'Gemini';
+  if (isBadKey) return `🔑 Проблема с ключом ${who} — <u style="cursor:pointer" onclick="showApiKeyScreen()">сменить ключ</u>`;
+  if (isQuota)  return `⏳ Лимит ${who} исчерпан — попробуйте позже или <u style="cursor:pointer" onclick="showApiKeyScreen()">смените ключ</u>`;
   return 'Errore: ' + escapeHtml(msg);
 }
 
@@ -4463,7 +4615,7 @@ function renderEntry(e) {
   const srcEl = $('entrySource');
   if (e.source === 'wiktionary') {
     const href = e.sourceUrl || `https://en.wiktionary.org/wiki/${encodeURIComponent(e.word || '')}`;
-    srcEl.innerHTML = `Fonte: <a href="${href}" target="_blank" rel="noopener">Wiktionary</a> · CC BY-SA 4.0`;
+    srcEl.innerHTML = `Fonte: <a href="${href}" target="_blank" rel="noopener">Wiktionary</a> · CC BY-SA 4.0${e.llm ? ` · definizioni: ${escapeHtml(e.llm)}` : ''}`;
     srcEl.style.display = 'block';
   } else {
     srcEl.style.display = 'none';
@@ -5196,7 +5348,7 @@ async function fetchGeminiRussian(d) {
   const glosses = (d.senses || []).map(s => s.gloss).filter(Boolean).slice(0, 3).join('; ') || d.english?.main || '';
   const prompt = `Italian ${d.partOfSpeech || 'word'} "${d.word}"${glosses ? ` (English: ${glosses})` : ''}.
 Return ONLY valid JSON, no markdown: {"russian":{"main":"primary Russian translation","alternatives":"1-3 alternatives semicolon-separated or empty"}}`;
-  const r = await callGemini(prompt);
+  const r = await llmJson(prompt, 'dict');
   const ru = { main: r.russian?.main || '', alternatives: r.russian?.alternatives || '' };
   return ru.main ? ru : null;
 }
@@ -5238,7 +5390,7 @@ async function fetchGeminiMiniPreview(word) {
   const prompt = `Italian word "${word}". Return ONLY valid JSON, no markdown:
 {"word":"canonical form","partOfSpeech":"sostantivo/verbo/aggettivo/etc","category":"cibo/natura/persone/lavoro/casa/viaggio/emozioni/tempo/corpo/cultura/altro","phonetic":"IPA with ˈ","russian":{"main":"перевод","alternatives":"alt1; alt2"}}
 If not a real Italian word return {"word":null}.`;
-  const result = await callGemini(prompt);
+  const result = await llmJson(prompt, 'dict');
   if (!result || !result.word) return null;
   const q = { data: result, complete: true };
   _previewCache['d:' + word.toLowerCase()] = q;
