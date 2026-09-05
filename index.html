@@ -3466,6 +3466,10 @@ async function callGemini(prompt) {
   const data = await response.json();
   if (data.error) throw new Error(data.error.message);
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  return extractJson(text);
+}
+
+function extractJson(text) {
   const objStart = text.indexOf('{');
   const arrStart = text.indexOf('[');
   // Pick whichever comes first in the response
@@ -3478,6 +3482,46 @@ async function callGemini(prompt) {
     if (objEnd !== -1) return JSON.parse(text.slice(objStart, objEnd + 1));
   }
   throw new Error('No JSON found in: ' + text.slice(0, 200));
+}
+
+// Потоковый вариант: тот же один запрос, но onText получает накопленный текст по мере генерации.
+// Это позволяет показать начало ответа (русский перевод), пока модель дописывает остальное.
+async function callGeminiStream(prompt, onText) {
+  const url = `${GEMINI_MODEL_URL.replace(':generateContent', ':streamGenerateContent')}?alt=sse&key=${getApiKey()}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.2 }
+    })
+  });
+  if (!response.ok || !response.body) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error?.message || `HTTP ${response.status}`);
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '', text = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (!line.startsWith('data:')) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === '[DONE]') continue;
+      let chunk;
+      try { chunk = JSON.parse(payload); } catch { continue; }
+      if (chunk.error) throw new Error(chunk.error.message);
+      const t = chunk.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
+      if (t) { text += t; if (onText) { try { onText(text); } catch(e) {} } }
+    }
+  }
+  return extractJson(text);
 }
 
 // ── Free Dictionary API (Wiktionary) — быстрые словарные факты без LLM ─────────
@@ -3866,20 +3910,21 @@ async function lookupWordHybrid(query, base) {
   showState('result');
   addToHistory(base.word, 'dict');
   try {
-    // Русский перевод добываем параллельно с определениями: ru.wiktionary (~0.3 с) и крошечный
-    // запрос к Gemini (~1 с). Что пришло первым, то и показываем, не дожидаясь полного ответа.
+    // Русский перевод показываем как можно раньше, но запрос к Gemini один: ответ читаем потоком,
+    // поле russian в схеме стоит первым и приходит через ~1 с, определения дочитываются следом.
+    // Параллельно бесплатно пробуем ru.wiktionary (~0.3 с).
     let shownRu = null;
     const takeRu = ru => {
       if (!ru || !ru.main || shownRu) return;
       shownRu = ru;
       if (currentDictWord === key && currentDictEntry && currentDictEntry._pending) renderEntry({ ...currentDictEntry, russian: ru });
     };
-    const ruJobs = [
-      fetchRuWiktionary(base.word).then(takeRu).catch(() => {}),
-      fetchGeminiRussian(base).then(takeRu).catch(() => {})
-    ];
-    const extra = await callGemini(fdCompletionPrompt(base));
-    await Promise.all(ruJobs);
+    const wiktJob = fetchRuWiktionary(base.word).then(takeRu).catch(() => {});
+    const extra = await callGeminiStream(fdCompletionPrompt(base), partial => {
+      const m = partial.match(/"russian"\s*:\s*\{[^{}]*\}/);
+      if (m) { try { takeRu(JSON.parse('{' + m[0] + '}').russian); } catch(e) {} }
+    });
+    await wiktJob;
     const entry = fdMergeCompletion(base, extra, shownRu);
     const queryKey = query.toLowerCase();
     await sbSave('dictionary', 'word', key, entry);
@@ -5074,15 +5119,14 @@ Return ONLY valid JSON, no markdown: {"russian":{"main":"primary Russian transla
   return ru.main ? ru : null;
 }
 
-// Для превью: ru.wiktionary и Gemini параллельно, берём первый непустой ответ
-function fetchQuickRussian(d) {
-  return new Promise((resolve, reject) => {
-    let pending = 2, done = false;
-    const ok = ru => { if (done) return; if (ru && ru.main) { done = true; resolve(ru); } else if (--pending === 0) reject(new Error('no translation')); };
-    const fail = () => { if (done) return; if (--pending === 0) reject(new Error('no translation')); };
-    fetchRuWiktionary(d.word).then(ok, fail);
-    fetchGeminiRussian(d).then(ok, fail);
-  });
+// Для превью: сначала ru.wiktionary (бесплатно), Gemini только если статьи там нет —
+// чтобы не тратить дневной лимит запросов на каждое наведение мыши
+async function fetchQuickRussian(d) {
+  const fast = await fetchRuWiktionary(d.word).catch(() => null);
+  if (fast && fast.main) return fast;
+  const ru = await fetchGeminiRussian(d);
+  if (!ru) throw new Error('no translation');
+  return ru;
 }
 
 // Дописывает русский перевод в данные превью и дёргает всех, кто ждёт обновления
