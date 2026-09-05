@@ -3795,14 +3795,29 @@ function mapFreeDictionary(fd, opts = {}) {
 // Короткий промпт только на то, чего в Викисловаре нет: русский, категория, итальянские определения
 // ── Русский перевод без LLM: раздел «Значение» итальянской статьи на ru.wiktionary ─
 const _ruWiktCache = {};
-let _ruWiktQueue = Promise.resolve();
-async function fetchRuWiktionary(word) {
+const _ruWiktInflight = {};
+// Не больше двух одновременных запросов к Wikimedia; устаревшие (мышь уже ушла) отбрасываются
+const _ruWiktLimit = { active: 0, max: 2, waiting: [] };
+function _ruWiktAcquire() {
+  if (_ruWiktLimit.active < _ruWiktLimit.max) { _ruWiktLimit.active++; return Promise.resolve(); }
+  return new Promise(r => _ruWiktLimit.waiting.push(r)).then(() => { _ruWiktLimit.active++; });
+}
+function _ruWiktRelease() {
+  _ruWiktLimit.active--;
+  const next = _ruWiktLimit.waiting.shift();
+  if (next) next();
+}
+// skipIf — функция; если к моменту запуска она вернёт true, запрос не делается (превью уже закрыто)
+async function fetchRuWiktionary(word, skipIf) {
   const w = (word || '').toLowerCase();
   if (!w) return null;
   if (_ruWiktCache[w] !== undefined) return _ruWiktCache[w];
-  // Wikimedia режет частые запросы: выполняем их по одному с небольшой паузой
-  const run = _ruWiktQueue.then(async () => {
-    if (_ruWiktCache[w] !== undefined) return _ruWiktCache[w];
+  if (_ruWiktInflight[w]) return _ruWiktInflight[w];
+  const run = (async () => {
+    if (skipIf && skipIf()) return null;
+    await _ruWiktAcquire();
+    if (_ruWiktCache[w] !== undefined) { _ruWiktRelease(); return _ruWiktCache[w]; }
+    if (skipIf && skipIf()) { _ruWiktRelease(); return null; }
     let out = null, cacheable = true;
     try {
       const url = `https://ru.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(w)}&prop=wikitext&format=json&formatversion=2&redirects=1&origin=*`;
@@ -3822,11 +3837,12 @@ async function fetchRuWiktionary(word) {
         console.warn('ru.wiktionary status', res.status);
       }
     } catch(e) { cacheable = false; console.warn('ru.wiktionary error:', e); }
+    _ruWiktRelease();
     if (cacheable) _ruWiktCache[w] = out;
-    await new Promise(r => setTimeout(r, 400));
     return out;
-  });
-  _ruWiktQueue = run.catch(() => {});
+  })();
+  _ruWiktInflight[w] = run;
+  run.finally(() => { delete _ruWiktInflight[w]; });
   return run;
 }
 
@@ -5079,8 +5095,10 @@ function renderPreviewDict(popup, d) {
 
 // Быстрые данные для превью: кэш Supabase и Викисловарь запрашиваем параллельно.
 // Возвращает { data, complete }: complete=false значит, что русский перевод ещё надо получить у Gemini.
-async function fetchQuickDict(word) {
+async function fetchQuickDict(word, skipIf) {
   const w = word.toLowerCase();
+  // Русский из ru.wiktionary запрашиваем сразу, параллельно с кэшем и Викисловарём
+  let ruPromise = fetchRuWiktionary(w, skipIf).catch(() => null);
   const [cached, fd] = await Promise.all([sbGet('dictionary', w).catch(() => null), fetchFreeDictionary(w)]);
   if (cached) return { data: cached, complete: true };
   let m = fd ? mapFreeDictionary(fd, { light: true }) : null;
@@ -5089,22 +5107,23 @@ async function fetchQuickDict(word) {
   if (m.lemma) {
     // Словоформа: показываем начальную форму
     const lemma = m.lemma.toLowerCase();
+    ruPromise = fetchRuWiktionary(lemma, skipIf).catch(() => null);
     const [cached2, fd2] = await Promise.all([sbGet('dictionary', lemma).catch(() => null), fetchFreeDictionary(lemma)]);
     if (cached2) return { data: { ...cached2, formWord: w }, complete: true };
     const m2 = fd2 ? mapFreeDictionary(fd2, { light: true }) : null;
     if (!m2 || m2.lemma || m2.lemmas) return { data: { formWord: w, word: m.lemma, formOf: [m.lemma] }, complete: true };
     m = { ...m2, formWord: w };
   }
-  return { data: m, complete: false };
+  return { data: m, complete: false, ruPromise };
 }
 
-async function fetchPreviewData(word, isGrammar) {
+async function fetchPreviewData(word, isGrammar, skipIf) {
   const key = (isGrammar ? 'g:' : 'd:') + word.toLowerCase();
   if (_previewCache[key] !== undefined) return _previewCache[key];
   try {
     const q = isGrammar
       ? await sbGet('grammar', word.toLowerCase()).then(d => d ? { data: d, complete: true } : null)
-      : await fetchQuickDict(word);
+      : await fetchQuickDict(word, skipIf);
     _previewCache[key] = q || null;
   } catch { _previewCache[key] = null; }
   return _previewCache[key];
@@ -5123,8 +5142,12 @@ Return ONLY valid JSON, no markdown: {"russian":{"main":"primary Russian transla
 
 // Для превью: сначала ru.wiktionary (бесплатно), Gemini только если статьи там нет —
 // чтобы не тратить дневной лимит запросов на каждое наведение мыши
-async function fetchQuickRussian(d) {
-  const fast = await fetchRuWiktionary(d.word).catch(() => null);
+async function fetchQuickRussian(q) {
+  const d = q.data;
+  // Запрос к ru.wiktionary уже мог стартовать в fetchQuickDict — ждём его, а не запускаем новый
+  let fast = q.ruPromise ? await q.ruPromise : null;
+  q.ruPromise = null;
+  if (!fast) fast = await fetchRuWiktionary(d.word).catch(() => null); // если прежний был отброшен как устаревший
   if (fast && fast.main) return fast;
   const ru = await fetchGeminiRussian(d);
   if (!ru) throw new Error('no translation');
@@ -5139,7 +5162,7 @@ function ensureQuickRussian(q, onUpdate) {
   d._ruWaiters.push(onUpdate);
   if (d._ruLoading) return;
   d._ruLoading = true;
-  fetchQuickRussian(d)
+  fetchQuickRussian(q)
     .then(ru => { d.russian = ru; })
     .catch(() => { d._ruFailed = true; })
     .finally(() => {
@@ -5172,7 +5195,7 @@ function showPreview(el, word, isGrammar, x, y) {
   const stillMine = () => popup.classList.contains('visible') && popup.dataset.word === word;
 
   _previewTimeout = setTimeout(async () => {
-    let q = await fetchPreviewData(word, isGrammar);
+    let q = await fetchPreviewData(word, isGrammar, () => !stillMine());
     if (!stillMine()) return;
 
     if (!q) {
@@ -5285,7 +5308,7 @@ function showBottomSheet(word, isGrammar) {
 async function loadSheetData(word, isGrammar, content) {
   const sheet = $('bottomSheet');
   const stillMine = () => sheet.classList.contains('open') && _sheetWord === word;
-  let q = await fetchPreviewData(word, isGrammar);
+  let q = await fetchPreviewData(word, isGrammar, () => !stillMine());
   if (!stillMine()) return;
 
   if (!q && !isGrammar) {
