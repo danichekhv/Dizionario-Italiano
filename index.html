@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dizionario Italiano</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🇮🇹</text></svg>">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Gentium+Plus:ital@0;1&display=swap" rel="stylesheet">
 <style>
   :root {
     --cream: #f5f0e8;
@@ -293,8 +293,9 @@
   .speak-btn svg { display: block; }
 
   .word-phonetic {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 20px;
+    /* Шрифт с полным набором IPA: в JetBrains Mono нет ʃ, d͡ʒ, ɛ, ɔ, и на Android они превращались в квадраты */
+    font-family: 'Gentium Plus', 'Charis SIL', 'Doulos SIL', 'Noto Sans', 'DejaVu Sans', 'Segoe UI', serif;
+    font-size: 22px;
     color: var(--stone);
     padding-bottom: 2px;
     white-space: nowrap;
@@ -601,45 +602,27 @@
 
   .conjugation-body.open { display: block; }
 
-  /* Tense tabs */
+  /* Наклонения: одна строка вкладок, на узком экране скроллится по горизонтали */
   .tense-tabs {
     display: flex;
-    flex-direction: column;
-    gap: 16px;
-    margin-bottom: 28px;
-  }
-
-  .tense-group {
-    display: flex;
-    flex-direction: column;
     gap: 6px;
+    margin-bottom: 22px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
   }
-
-  .tense-group-label {
-    font-size: 9px;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--muted);
-    font-family: 'JetBrains Mono', monospace;
-    padding-bottom: 4px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 2px;
-  }
-
-  .tense-group-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
+  .tense-tabs::-webkit-scrollbar { display: none; }
 
   .tense-tab {
-    padding: 6px 14px;
-    font-size: 13px;
+    flex-shrink: 0;
+    padding: 8px 16px;
+    font-size: 14px;
     font-family: 'Crimson Pro', serif;
     font-style: italic;
     cursor: pointer;
     border: 1px solid var(--border);
-    border-radius: 3px;
+    border-radius: 20px;
     background: transparent;
     color: var(--stone);
     transition: all 0.2s;
@@ -658,59 +641,52 @@
     font-style: normal;
   }
 
-  /* Conjugation table */
-  .conj-table-wrap {
+  /* Все времена выбранного наклонения показываются сразу, карточками */
+  .tense-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
     animation: fadeUp 0.3s ease;
   }
 
-  .tense-title-display {
+  .tense-card {
+    background: var(--parchment);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .tense-card-title {
     font-family: 'Playfair Display', serif;
-    font-size: 22px;
+    font-size: 16px;
     font-style: italic;
     color: var(--ink);
-    margin-bottom: 20px;
-    padding-bottom: 12px;
+    padding: 10px 14px;
     border-bottom: 1px solid var(--border);
-  }
-
-  .conj-grid-wrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .conj-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  @media (max-width: 560px) {
-    .conj-grid { grid-template-columns: 1fr; }
+    background: rgba(139,115,85,0.08);
   }
 
   .conj-row {
     display: grid;
-    grid-template-columns: 90px 1fr;
+    grid-template-columns: 76px 1fr;
     gap: 0;
-    background: var(--parchment);
-    border-radius: 3px;
-    overflow: hidden;
+    border-bottom: 1px solid rgba(139,115,85,0.12);
   }
+  .conj-row:last-child { border-bottom: none; }
 
   .conj-pronoun {
-    padding: 10px 14px;
-    font-size: 13px;
+    padding: 8px 12px;
+    font-size: 12px;
     font-family: 'JetBrains Mono', monospace;
     color: var(--muted);
-    background: rgba(139,115,85,0.12);
+    background: rgba(139,115,85,0.06);
     display: flex;
     align-items: center;
   }
 
   .conj-form {
-    padding: 10px 16px;
-    font-size: 17px;
+    padding: 8px 14px;
+    font-size: 16px;
     color: var(--ink);
     font-weight: 400;
   }
@@ -1054,13 +1030,13 @@
     .translation-text { font-size: 15px; }
     .translation-alts { font-size: 12px; }
     .plural-forms { gap: 14px; }
-    .conj-grid { grid-template-columns: 1fr; gap: 2px; }
+    .tense-cards { grid-template-columns: 1fr; gap: 12px; }
     .conj-row { grid-template-columns: 60px 1fr; }
-    .conj-form { font-size: 13px; }
-    .conj-pronoun { font-size: 11px; }
+    .conj-form { font-size: 14px; padding: 7px 12px; }
+    .conj-pronoun { font-size: 11px; padding: 7px 10px; }
+    .tense-card-title { font-size: 15px; padding: 8px 12px; }
     .star-btn { font-size: 18px; }
-    .tense-group-label { font-size: 8px; }
-    .tense-tab { padding: 4px 8px; font-size: 11px; }
+    .tense-tab { padding: 6px 12px; font-size: 13px; }
     .definition-text { font-size: 15px; }
     .example-text { font-size: 13px; }
 
@@ -2611,8 +2587,8 @@
     margin-bottom: 2px;
   }
   .wp-phonetic {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
+    font-family: 'Gentium Plus', 'Charis SIL', 'Doulos SIL', 'Noto Sans', 'DejaVu Sans', 'Segoe UI', serif;
+    font-size: 14px;
     color: var(--stone);
     margin-bottom: 8px;
   }
@@ -2748,8 +2724,8 @@
   .grammar-sheet .sheet-wp-word { color: #e8edf8; }
 
   .sheet-wp-phonetic {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 15px;
+    font-family: 'Gentium Plus', 'Charis SIL', 'Doulos SIL', 'Noto Sans', 'DejaVu Sans', 'Segoe UI', serif;
+    font-size: 17px;
     color: var(--stone);
     margin-bottom: 12px;
   }
@@ -4366,44 +4342,52 @@ const TENSE_GROUPS = [
   { label: 'Forme nominali', tenses: ['Infinito','Participio','Gerundio'] }
 ];
 
+// Выбранное наклонение запоминается между словами
+let currentMood = 'Indicativo';
+
+// Вкладки — наклонения; внутри показываются сразу все его времена
 function renderTenseTabs(conj) {
   const tabs = $('tenseTabs');
   tabs.innerHTML = '';
-  const available = Object.keys(conj);
-  let firstBtn = null, firstTense = null;
-  TENSE_GROUPS.forEach(group => {
-    const groupTenses = group.tenses.filter(t => available.includes(t));
-    if (!groupTenses.length) return;
-    const groupEl = document.createElement('div'); groupEl.className = 'tense-group';
-    const labelEl = document.createElement('div'); labelEl.className = 'tense-group-label'; labelEl.textContent = group.label;
-    groupEl.appendChild(labelEl);
-    const btnsEl = document.createElement('div'); btnsEl.className = 'tense-group-buttons';
-    groupTenses.forEach(tense => {
-      const shortName = tense.replace(/^Indicativo |^Congiuntivo |^Condizionale /, '');
-      const btn = document.createElement('button');
-      btn.className = 'tense-tab'; btn.textContent = shortName; btn.dataset.tense = tense;
-      btn.onclick = () => { document.querySelectorAll('.tense-tab').forEach(t => t.classList.remove('active')); btn.classList.add('active'); renderConjTable(tense, conj[tense]); };
-      btnsEl.appendChild(btn);
-      if (!firstBtn) { firstBtn = btn; firstTense = tense; }
-    });
-    groupEl.appendChild(btnsEl); tabs.appendChild(groupEl);
+  const available = Object.keys(conj || {});
+  const groups = TENSE_GROUPS
+    .map(g => ({ label: g.label, tenses: g.tenses.filter(t => available.includes(t)) }))
+    .filter(g => g.tenses.length);
+  if (!groups.length) { $('conjTableWrap').innerHTML = ''; return; }
+  if (!groups.some(g => g.label === currentMood)) currentMood = groups[0].label;
+  groups.forEach(group => {
+    const btn = document.createElement('button');
+    btn.className = 'tense-tab' + (group.label === currentMood ? ' active' : '');
+    btn.textContent = group.label;
+    btn.onclick = () => {
+      currentMood = group.label;
+      tabs.querySelectorAll('.tense-tab').forEach(t => t.classList.toggle('active', t === btn));
+      renderMoodCards(group, conj);
+    };
+    tabs.appendChild(btn);
   });
-  if (firstBtn) { firstBtn.classList.add('active'); renderConjTable(firstTense, conj[firstTense]); }
+  renderMoodCards(groups.find(g => g.label === currentMood), conj);
 }
 
-function renderConjTable(tense, forms) {
+function renderMoodCards(group, conj) {
   const wrap = $('conjTableWrap'); wrap.innerHTML = '';
-  const title = document.createElement('div'); title.className = 'tense-title-display'; title.textContent = tense; wrap.appendChild(title);
-  const grid = document.createElement('div'); grid.className = 'conj-grid';
+  const cards = document.createElement('div'); cards.className = 'tense-cards';
   // Supabase (jsonb) не сохраняет порядок ключей, поэтому сортируем местоимения сами
   const order = ['io', 'tu', 'lui/lei', 'noi', 'voi', 'loro', 'Presente', 'Passato'];
   const rank = k => { const i = order.indexOf(k); return i === -1 ? order.length : i; };
-  Object.entries(forms || {}).sort((a, b) => rank(a[0]) - rank(b[0])).forEach(([pronoun, form]) => {
-    const row = document.createElement('div'); row.className = 'conj-row';
-    row.innerHTML = `<div class="conj-pronoun">${pronoun}</div><div class="conj-form">${form}</div>`;
-    grid.appendChild(row);
+  group.tenses.forEach(tense => {
+    const card = document.createElement('div'); card.className = 'tense-card';
+    const title = document.createElement('div'); title.className = 'tense-card-title';
+    title.textContent = tense.replace(/^(Indicativo|Congiuntivo|Condizionale) /, '');
+    card.appendChild(title);
+    Object.entries(conj[tense] || {}).sort((a, b) => rank(a[0]) - rank(b[0])).forEach(([pronoun, form]) => {
+      const row = document.createElement('div'); row.className = 'conj-row';
+      row.innerHTML = `<div class="conj-pronoun">${pronoun}</div><div class="conj-form">${form}</div>`;
+      card.appendChild(row);
+    });
+    cards.appendChild(card);
   });
-  wrap.appendChild(grid);
+  wrap.appendChild(cards);
 }
 
 $('conjToggle').addEventListener('click', () => {
