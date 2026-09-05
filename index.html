@@ -3948,6 +3948,9 @@ async function lookupWordHybrid(query, base) {
       shownRu = ru;
       if (currentDictWord === key && currentDictEntry && currentDictEntry._pending) renderEntry({ ...currentDictEntry, russian: ru });
     };
+    // Если перевод уже добыт для всплывающей подсказки этого слова — показываем его сразу
+    const previewQ = _previewCache['d:' + key] || _previewCache['d:' + query.toLowerCase()];
+    if (previewQ && previewQ.data && previewQ.data.russian && previewQ.data.russian.main) takeRu(previewQ.data.russian);
     const wiktJob = fetchRuWiktionary(base.word).then(takeRu).catch(() => {});
     let shownMeanings = 0;
     const extra = await callGeminiStream(fdCompletionPrompt(base), partial => {
