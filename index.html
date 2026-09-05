@@ -4543,7 +4543,9 @@ function renderMoodCards(group, conj) {
   const order = ['io', 'tu', 'lui/lei', 'noi', 'voi', 'loro', 'Presente', 'Passato'];
   const rank = k => { const i = order.indexOf(k); return i === -1 ? order.length : i; };
   group.tenses.forEach(tense => {
-    const card = document.createElement('div'); card.className = 'tense-card collapsed';
+    // На телефоне карточки свёрнуты, на компьютере сразу развёрнуты (клик по названию сворачивает)
+    const collapsedByDefault = window.matchMedia('(max-width: 640px)').matches;
+    const card = document.createElement('div'); card.className = 'tense-card' + (collapsedByDefault ? ' collapsed' : '');
     const title = document.createElement('div'); title.className = 'tense-card-title';
     title.textContent = tense.replace(/^(Indicativo|Congiuntivo|Condizionale) /, '');
     title.onclick = () => card.classList.toggle('collapsed');
