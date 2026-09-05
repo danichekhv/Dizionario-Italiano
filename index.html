@@ -2625,6 +2625,10 @@
     margin-bottom: 8px;
   }
   .wp-formof { font-size: 12px; font-style: italic; color: var(--muted); margin-bottom: 6px; }
+  .wp-formof-list div { font-size: 14px; margin: 3px 0; color: var(--ink); }
+  .wp-formof-list b { font-family: 'Playfair Display', serif; font-style: italic; font-weight: 600; }
+  .wp-formof-list span { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--terracotta); margin-left: 6px; }
+  .wp-formof-list em { color: var(--stone); }
   .wp-arrow { color: var(--terracotta); font-weight: 400; margin: 0 4px; }
   .wp-en { font-size: 13px; font-style: italic; color: var(--stone); margin-top: 4px; }
   .wp-badges {
@@ -2765,6 +2769,10 @@
     margin-bottom: 12px;
   }
   .sheet-wp-formof { font-size: 14px; font-style: italic; color: var(--muted); margin-bottom: 8px; }
+  .sheet-wp-formof-list div { font-size: 17px; margin: 6px 0; color: var(--ink); }
+  .sheet-wp-formof-list b { font-family: 'Playfair Display', serif; font-style: italic; font-weight: 600; }
+  .sheet-wp-formof-list span { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--terracotta); margin-left: 6px; }
+  .sheet-wp-formof-list em { color: var(--stone); }
   .sheet-wp-en { font-size: 15px; font-style: italic; color: var(--stone); margin-top: 6px; }
   .grammar-sheet .sheet-wp-phonetic { color: #6b7fa8; }
 
@@ -5103,13 +5111,25 @@ function previewHeaderHtml(d, p) {
   const head = d.formWord && d.word && d.formWord !== d.word
     ? `${d.formWord}<span class="wp-arrow">→</span>${d.word}`
     : (d.word || d.formWord || '');
+  // Форма нескольких слов (arti → arto, arte): список вариантов с переводом каждого
+  let formOfHtml = '';
+  if (d.formOfDetails && d.formOfDetails.length) {
+    formOfHtml = `<div class="${p}-formof">форма слов:</div><div class="${p}-formof-list">${d.formOfDetails.map(x =>
+      `<div><b>${x.lemma}</b>${x.pos ? `<span>${x.pos}</span>` : ''}${x.ru ? ` · ${x.ru}` : x.en ? ` · <em>${x.en}</em>` : ''}</div>`).join('')}</div>`;
+  } else if (d.formOf && d.formOf.length > 1) {
+    formOfHtml = `<div class="${p}-formof">форма слов: ${d.formOf.join(', ')}</div>`;
+  }
+  // Слово со своей статьёй, которое заодно является формой других слов (specifica → specifico, specificare)
+  const alsoHtml = d.alsoForms && d.alsoForms.length
+    ? `<div class="${p}-formof">также: ${d.alsoForms.map(l => `${l.lemma}${l.pos ? ` (${l.pos})` : ''}`).join(', ')}</div>` : '';
   return `<div class="${p}-word">${head}</div>
-    ${d.formOf && d.formOf.length > 1 ? `<div class="${p}-formof">форма слов: ${d.formOf.join(', ')}</div>` : ''}
+    ${formOfHtml}
     ${d.phonetic ? `<div class="${p}-phonetic">${highlightStressPreview(d.phonetic)}</div>` : ''}
     <div class="${p}-badges">
       ${d.partOfSpeech ? `<span class="${p}-badge">${d.partOfSpeech}</span>` : ''}
       ${d.category ? `<span class="${p}-badge">${d.category}</span>` : ''}
-    </div>`;
+    </div>
+    ${alsoHtml}`;
 }
 function previewRussianHtml(d) {
   if (d.russian && d.russian.main) return `${d.russian.main}${d.russian.alternatives ? `<br><em>${d.russian.alternatives}</em>` : ''}`;
@@ -5135,7 +5155,16 @@ async function fetchQuickDict(word, skipIf) {
   if (cached) return { data: cached, complete: true };
   let m = fd ? mapFreeDictionary(fd, { light: true }) : null;
   if (!m) return null;
-  if (m.lemmas) return { data: { formWord: w, formOf: m.lemmas.map(l => l.lemma) }, complete: true };
+  if (m.lemmas) {
+    // Форма нескольких слов: для каждого варианта подтягиваем перевод (ru.wiktionary, иначе английская глосса)
+    const details = await Promise.all(m.lemmas.slice(0, 3).map(async l => {
+      const [fdL, ru] = await Promise.all([fetchFreeDictionary(l.lemma), fetchRuWiktionary(l.lemma, skipIf).catch(() => null)]);
+      const mL = fdL ? mapFreeDictionary(fdL, { light: true }) : null;
+      const en = mL && !mL.lemma && !mL.lemmas ? (mL.english?.main || '') : '';
+      return { lemma: l.lemma, pos: l.pos, desc: l.desc, ru: (ru && ru.main) || '', en };
+    }));
+    return { data: { formWord: w, formOf: m.lemmas.map(l => l.lemma), formOfDetails: details }, complete: true };
+  }
   if (m.lemma) {
     // Словоформа: показываем начальную форму
     const lemma = m.lemma.toLowerCase();
