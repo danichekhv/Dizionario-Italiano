@@ -4310,7 +4310,10 @@ function renderConjTable(tense, forms) {
   const wrap = $('conjTableWrap'); wrap.innerHTML = '';
   const title = document.createElement('div'); title.className = 'tense-title-display'; title.textContent = tense; wrap.appendChild(title);
   const grid = document.createElement('div'); grid.className = 'conj-grid';
-  Object.entries(forms).forEach(([pronoun, form]) => {
+  // Supabase (jsonb) не сохраняет порядок ключей, поэтому сортируем местоимения сами
+  const order = ['io', 'tu', 'lui/lei', 'noi', 'voi', 'loro', 'Presente', 'Passato'];
+  const rank = k => { const i = order.indexOf(k); return i === -1 ? order.length : i; };
+  Object.entries(forms || {}).sort((a, b) => rank(a[0]) - rank(b[0])).forEach(([pronoun, form]) => {
     const row = document.createElement('div'); row.className = 'conj-row';
     row.innerHTML = `<div class="conj-pronoun">${pronoun}</div><div class="conj-form">${form}</div>`;
     grid.appendChild(row);
