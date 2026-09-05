@@ -682,8 +682,17 @@
     margin-right: 4px;
     transition: transform 0.25s ease;
   }
-  /* Карточки времён по умолчанию свёрнуты, раскрываются по клику на название */
-  .tense-card.collapsed .conj-row { display: none; }
+  /* Карточки времён по умолчанию свёрнуты, раскрываются по клику на название.
+     Раскрытая карточка занимает всю ширину сетки, формы внутри идут в две колонки */
+  .tense-card:not(.collapsed) { grid-column: 1 / -1; }
+  .tense-card-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(var(--rows, 3), auto);
+  }
+  .tense-card-body .conj-row:nth-child(n + 4) { border-left: 1px solid rgba(139,115,85,0.12); }
+  .tense-card.collapsed .tense-card-body { display: none; }
   .tense-card.collapsed .tense-card-title { border-bottom-color: transparent; }
   .tense-card.collapsed .tense-card-title::after { transform: rotate(-45deg); }
 
@@ -1052,6 +1061,8 @@
     .translation-alts { font-size: 12px; }
     .plural-forms { gap: 14px; }
     .tense-cards { grid-template-columns: 1fr; gap: 12px; }
+    .tense-card-body { grid-template-columns: 1fr; grid-auto-flow: row; grid-template-rows: none; }
+    .tense-card-body .conj-row:nth-child(n + 4) { border-left: none; }
     .conj-row { grid-template-columns: 60px 1fr; }
     .conj-form { font-size: 14px; padding: 7px 12px; }
     .conj-pronoun { font-size: 11px; padding: 7px 10px; }
@@ -2613,6 +2624,9 @@
     color: var(--stone);
     margin-bottom: 8px;
   }
+  .wp-formof { font-size: 12px; font-style: italic; color: var(--muted); margin-bottom: 6px; }
+  .wp-arrow { color: var(--terracotta); font-weight: 400; margin: 0 4px; }
+  .wp-en { font-size: 13px; font-style: italic; color: var(--stone); margin-top: 4px; }
   .wp-badges {
     display: flex;
     gap: 6px;
@@ -2750,6 +2764,8 @@
     color: var(--stone);
     margin-bottom: 12px;
   }
+  .sheet-wp-formof { font-size: 14px; font-style: italic; color: var(--muted); margin-bottom: 8px; }
+  .sheet-wp-en { font-size: 15px; font-style: italic; color: var(--stone); margin-top: 6px; }
   .grammar-sheet .sheet-wp-phonetic { color: #6b7fa8; }
 
   .sheet-wp-badges {
@@ -3660,7 +3676,7 @@ function fdSenseLabel(def) { const m = (def || '').match(/^\s*\(([^)]*)\)/); ret
 
 // Переводит ответ Free Dictionary в формат статьи приложения.
 // Возвращает { lemma } для словоформ, null — если данных недостаточно (тогда всё генерирует Gemini).
-function mapFreeDictionary(fd) {
+function mapFreeDictionary(fd, opts = {}) {
   const entries = fd.entries;
   const primary = entries.find(en => (en.senses || []).some(s => !fdIsFormOf(s)));
   const word = fd.word;
@@ -3707,9 +3723,10 @@ function mapFreeDictionary(fd) {
   let conjugations = null, auxiliary = null;
   if (isVerb) {
     const built = fdBuildConjugations(primary, word);
-    if (!built) return null; // неполная таблица форм — пусть Gemini генерирует статью целиком
-    conjugations = built.conjugations;
-    auxiliary = built.auxiliary;
+    // Неполная таблица форм — пусть Gemini генерирует статью целиком (превью спряжения не нужны)
+    if (!built && !opts.light) return null;
+    conjugations = built ? built.conjugations : null;
+    auxiliary = built ? built.auxiliary : null;
   }
 
   const ipa = (primary.pronunciations || []).find(p => p.type === 'ipa' && p.text);
@@ -4402,11 +4419,15 @@ function renderMoodCards(group, conj) {
     title.textContent = tense.replace(/^(Indicativo|Congiuntivo|Condizionale) /, '');
     title.onclick = () => card.classList.toggle('collapsed');
     card.appendChild(title);
-    Object.entries(conj[tense] || {}).sort((a, b) => rank(a[0]) - rank(b[0])).forEach(([pronoun, form]) => {
+    const body = document.createElement('div'); body.className = 'tense-card-body';
+    const entries = Object.entries(conj[tense] || {}).sort((a, b) => rank(a[0]) - rank(b[0]));
+    body.style.setProperty('--rows', Math.max(1, Math.ceil(entries.length / 2)));
+    entries.forEach(([pronoun, form]) => {
       const row = document.createElement('div'); row.className = 'conj-row';
       row.innerHTML = `<div class="conj-pronoun">${pronoun}</div><div class="conj-form">${form}</div>`;
-      card.appendChild(row);
+      body.appendChild(row);
     });
+    card.appendChild(body);
     cards.appendChild(card);
   });
   wrap.appendChild(cards);
@@ -4898,28 +4919,103 @@ function highlightStressPreview(phonetic) {
   return (phonetic || '').replace(/ˈ([^ˌ\s.]+)/g, (m, syl) => `ˈ<span style="color:var(--terracotta);font-weight:bold">${syl}</span>`);
 }
 
-function renderPreviewDict(popup, data) {
-  popup.innerHTML = `
-    <div class="wp-word">${data.word || ''}</div>
-    ${data.phonetic ? `<div class="wp-phonetic">${highlightStressPreview(data.phonetic)}</div>` : ''}
-    <div class="wp-badges">
-      ${data.partOfSpeech ? `<span class="wp-badge">${data.partOfSpeech}</span>` : ''}
-      ${data.category ? `<span class="wp-badge">${data.category}</span>` : ''}
-    </div>
-    <div class="wp-translation">
-      ${data.russian?.main || ''}
-      ${data.russian?.alternatives ? `<br><em>${data.russian.alternatives}</em>` : ''}
+// Общие куски разметки превью и мобильной шторки (prefix: 'wp' или 'sheet-wp')
+function previewHeaderHtml(d, p) {
+  const head = d.formWord && d.word && d.formWord !== d.word
+    ? `${d.formWord}<span class="wp-arrow">→</span>${d.word}`
+    : (d.word || d.formWord || '');
+  return `<div class="${p}-word">${head}</div>
+    ${d.formOf && d.formOf.length > 1 ? `<div class="${p}-formof">форма слов: ${d.formOf.join(', ')}</div>` : ''}
+    ${d.phonetic ? `<div class="${p}-phonetic">${highlightStressPreview(d.phonetic)}</div>` : ''}
+    <div class="${p}-badges">
+      ${d.partOfSpeech ? `<span class="${p}-badge">${d.partOfSpeech}</span>` : ''}
+      ${d.category ? `<span class="${p}-badge">${d.category}</span>` : ''}
     </div>`;
+}
+function previewRussianHtml(d) {
+  if (d.russian && d.russian.main) return `${d.russian.main}${d.russian.alternatives ? `<br><em>${d.russian.alternatives}</em>` : ''}`;
+  if (d._ruLoading) return `<span class="pending-shimmer short"></span>`;
+  if (d._ruFailed) return `<em>перевод недоступен</em>`;
+  return '';
+}
+
+function renderPreviewDict(popup, d) {
+  popup.innerHTML = `
+    ${previewHeaderHtml(d, 'wp')}
+    <div class="wp-translation">${previewRussianHtml(d)}</div>
+    ${d.english?.main ? `<div class="wp-en">${d.english.main}</div>` : ''}`;
+}
+
+// Быстрые данные для превью: кэш Supabase и Викисловарь запрашиваем параллельно.
+// Возвращает { data, complete }: complete=false значит, что русский перевод ещё надо получить у Gemini.
+async function fetchQuickDict(word) {
+  const w = word.toLowerCase();
+  const [cached, fd] = await Promise.all([sbGet('dictionary', w).catch(() => null), fetchFreeDictionary(w)]);
+  if (cached) return { data: cached, complete: true };
+  let m = fd ? mapFreeDictionary(fd, { light: true }) : null;
+  if (!m) return null;
+  if (m.lemmas) return { data: { formWord: w, formOf: m.lemmas.map(l => l.lemma) }, complete: true };
+  if (m.lemma) {
+    // Словоформа: показываем начальную форму
+    const lemma = m.lemma.toLowerCase();
+    const [cached2, fd2] = await Promise.all([sbGet('dictionary', lemma).catch(() => null), fetchFreeDictionary(lemma)]);
+    if (cached2) return { data: { ...cached2, formWord: w }, complete: true };
+    const m2 = fd2 ? mapFreeDictionary(fd2, { light: true }) : null;
+    if (!m2 || m2.lemma || m2.lemmas) return { data: { formWord: w, word: m.lemma, formOf: [m.lemma] }, complete: true };
+    m = { ...m2, formWord: w };
+  }
+  return { data: m, complete: false };
 }
 
 async function fetchPreviewData(word, isGrammar) {
   const key = (isGrammar ? 'g:' : 'd:') + word.toLowerCase();
   if (_previewCache[key] !== undefined) return _previewCache[key];
   try {
-    const data = await sbGet(isGrammar ? 'grammar' : 'dictionary', word.toLowerCase());
-    _previewCache[key] = data || null;
-    return _previewCache[key];
-  } catch { _previewCache[key] = null; return null; }
+    const q = isGrammar
+      ? await sbGet('grammar', word.toLowerCase()).then(d => d ? { data: d, complete: true } : null)
+      : await fetchQuickDict(word);
+    _previewCache[key] = q || null;
+  } catch { _previewCache[key] = null; }
+  return _previewCache[key];
+}
+
+// Только русский перевод, короткий промпт с опорой на английские глоссы Викисловаря
+async function fetchQuickRussian(d) {
+  const glosses = (d.senses || []).map(s => s.gloss).filter(Boolean).slice(0, 3).join('; ') || d.english?.main || '';
+  const prompt = `Italian ${d.partOfSpeech || 'word'} "${d.word}"${glosses ? ` (English: ${glosses})` : ''}.
+Return ONLY valid JSON, no markdown: {"russian":{"main":"primary Russian translation","alternatives":"1-3 alternatives semicolon-separated or empty"}}`;
+  const r = await callGemini(prompt);
+  return { main: r.russian?.main || '', alternatives: r.russian?.alternatives || '' };
+}
+
+// Дописывает русский перевод в данные превью и дёргает всех, кто ждёт обновления
+function ensureQuickRussian(q, onUpdate) {
+  const d = q.data;
+  if (q.complete || (d.russian && d.russian.main)) return;
+  d._ruWaiters = d._ruWaiters || [];
+  d._ruWaiters.push(onUpdate);
+  if (d._ruLoading) return;
+  d._ruLoading = true;
+  fetchQuickRussian(d)
+    .then(ru => { d.russian = ru; })
+    .catch(() => { d._ruFailed = true; })
+    .finally(() => {
+      d._ruLoading = false; q.complete = true;
+      const waiters = d._ruWaiters; d._ruWaiters = [];
+      waiters.forEach(fn => { try { fn(); } catch(e) {} });
+    });
+}
+
+// Слова нет в Викисловаре — старый запасной путь через Gemini
+async function fetchGeminiMiniPreview(word) {
+  const prompt = `Italian word "${word}". Return ONLY valid JSON, no markdown:
+{"word":"canonical form","partOfSpeech":"sostantivo/verbo/aggettivo/etc","category":"cibo/natura/persone/lavoro/casa/viaggio/emozioni/tempo/corpo/cultura/altro","phonetic":"IPA with ˈ","russian":{"main":"перевод","alternatives":"alt1; alt2"}}
+If not a real Italian word return {"word":null}.`;
+  const result = await callGemini(prompt);
+  if (!result || !result.word) return null;
+  const q = { data: result, complete: true };
+  _previewCache['d:' + word.toLowerCase()] = q;
+  return q;
 }
 
 function showPreview(el, word, isGrammar, x, y) {
@@ -4927,41 +5023,37 @@ function showPreview(el, word, isGrammar, x, y) {
   const popup = $('wordPreview');
   popup.className = 'word-preview' + (isGrammar ? ' grammar-preview' : '');
   popup.innerHTML = `<div class="wp-loading">…</div>`;
+  popup.dataset.word = word;
   positionPreview(popup, x, y);
   popup.classList.add('visible');
+  const stillMine = () => popup.classList.contains('visible') && popup.dataset.word === word;
 
   _previewTimeout = setTimeout(async () => {
-    const data = await fetchPreviewData(word, isGrammar);
-    if (!popup.classList.contains('visible')) return;
+    let q = await fetchPreviewData(word, isGrammar);
+    if (!stillMine()) return;
 
-    if (!data) {
-      // Нет в кэше — запрашиваем Gemini (только для словаря)
+    if (!q) {
       if (isGrammar) { hidePreview(); return; }
       popup.innerHTML = `<div class="wp-loading">Загрузка…</div>`;
-      try {
-        const prompt = `Italian word "${word}". Return ONLY valid JSON, no markdown:
-{"word":"canonical form","partOfSpeech":"sostantivo/verbo/aggettivo/etc","category":"cibo/natura/persone/lavoro/casa/viaggio/emozioni/tempo/corpo/cultura/altro","phonetic":"IPA with ˈ","russian":{"main":"перевод","alternatives":"alt1; alt2"}}
-If not a real Italian word return {"word":null}.`;
-        const result = await callGemini(prompt);
-        if (!popup.classList.contains('visible')) return;
-        if (!result || !result.word) { hidePreview(); return; }
-        // Сохраняем в локальный кэш превью (не в Supabase — это только мини-данные)
-        _previewCache['d:' + word.toLowerCase()] = result;
-        renderPreviewDict(popup, result);
-      } catch { hidePreview(); }
-      return;
+      try { q = await fetchGeminiMiniPreview(word); } catch { q = null; }
+      if (!stillMine()) return;
+      if (!q) { hidePreview(); return; }
     }
 
     if (isGrammar) {
+      const data = q.data;
       popup.innerHTML = `
         <div class="wp-word">${data.title || word}</div>
         <div class="wp-badges">
           ${data.category ? `<span class="wp-badge">${data.category}</span>` : ''}
         </div>
         <div class="wp-translation">${data.titleRu || ''}</div>`;
-    } else {
-      renderPreviewDict(popup, data);
+      return;
     }
+
+    // Факты из Викисловаря показываем сразу, русский перевод подтягивается следом
+    ensureQuickRussian(q, () => { if (stillMine()) renderPreviewDict(popup, q.data); });
+    renderPreviewDict(popup, q.data);
   }, 80);
 }
 
@@ -5048,58 +5140,44 @@ function showBottomSheet(word, isGrammar) {
 }
 
 async function loadSheetData(word, isGrammar, content) {
-  const data = await fetchPreviewData(word, isGrammar);
   const sheet = $('bottomSheet');
-  if (!sheet.classList.contains('open')) return;
+  const stillMine = () => sheet.classList.contains('open') && _sheetWord === word;
+  let q = await fetchPreviewData(word, isGrammar);
+  if (!stillMine()) return;
 
-  if (!data && !isGrammar) {
-    // Try Gemini for mini preview
+  if (!q && !isGrammar) {
+    // Слова нет в Викисловаре — пробуем Gemini
     content.innerHTML = `<div class="sheet-wp-loading">Ищем слово…</div>`;
-    try {
-      const prompt = `Italian word "${word}". Return ONLY valid JSON, no markdown:
-{"word":"canonical form","partOfSpeech":"sostantivo/verbo/aggettivo/etc","category":"cibo/natura/persone/lavoro/casa/viaggio/emozioni/tempo/corpo/cultura/altro","phonetic":"IPA with ˈ","russian":{"main":"перевод","alternatives":"alt1; alt2"}}
-If not a real Italian word return {"word":null}.`;
-      const result = await callGemini(prompt);
-      if (!sheet.classList.contains('open')) return;
-      if (!result || !result.word) {
-        content.innerHTML = `<div class="sheet-wp-loading">Слово не найдено</div>`;
-        return;
-      }
-      _previewCache['d:' + word.toLowerCase()] = result;
-      renderSheetDict(content, result);
-    } catch {
-      content.innerHTML = `<div class="sheet-wp-loading">Ошибка загрузки</div>`;
-    }
-    return;
+    try { q = await fetchGeminiMiniPreview(word); } catch { q = null; content.innerHTML = `<div class="sheet-wp-loading">Ошибка загрузки</div>`; return; }
+    if (!stillMine()) return;
+    if (!q) { content.innerHTML = `<div class="sheet-wp-loading">Слово не найдено</div>`; return; }
   }
 
-  if (!data) {
+  if (!q) {
     content.innerHTML = `<div class="sheet-wp-loading">Нет данных</div>`;
     return;
   }
 
   if (isGrammar) {
+    const data = q.data;
     content.innerHTML = `
       <div class="sheet-wp-word">${data.title || word}</div>
       <div class="sheet-wp-badges">
         ${data.category ? `<span class="sheet-wp-badge">${data.category}</span>` : ''}
       </div>
       <div class="sheet-wp-translation">${data.titleRu || ''}</div>`;
-  } else {
-    renderSheetDict(content, data);
+    return;
   }
+
+  ensureQuickRussian(q, () => { if (stillMine()) renderSheetDict(content, q.data); });
+  renderSheetDict(content, q.data);
 }
 
-function renderSheetDict(container, data) {
+function renderSheetDict(container, d) {
   container.innerHTML = `
-    <div class="sheet-wp-word">${data.word || ''}</div>
-    ${data.phonetic ? `<div class="sheet-wp-phonetic">${highlightStressPreview(data.phonetic)}</div>` : ''}
-    <div class="sheet-wp-badges">
-      ${data.partOfSpeech ? `<span class="sheet-wp-badge">${data.partOfSpeech}</span>` : ''}
-      ${data.category ? `<span class="sheet-wp-badge">${data.category}</span>` : ''}
-    </div>
-    <div class="sheet-wp-translation">${data.russian?.main || ''}</div>
-    ${data.russian?.alternatives ? `<div class="sheet-wp-alts">${data.russian.alternatives}</div>` : ''}
+    ${previewHeaderHtml(d, 'sheet-wp')}
+    <div class="sheet-wp-translation">${previewRussianHtml(d)}</div>
+    ${d.english?.main ? `<div class="sheet-wp-en">${d.english.main}</div>` : ''}
   `;
 }
 
