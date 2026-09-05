@@ -2441,6 +2441,24 @@
   }
   .apikey-btn:hover { background: #a8411e; }
 
+  .apikey-back-btn {
+    display: none;
+    width: 100%;
+    padding: 12px;
+    margin: -8px 0 20px;
+    background: transparent;
+    color: var(--muted);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 16px;
+    font-style: italic;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .apikey-back-btn.visible { display: block; }
+  .apikey-back-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
+
   .apikey-error {
     display: none;
     color: var(--terracotta);
@@ -2778,6 +2796,7 @@
     </div>
     <div class="apikey-error" id="apikeyError">Введите корректный ключ (начинается с AIza…)</div>
     <button class="apikey-btn" onclick="saveApiKey()">Начать →</button>
+    <button class="apikey-back-btn" id="apikeyBackBtn" onclick="hideApiKeyScreen()">← Назад</button>
     <p class="apikey-hint">
       Получить ключ бесплатно можно на<br>
       <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a><br><br>
@@ -3034,6 +3053,9 @@ function showApiKeyScreen() {
   $('headerSettingsBtn').style.visibility = 'hidden';
   const existing = getApiKey();
   if (existing) $('apikeyInput').value = existing;
+  // Назад можно только если ключ уже сохранён — при первом запуске возвращаться некуда
+  $('apikeyBackBtn').classList.toggle('visible', !!existing);
+  $('apikeyError').classList.remove('visible');
   setTimeout(() => $('apikeyInput').focus(), 100);
 }
 
@@ -3041,6 +3063,11 @@ function hideApiKeyScreen() {
   $('apikeyOverlay').classList.remove('open');
   $('headerSettingsBtn').style.visibility = 'visible';
 }
+
+// Escape тоже закрывает экран ключа, если ключ уже есть
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('apikeyOverlay').classList.contains('open') && getApiKey()) hideApiKeyScreen();
+});
 
 function toggleApiKeyVisibility() {
   const inp = $('apikeyInput');
@@ -3307,7 +3334,9 @@ function showState(state) {
         renderFavList(tab);
       });
     } else if (savedState === 'initial') {
-      if (['result','rulist','grammar'].includes(state)) {
+      // Поиск всегда идёт через 'loading', поэтому фиксируем начальный экран
+      // и при уходе в loading — иначе кнопка «Назад» после первого поиска не появится
+      if (['result','rulist','grammar','favorites','loading'].includes(state)) {
         const m = savedMode;
         pushHistory(() => {
           currentMode = m;
@@ -3414,7 +3443,11 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
   try {
     const entry = await callGemini(prompt);
     if (!entry.word) { $('errorText').textContent = `"${word}" — parola non trovata`; showState('error'); return; }
-    await sbSave('dictionary', 'word', (entry.word || word).toLowerCase(), entry);
+    const canonicalKey = (entry.word || word).toLowerCase();
+    const queryKey = word.toLowerCase();
+    await sbSave('dictionary', 'word', canonicalKey, entry);
+    // Кэшируем и под введённым запросом, чтобы повторный поиск попадал в кэш
+    if (queryKey !== canonicalKey) await sbSave('dictionary', 'word', queryKey, entry);
     renderEntry(entry);
     showState('result');
     addToHistory(entry.word || word, 'dict');
@@ -3521,7 +3554,11 @@ async function lookupGrammar(topic) {
       $('errorText').textContent = `"${topic}" — попробуйте другую грамматическую тему`;
       showState('error'); return;
     }
-    await sbSave('grammar', 'topic', (g.title || topic).toLowerCase(), g);
+    const titleKey = (g.title || topic).toLowerCase();
+    const topicKey = topic.toLowerCase();
+    await sbSave('grammar', 'topic', titleKey, g);
+    // Кэшируем и под введённым запросом: заголовок от Gemini почти никогда не совпадает с запросом
+    if (topicKey !== titleKey) await sbSave('grammar', 'topic', topicKey, g);
     renderGrammar(g);
     showState('grammar');
     addToHistory(g.title || topic, 'grammar');
@@ -4083,7 +4120,7 @@ function renderFavRows(rows, tab) {
             <div class="fav-card-meta">${d.partOfSpeech || ''}${d.gender ? ' · ' + d.gender : ''} · ${d.russian?.main || ''}</div>
           </div>
           <div class="fav-card-right">
-            <button class="fav-remove" title="Удалить" onclick="removeFav(event,'${tab}','${key.replace(/'/g,"\'")}')">✕</button>
+            <button class="fav-remove" title="Удалить" onclick="removeFav(event,'${tab}','${key.replace(/'/g,"\\'")}')">✕</button>
             <span class="fav-card-arrow">→</span>
           </div>`;
         card.onclick = (e) => {
@@ -4107,7 +4144,7 @@ function renderFavRows(rows, tab) {
             <div class="fav-card-meta">${d.titleRu || ''} · ${d.category || ''}</div>
           </div>
           <div class="fav-card-right">
-            <button class="fav-remove" title="Удалить" onclick="removeFav(event,'${tab}','${key.replace(/'/g,"\'")}')">✕</button>
+            <button class="fav-remove" title="Удалить" onclick="removeFav(event,'${tab}','${key.replace(/'/g,"\\'")}')">✕</button>
             <span class="fav-card-arrow">→</span>
           </div>`;
         card.onclick = (e) => {
@@ -4282,7 +4319,8 @@ function handleWordClick(word) {
 
 // ── Клик по заголовку — на главный экран ──────────────────────────────────────
 function goHome() {
-  switchMode(currentMode);
+  // Из избранного возвращаемся в тот режим, откуда его открыли
+  switchMode(currentMode === 'favorites' ? _modeBeforeFav : currentMode);
 }
 function doSearch() {
   const val = $('searchInput').value.trim();
@@ -4296,7 +4334,10 @@ $('searchBtn').addEventListener('click', doSearch);
 $('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
 
 // ── Floating fav button logic ─────────────────────────────────────────────────
+let _modeBeforeFav = 'dict';
+
 function openFavorites() {
+  if (currentMode !== 'favorites') _modeBeforeFav = currentMode;
   // showState должен вызываться ДО смены currentMode —
   // тогда он правильно захватит savedMode = 'dict'/'grammar' в историю
   showState('favorites');
@@ -4308,7 +4349,9 @@ function openFavorites() {
 
 function favFloatClick() {
   if (currentMode === 'favorites') {
-    goBack();
+    // Если истории нет (избранное открыто первым действием) — просто выходим в прежний режим
+    if (navHistory.length > 0) goBack();
+    else switchMode(_modeBeforeFav);
   } else {
     openFavorites();
   }
@@ -4461,7 +4504,9 @@ function hidePreview() {
 }
 
 // Навешиваем события на кликабельные слова через делегирование
-const isTouchDevice = () => 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+// Проверяем основной способ ввода, а не наличие тачскрина:
+// ноутбук с сенсорным экраном и мышью должен работать как десктоп
+const isTouchDevice = () => window.matchMedia('(hover: none) and (pointer: coarse)').matches;
 
 // Desktop: hover preview
 document.addEventListener('mouseover', (e) => {
@@ -4658,10 +4703,11 @@ document.addEventListener('click', (e) => {
   if (!isTouchDevice()) return;
   const el = e.target.closest('.clickable-word, .related-word-btn');
   if (!el) return;
+  const word = el.textContent.trim();
+  // Короткие слова не перехватываем — пусть сработает обычный onclick элемента
+  if (!word || word.length < 3) return;
   e.preventDefault();
   e.stopPropagation();
-  const word = el.textContent.trim();
-  if (!word || word.length < 3) return;
   const isGrammar = currentMode === 'grammar';
   showBottomSheet(word, isGrammar);
 }, true);
