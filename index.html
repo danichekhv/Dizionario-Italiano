@@ -416,6 +416,49 @@
     line-height: 1.7;
   }
 
+  /* Плейсхолдер, пока Gemini дописывает перевод и определения */
+  .pending-shimmer {
+    display: inline-block;
+    height: 1em;
+    width: 9em;
+    max-width: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, rgba(139,115,85,0.12) 25%, rgba(139,115,85,0.28) 50%, rgba(139,115,85,0.12) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s infinite linear;
+    vertical-align: middle;
+  }
+  .pending-shimmer.short { width: 5em; }
+  .pending-shimmer.wide  { width: 100%; height: 1.2em; }
+  .pending-note {
+    font-size: 14px;
+    font-style: italic;
+    color: var(--muted);
+    margin-top: 10px;
+  }
+  .pending-error {
+    font-size: 15px;
+    font-style: italic;
+    color: var(--terracotta);
+    margin-top: 6px;
+  }
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to   { background-position: -200% 0; }
+  }
+
+  /* Атрибуция источника (Wiktionary, CC BY-SA) */
+  .entry-source {
+    margin-top: 18px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+    opacity: 0.8;
+  }
+  .entry-source a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--border); }
+  .entry-source a:hover { color: var(--terracotta); border-bottom-color: var(--terracotta); }
+
   /* Нумерованные значения */
   .meanings-list {
     display: flex;
@@ -2964,6 +3007,7 @@
     <div class="definition-section">
       <div class="section-label">Definizione</div>
       <div id="meaningsContainer"></div>
+      <div class="entry-source" id="entrySource" style="display:none"></div>
     </div>
 
     <!-- Conjugation (shown only for verbs) -->
@@ -3136,7 +3180,7 @@ async function sbSave(table, keyCol, keyVal, data) {
   } catch(e) { console.warn("Supabase sbSave exception:", e); }
 }
 
-function showCacheBadge() {
+function showToast(text) {
   if (!document.getElementById('cacheStyle')) {
     const s = document.createElement('style');
     s.id = 'cacheStyle';
@@ -3156,10 +3200,12 @@ function showCacheBadge() {
   }
   const t = document.createElement('div');
   t.className = 'cache-toast';
-  t.textContent = '⚡ из кэша';
+  t.textContent = text;
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 2500);
 }
+
+function showCacheBadge() { showToast('⚡ из кэша'); }
 
 // ── Состояние ────────────────────────────────────────────────────────────────
 let currentLang = 'it';
@@ -3389,8 +3435,312 @@ async function callGemini(prompt) {
   throw new Error('No JSON found in: ' + text.slice(0, 200));
 }
 
+// ── Free Dictionary API (Wiktionary) — быстрые словарные факты без LLM ─────────
+// Даёт транскрипцию, род, множественное число, простые времена, английские глоссы.
+// Русский перевод и итальянские определения всё равно дописывает Gemini.
+const FD_URL = 'https://freedictionaryapi.com/api/v1/entries/it/';
+
+async function fetchFreeDictionary(word) {
+  try {
+    const res = await fetch(FD_URL + encodeURIComponent(word.trim().toLowerCase()));
+    if (!res.ok) return null;
+    const data = await res.json();
+    const entries = (data.entries || []).filter(en => !en.language || en.language.code === 'it');
+    return entries.length ? { ...data, entries } : null;
+  } catch(e) { console.warn('FreeDictionary error:', e); return null; }
+}
+
+const FD_POS = {
+  noun: 'sostantivo', 'proper noun': 'nome proprio', verb: 'verbo', adjective: 'aggettivo', adverb: 'avverbio',
+  preposition: 'preposizione', conjunction: 'congiunzione', pronoun: 'pronome', article: 'articolo',
+  determiner: 'determinante', interjection: 'interiezione', numeral: 'numerale', number: 'numerale',
+  phrase: 'locuzione', prefix: 'prefisso', suffix: 'suffisso', participle: 'participio', contraction: 'contrazione'
+};
+
+// Викисловарь помечает ударение акцентом (màngio); в орфографии акцент остаётся только на последней букве
+const FD_ACCENTS = { 'à':'a','á':'a','è':'e','é':'e','ì':'i','í':'i','ò':'o','ó':'o','ù':'u','ú':'u' };
+// Односложные формы, у которых акцент — часть орфографии (è, dà, può…); остальные (fù, stà) пишутся без него
+const FD_MONO_ACCENT = new Set(['è','dà','dì','sé','sì','né','già','giù','più','può','ciò','là','lì']);
+function fdStripStress(form) {
+  return (form || '').split(' ').map(w => {
+    if (w.length < 2) return w;
+    let out = w.slice(0, -1).replace(/[àáèéìíòóùú]/g, c => FD_ACCENTS[c]) + w.slice(-1);
+    const mono = /^[^aeiouàáèéìíòóùú]*[aeiouàáèéìíòóùú]+[^aeiouàáèéìíòóùú]*$/i.test(out);
+    if (mono && /[àáèéìíòóùú]$/.test(out) && !FD_MONO_ACCENT.has(out.toLowerCase())) {
+      out = out.slice(0, -1) + FD_ACCENTS[out.slice(-1)];
+    }
+    return out;
+  }).join(' ');
+}
+
+const fdIsFormOf = s => (s.tags || []).some(t => t === 'form of' || t === 'alt of');
+const fdHas = (tags, ...need) => need.every(t => tags.includes(t));
+
+function fdPerson(tags) {
+  const num = tags.includes('plural') ? 1 : tags.includes('singular') ? 0 : -1;
+  if (num < 0) return null;
+  if (tags.includes('first-person'))  return ['io', 'noi'][num];
+  if (tags.includes('second-person')) return ['tu', 'voi'][num];
+  if (tags.includes('third-person'))  return ['lui/lei', 'loro'][num];
+  return null;
+}
+
+const FD_SIMPLE_TENSES = [
+  ['Indicativo Presente',        t => fdHas(t, 'indicative', 'present')],
+  ['Indicativo Imperfetto',      t => fdHas(t, 'indicative', 'imperfect')],
+  ['Indicativo Passato Remoto',  t => fdHas(t, 'indicative', 'historic')],
+  ['Indicativo Futuro Semplice', t => fdHas(t, 'indicative', 'future')],
+  ['Condizionale Presente',      t => t.includes('conditional')],
+  ['Congiuntivo Presente',       t => fdHas(t, 'subjunctive', 'present')],
+  ['Congiuntivo Imperfetto',     t => fdHas(t, 'subjunctive', 'imperfect')],
+  ['Imperativo',                 t => t.includes('imperative') && !t.includes('negative')],
+];
+const FD_PRONOUNS  = ['io','tu','lui/lei','noi','voi','loro'];
+const FD_REFLEXIVE = ['mi','ti','si','ci','vi','si'];
+
+// Простые времена essere/avere — из них собираются составные времена
+const FD_AUX = {
+  avere: {
+    'Indicativo Presente':        ['ho','hai','ha','abbiamo','avete','hanno'],
+    'Indicativo Imperfetto':      ['avevo','avevi','aveva','avevamo','avevate','avevano'],
+    'Indicativo Futuro Semplice': ['avrò','avrai','avrà','avremo','avrete','avranno'],
+    'Congiuntivo Presente':       ['abbia','abbia','abbia','abbiamo','abbiate','abbiano'],
+    'Congiuntivo Imperfetto':     ['avessi','avessi','avesse','avessimo','aveste','avessero'],
+    'Condizionale Presente':      ['avrei','avresti','avrebbe','avremmo','avreste','avrebbero'],
+  },
+  essere: {
+    'Indicativo Presente':        ['sono','sei','è','siamo','siete','sono'],
+    'Indicativo Imperfetto':      ['ero','eri','era','eravamo','eravate','erano'],
+    'Indicativo Futuro Semplice': ['sarò','sarai','sarà','saremo','sarete','saranno'],
+    'Congiuntivo Presente':       ['sia','sia','sia','siamo','siate','siano'],
+    'Congiuntivo Imperfetto':     ['fossi','fossi','fosse','fossimo','foste','fossero'],
+    'Condizionale Presente':      ['sarei','saresti','sarebbe','saremmo','sareste','sarebbero'],
+  }
+};
+const FD_COMPOUND = [
+  ['Indicativo Passato Prossimo',    'Indicativo Presente'],
+  ['Indicativo Trapassato Prossimo', 'Indicativo Imperfetto'],
+  ['Indicativo Futuro Anteriore',    'Indicativo Futuro Semplice'],
+  ['Congiuntivo Passato',            'Congiuntivo Presente'],
+  ['Congiuntivo Trapassato',         'Congiuntivo Imperfetto'],
+  ['Condizionale Passato',           'Condizionale Presente'],
+];
+
+// Собирает таблицу спряжений из forms[] Викисловаря. null — если таблица неполная.
+function fdBuildConjugations(entry, infinitive) {
+  const conj = {};
+  let participle = '', participlePres = '', gerund = '', aux = '';
+  (entry.forms || []).forEach(f => {
+    const tags = f.tags || [];
+    if (!f.word || f.word === '-') return;
+    if (tags.some(t => ['table-tags','inflection-template','canonical','alternative','error-unrecognized-form'].includes(t))) return;
+    const form = fdStripStress(f.word);
+    if (tags.includes('auxiliary')) { if (!aux) aux = form; return; }
+    if (tags.includes('participle')) {
+      if (tags.includes('past') && !participle) participle = form;
+      else if (tags.includes('present') && !participlePres) participlePres = form;
+      return;
+    }
+    if (tags.includes('gerund')) { if (!gerund) gerund = form; return; }
+    if (tags.includes('infinitive')) return;
+    const tense = FD_SIMPLE_TENSES.find(([, test]) => test(tags));
+    const person = fdPerson(tags);
+    if (!tense || !person) return;
+    conj[tense[0]] = conj[tense[0]] || {};
+    // Первая форма считается основной, орфографические варианты (mangerèbbe/mangerébbe) пропускаем
+    if (!conj[tense[0]][person]) conj[tense[0]][person] = form;
+  });
+
+  const present = conj['Indicativo Presente'] || {};
+  if (FD_PRONOUNS.some(p => !present[p]) || !participle) return null;
+
+  // Составные времена: вспомогательный глагол + причастие (с согласованием при essere)
+  const reflexive = /rsi$/.test(infinitive);
+  if (reflexive) aux = 'essere';
+  if (aux !== 'essere' && aux !== 'avere') aux = 'avere';
+  const pp = reflexive ? participle.replace(/si$/, '') : participle;
+  const agree = i => aux === 'essere' ? pp.replace(/o$/, i < 3 ? 'o/a' : 'i/e') : pp;
+  FD_COMPOUND.forEach(([name, simple]) => {
+    conj[name] = {};
+    FD_PRONOUNS.forEach((p, i) => {
+      conj[name][p] = (reflexive ? FD_REFLEXIVE[i] + ' ' : '') + FD_AUX[aux][simple][i] + ' ' + agree(i);
+    });
+  });
+
+  // Порядок лиц — как в остальном приложении
+  FD_SIMPLE_TENSES.forEach(([name]) => {
+    if (!conj[name]) return;
+    const ordered = {};
+    FD_PRONOUNS.forEach(p => { if (conj[name][p]) ordered[p] = conj[name][p]; });
+    conj[name] = ordered;
+  });
+
+  const ppSg = aux === 'essere' ? pp.replace(/o$/, 'o/a') : pp;
+  conj['Infinito']   = { Presente: infinitive, Passato: reflexive ? `essersi ${ppSg}` : `${aux} ${ppSg}` };
+  conj['Participio'] = { Presente: participlePres || '—', Passato: participle };
+  conj['Gerundio']   = { Presente: gerund || '—', Passato: reflexive ? `essendosi ${ppSg}` : `${aux === 'essere' ? 'essendo' : 'avendo'} ${ppSg}` };
+  return { conjugations: conj, auxiliary: aux };
+}
+
+// Артикль по роду и началу слова — в Викисловаре его нет
+function fdArticle(word, gender, plural) {
+  const w = (word || '').toLowerCase();
+  const vowel = /^[aeiouàèéìòù]/.test(w);
+  const special = /^(s[bcdfghjklmnpqrstvwxz]|z|gn|ps|pn|x|y|i[aeou])/.test(w);
+  if (gender === 'f.') return plural ? 'le' : (vowel ? "l'" : 'la');
+  if (plural) return (vowel || special) ? 'gli' : 'i';
+  return vowel ? "l'" : special ? 'lo' : 'il';
+}
+
+function fdCleanGloss(def) {
+  return (def || '')
+    .replace(/\[[^\]]*\]/g, '')                       // [auxiliary avere]
+    .replace(/^\s*\([^)]*\)\s*/, '')                  // (transitive, figurative)
+    .replace(/^[A-Z][^.]*\.\s+(?=(to|a|an|the)\s)/, '') // "Used as a copula. to be" → "to be"
+    .replace(/\s+/g, ' ').trim();
+}
+function fdSenseLabel(def) { const m = (def || '').match(/^\s*\(([^)]*)\)/); return m ? m[1] : ''; }
+
+// Переводит ответ Free Dictionary в формат статьи приложения.
+// Возвращает { lemma } для словоформ, null — если данных недостаточно (тогда всё генерирует Gemini).
+function mapFreeDictionary(fd) {
+  const entries = fd.entries;
+  const primary = entries.find(en => (en.senses || []).some(s => !fdIsFormOf(s)));
+  if (!primary) {
+    // Все статьи — словоформы («sono» → essere, «case» → casa): достаём начальную форму
+    const formEntry = entries.find(en => (en.senses || []).some(s => (s.tags || []).includes('form of'))) || entries[0];
+    const sense = (formEntry.senses || []).find(fdIsFormOf);
+    const m = sense && sense.definition.match(/\bof ([^\s:,;()]+)/);
+    return m ? { lemma: m[1].replace(/[.…]+$/, '') } : null;
+  }
+  const word = fd.word;
+  const posEn = primary.partOfSpeech || '';
+  const isNoun = posEn === 'noun';
+  const isVerb = posEn === 'verb';
+  const senses = (primary.senses || []).filter(s => !fdIsFormOf(s)).slice(0, 4);
+  const tagSet = new Set(senses.flatMap(s => s.tags || []));
+
+  let gender = null;
+  if (isNoun) {
+    gender = tagSet.has('feminine') && tagSet.has('masculine') ? 'm./f.'
+           : tagSet.has('feminine') ? 'f.' : tagSet.has('masculine') ? 'm.' : null;
+  }
+
+  const glosses = [];
+  senses.forEach(s => { const g = fdCleanGloss(s.definition); if (g && !glosses.includes(g)) glosses.push(g); });
+  const englishMain = (glosses[0] || '').split(/[;,]/)[0].trim();
+  const englishAlts = glosses.slice(1, 4).map(g => g.split(';')[0].trim()).filter(Boolean).join('; ');
+
+  const related = [];
+  senses.forEach(s => (s.synonyms || []).concat(s.antonyms || []).forEach(w => {
+    if (w && w !== word && !related.includes(w) && related.length < 6) related.push(w);
+  }));
+
+  let singular = null, plural = null;
+  if (isNoun) {
+    const pl = (primary.forms || []).find(f => (f.tags || []).includes('plural')
+      && !(f.tags || []).some(t => ['archaic','dialectal','obsolete','rare','alternative'].includes(t)));
+    const plForm = pl ? fdStripStress(pl.word) : (tagSet.has('invariable') ? word : null);
+    if (plForm) {
+      singular = { article: fdArticle(word, gender, false), form: word };
+      plural   = { article: fdArticle(plForm, gender, true), form: plForm };
+    }
+  }
+
+  let conjugations = null, auxiliary = null;
+  if (isVerb) {
+    const built = fdBuildConjugations(primary, word);
+    if (!built) return null; // неполная таблица форм — пусть Gemini генерирует статью целиком
+    conjugations = built.conjugations;
+    auxiliary = built.auxiliary;
+  }
+
+  const ipa = (primary.pronunciations || []).find(p => p.type === 'ipa' && p.text);
+  return {
+    word, partOfSpeech: FD_POS[posEn] || posEn, gender, isNoun, isVerb,
+    phonetic: ipa ? ipa.text : '',
+    singular, plural, conjugations, auxiliary,
+    english: { main: englishMain, alternatives: englishAlts },
+    relatedWords: related,
+    senses: senses.map(s => ({
+      gloss: fdCleanGloss(s.definition),
+      label: fdSenseLabel(s.definition),
+      example: (s.examples && s.examples[0]) || (s.quotes && s.quotes[0] && s.quotes[0].text) || ''
+    })),
+    source: 'wiktionary',
+    sourceUrl: (fd.source && fd.source.url) || ''
+  };
+}
+
+// Короткий промпт только на то, чего в Викисловаре нет: русский, категория, итальянские определения
+function fdCompletionPrompt(base) {
+  const senseLines = base.senses.map((s, i) =>
+    `${i + 1}. ${s.label ? '(' + s.label + ') ' : ''}${s.gloss}${s.example ? ` — e.g. "${s.example}"` : ''}`).join('\n');
+  const needRelated = (base.relatedWords || []).length < 3;
+  const meaningsRule = base.senses.length
+    ? `exactly ${base.senses.length} item(s), one per known sense above, in the same order. Reuse the given example if it is a natural full sentence, otherwise write your own.`
+    : `1-3 items ordered from most to least frequent usage.`;
+  return `You are an expert Italian linguist. Complete the dictionary entry for the Italian ${base.partOfSpeech} "${base.word}"${base.gender ? ` (${base.gender})` : ''}.
+Known senses from Wiktionary (English glosses, most common first):
+${senseLines || '(none)'}
+
+Return ONLY valid JSON, no markdown:
+{
+  "russian": { "main": "primary Russian translation", "alternatives": "2-3 alternatives semicolon-separated or empty" },
+  "category": "cibo / natura / persone / lavoro / casa / viaggio / emozioni / tempo / corpo / cultura / altro",
+  "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian" } ]${needRelated ? `,
+  "relatedWords": ["3-5 semantically related Italian words (synonyms, antonyms, thematic)"]` : ''}
+}
+meanings: ${meaningsRule}`;
+}
+
+function fdMergeCompletion(base, extra) {
+  const meanings = Array.isArray(extra.meanings) && extra.meanings.some(m => m && m.definition)
+    ? extra.meanings.filter(m => m && m.definition).map(m => ({ definition: m.definition, example: m.example || '' }))
+    : base.senses.map(s => ({ definition: s.gloss, example: s.example }));
+  const related = (base.relatedWords || []).slice();
+  (Array.isArray(extra.relatedWords) ? extra.relatedWords : []).forEach(w => {
+    if (typeof w === 'string' && w && !related.includes(w) && related.length < 6) related.push(w);
+  });
+  const { senses, _pending, ...rest } = base;
+  return {
+    ...rest,
+    russian: { main: extra.russian?.main || '', alternatives: extra.russian?.alternatives || '' },
+    category: extra.category || 'altro',
+    meanings,
+    relatedWords: related
+  };
+}
+
+// Гибридный путь: сразу показываем факты из Викисловаря, Gemini дописывает остальное
+async function lookupWordHybrid(query, base) {
+  const key = base.word.toLowerCase();
+  renderEntry({ ...base, _pending: true });
+  showState('result');
+  addToHistory(base.word, 'dict');
+  try {
+    const extra = await callGemini(fdCompletionPrompt(base));
+    const entry = fdMergeCompletion(base, extra);
+    const queryKey = query.toLowerCase();
+    await sbSave('dictionary', 'word', key, entry);
+    if (queryKey !== key) await sbSave('dictionary', 'word', queryKey, entry);
+    // Пока Gemini отвечал, пользователь мог уйти на другое слово
+    if (currentDictWord === key) renderEntry(entry);
+  } catch(err) {
+    console.error('lookupWordHybrid error:', err);
+    if (currentDictWord !== key) return;
+    // Оставляем быстрые данные на экране, вместо определений — английские глоссы и причина ошибки
+    const { _pending, ...shown } = currentDictEntry || base;
+    currentDictEntry = shown;
+    $('transRU').textContent = '—'; $('transRUalt').textContent = '';
+    $('meaningsContainer').innerHTML = `
+      <div class="definition-text">${base.senses.map(s => makeClickable(s.gloss)).join('; ') || '—'}</div>
+      <div class="pending-error">${describeApiError(err.message || '')}</div>`;
+  }
+}
+
 // ── Поиск итальянского слова ──────────────────────────────────────────────────
-async function lookupWord(word) {
+async function lookupWord(word, _depth = 0) {
   if (!word.trim()) return;
   showState('loading');
   const prompt = `You are an expert Italian linguist. Given the Italian word "${word}", provide a complete dictionary entry in JSON format.
@@ -3433,6 +3783,7 @@ Return ONLY valid JSON, no markdown, no explanation. Schema:
   }
 }
 If isVerb false → conjugations null. If isNoun false → singular/plural null. If not a real Italian word → word null. relatedWords: 3-5 semantically related Italian words (synonyms, antonyms, thematic). meanings: 1-4 items ordered from most frequent to least frequent usage. Always include at least 1 meaning.`;
+  // 1. Кэш Supabase — мгновенно
   const cachedWord = await sbGet('dictionary', word.toLowerCase());
   if (cachedWord) {
     try { renderEntry(cachedWord); showState('result'); showCacheBadge(); addToHistory(cachedWord.word || word, 'dict'); }
@@ -3440,6 +3791,20 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
     return;
   }
 
+  // 2. Викисловарь: транскрипция, формы, спряжения, глоссы — быстро и без LLM
+  const fd = await fetchFreeDictionary(word);
+  const mapped = fd ? mapFreeDictionary(fd) : null;
+  if (mapped && mapped.lemma) {
+    // Введена словоформа («sono», «mangiato») — переходим к начальной форме
+    if (_depth < 2 && mapped.lemma.toLowerCase() !== word.toLowerCase()) {
+      showToast(`${word} → ${mapped.lemma}`);
+      return lookupWord(mapped.lemma, _depth + 1);
+    }
+  } else if (mapped) {
+    return lookupWordHybrid(word, mapped);
+  }
+
+  // 3. Fallback: слова нет в Викисловаре или таблица форм неполная — Gemini генерирует всё
   try {
     const entry = await callGemini(prompt);
     if (!entry.word) { $('errorText').textContent = `"${word}" — parola non trovata`; showState('error'); return; }
@@ -3458,16 +3823,18 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
   }
 }
 
+const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+function describeApiError(msg) {
+  const isQuota = /quota|RESOURCE_EXHAUSTED|429/i.test(msg);
+  const isBadKey = /API[ _]key|API_KEY|PERMISSION_DENIED|leaked|403/i.test(msg);
+  if (isBadKey) return '🔑 Проблема с API ключом — <u style="cursor:pointer" onclick="showApiKeyScreen()">сменить ключ</u>';
+  if (isQuota)  return '⏳ Лимит Gemini исчерпан — попробуйте позже или <u style="cursor:pointer" onclick="showApiKeyScreen()">смените ключ</u>';
+  return 'Errore: ' + escapeHtml(msg);
+}
+
 function handleApiError(msg) {
-  const isQuota = msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429');
-  const isBadKey = msg.includes('API key') || msg.includes('API_KEY') || msg.includes('leaked') || msg.includes('invalid') || msg.includes('403');
-  if (isBadKey) {
-    $('errorText').innerHTML = '🔑 Проблема с API ключом — <u style="cursor:pointer" onclick="showApiKeyScreen()">сменить ключ</u>';
-  } else if (isQuota) {
-    $('errorText').innerHTML = '⏳ Лимит Gemini исчерпан — попробуйте позже или <u style="cursor:pointer" onclick="showApiKeyScreen()">смените ключ</u>';
-  } else {
-    $('errorText').textContent = 'Errore: ' + msg;
-  }
+  $('errorText').innerHTML = describeApiError(msg);
   showState('error');
 }
 
@@ -3800,11 +4167,27 @@ function renderEntry(e) {
     cat.textContent = e.category;
     $('wordType').after(cat);
   }
-  $('wordGender').textContent = e.gender || '';
-  $('transRU').textContent = e.russian?.main || '—';
-  $('transRUalt').textContent = e.russian?.alternatives || '';
+  // Для глаголов вместо рода показываем вспомогательный глагол
+  $('wordGender').textContent = e.gender || (e.isVerb && e.auxiliary ? `ausiliare ${e.auxiliary}` : '');
+  if (e._pending && !e.russian?.main) {
+    $('transRU').innerHTML = '<span class="pending-shimmer"></span>';
+    $('transRUalt').innerHTML = '<span class="pending-shimmer short"></span>';
+  } else {
+    $('transRU').textContent = e.russian?.main || '—';
+    $('transRUalt').textContent = e.russian?.alternatives || '';
+  }
   $('transEN').textContent = e.english?.main || '—';
   $('transENalt').textContent = e.english?.alternatives || '';
+
+  // Атрибуция источника
+  const srcEl = $('entrySource');
+  if (e.source === 'wiktionary') {
+    const href = e.sourceUrl || `https://en.wiktionary.org/wiki/${encodeURIComponent(e.word || '')}`;
+    srcEl.innerHTML = `Fonte: <a href="${href}" target="_blank" rel="noopener">Wiktionary</a> · CC BY-SA 4.0`;
+    srcEl.style.display = 'block';
+  } else {
+    srcEl.style.display = 'none';
+  }
 
   const pluralRow = $('pluralRow');
   if (e.isNoun && e.singular && e.plural) {
@@ -3824,7 +4207,13 @@ function renderEntry(e) {
 
   // Definizione — поддержка нового формата meanings и старого definition/example
   const mc = $('meaningsContainer');
-  if (e.meanings && e.meanings.length > 0) {
+  if (e._pending && !(e.meanings && e.meanings.length > 0)) {
+    // Быстрые данные уже на экране, Gemini дописывает определения и перевод
+    mc.innerHTML = `
+      <span class="pending-shimmer wide"></span>
+      <span class="pending-shimmer wide" style="width:70%"></span>
+      <div class="pending-note">Gemini готовит перевод и определения…</div>`;
+  } else if (e.meanings && e.meanings.length > 0) {
     // Новый формат — массив значений
     if (e.meanings.length === 1) {
       // Одно значение — без номера
@@ -4002,6 +4391,7 @@ async function getFavorites(type) {
 async function toggleFav(mode) {
   if (mode === 'dict') {
     if (!currentDictEntry) return;
+    if (currentDictEntry._pending) { showToast('⏳ дождитесь загрузки статьи'); return; }
     const btn = document.getElementById('dictStarBtn');
     const isStarred = btn.classList.contains('starred');
     if (isStarred) {
