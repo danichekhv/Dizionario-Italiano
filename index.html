@@ -3622,10 +3622,20 @@ async function callCerebrasStream(prompt, onText) {
 // тот же запрос сразу уходит в Gemini. Ошибка ключа не маскируется, чтобы её было видно.
 let _lastDictLlm = 'Gemini';
 const isKeyError = msg => /401|403|Unauthorized|invalid_api_key|Wrong API Key|PERMISSION_DENIED/i.test(msg || '');
+// Причину отката показываем на экране (не чаще раза в 20 секунд), иначе непонятно, почему статью написал Gemini
+let _lastFallbackToastAt = 0;
+function noteCerebrasFallback(e) {
+  const msg = (e && e.message) || String(e);
+  console.warn('Cerebras → Gemini:', msg);
+  if (Date.now() - _lastFallbackToastAt > 20000) {
+    _lastFallbackToastAt = Date.now();
+    showToast('⚠ ' + msg.replace(/^Cerebras:\s*/i, 'Cerebras: ').slice(0, 140) + ' → Gemini');
+  }
+}
 async function llmJson(prompt, task) {
   if (task === 'dict' && useCerebrasForDict()) {
     try { const r = await callCerebras(prompt); _lastDictLlm = `Cerebras · ${getCerebrasModel()}`; return r; }
-    catch(e) { if (isKeyError(e.message)) throw e; console.warn('Cerebras → Gemini:', e.message); }
+    catch(e) { if (isKeyError(e.message)) throw e; noteCerebrasFallback(e); }
   }
   const r = await callGemini(prompt);
   if (task === 'dict') _lastDictLlm = 'Gemini';
@@ -3634,7 +3644,7 @@ async function llmJson(prompt, task) {
 async function llmJsonStream(prompt, task, onText) {
   if (task === 'dict' && useCerebrasForDict()) {
     try { const r = await callCerebrasStream(prompt, onText); _lastDictLlm = `Cerebras · ${getCerebrasModel()}`; return r; }
-    catch(e) { if (isKeyError(e.message)) throw e; console.warn('Cerebras → Gemini:', e.message); }
+    catch(e) { if (isKeyError(e.message)) throw e; noteCerebrasFallback(e); }
   }
   const r = await callGeminiStream(prompt, onText);
   if (task === 'dict') _lastDictLlm = 'Gemini';
