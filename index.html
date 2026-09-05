@@ -646,6 +646,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 14px;
+    align-items: start; /* свёрнутая карточка не растягивается вслед за раскрытой соседкой */
     animation: fadeUp 0.3s ease;
   }
 
@@ -664,7 +665,27 @@
     padding: 10px 14px;
     border-bottom: 1px solid var(--border);
     background: rgba(139,115,85,0.08);
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background 0.2s;
   }
+  .tense-card-title:hover { background: rgba(139,115,85,0.16); }
+  .tense-card-title::after {
+    content: '';
+    width: 7px; height: 7px;
+    border-right: 1.5px solid var(--muted);
+    border-bottom: 1.5px solid var(--muted);
+    transform: rotate(45deg);
+    margin-right: 4px;
+    transition: transform 0.25s ease;
+  }
+  /* Карточки времён по умолчанию свёрнуты, раскрываются по клику на название */
+  .tense-card.collapsed .conj-row { display: none; }
+  .tense-card.collapsed .tense-card-title { border-bottom-color: transparent; }
+  .tense-card.collapsed .tense-card-title::after { transform: rotate(-45deg); }
 
   .conj-row {
     display: grid;
@@ -4376,9 +4397,10 @@ function renderMoodCards(group, conj) {
   const order = ['io', 'tu', 'lui/lei', 'noi', 'voi', 'loro', 'Presente', 'Passato'];
   const rank = k => { const i = order.indexOf(k); return i === -1 ? order.length : i; };
   group.tenses.forEach(tense => {
-    const card = document.createElement('div'); card.className = 'tense-card';
+    const card = document.createElement('div'); card.className = 'tense-card collapsed';
     const title = document.createElement('div'); title.className = 'tense-card-title';
     title.textContent = tense.replace(/^(Indicativo|Congiuntivo|Condizionale) /, '');
+    title.onclick = () => card.classList.toggle('collapsed');
     card.appendChild(title);
     Object.entries(conj[tense] || {}).sort((a, b) => rank(a[0]) - rank(b[0])).forEach(([pronoun, form]) => {
       const row = document.createElement('div'); row.className = 'conj-row';
