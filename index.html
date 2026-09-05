@@ -312,6 +312,24 @@
     font-weight: 300;
   }
 
+  /* Подсказка «также форма слова: portare» */
+  .word-also {
+    margin-top: 8px;
+    font-size: 14px;
+    font-style: italic;
+    color: var(--muted);
+  }
+  .word-also button {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: var(--terracotta);
+    cursor: pointer;
+    border-bottom: 1px dotted rgba(196,82,42,0.5);
+  }
+  .word-also button:hover { border-bottom-style: solid; }
+
   /* Translations section */
   .translations-section {
     background: white;
@@ -2973,6 +2991,7 @@
         <div class="word-phonetic" id="wordPhonetic">—</div>
       </div>
       <div class="word-gender" id="wordGender"></div>
+      <div class="word-also" id="wordAlso" style="display:none"></div>
     </div>
 
     <div class="translations-section">
@@ -3368,6 +3387,7 @@ function showState(state) {
     } else if (savedState === 'rulist' && currentRuResults.length > 0) {
       const query = currentRuQuery;
       const results = currentRuResults;
+      const ruTitle = currentRuTitle;
       const searchVal = $('searchInput').value;
       const savedLang = currentLang;
       const m = savedMode;
@@ -3379,7 +3399,7 @@ function showState(state) {
         $('btnIT').classList.toggle('active', savedLang === 'it');
         $('btnRU').classList.toggle('active', savedLang === 'ru');
         $('searchInput').value = searchVal;
-        renderRuResults(query, results);
+        renderRuResults(query, results, ruTitle);
         _suppressHistory = true; showState('rulist'); _suppressHistory = false;
       });
     } else if (savedState === 'favorites') {
@@ -3485,7 +3505,35 @@ function fdStripStress(form) {
   }).join(' ');
 }
 
-const fdIsFormOf = s => (s.tags || []).some(t => t === 'form of' || t === 'alt of');
+// Словоформа: помечена тегом «form of»/«alt of» либо описана как «inflection of cercare:»
+const fdIsFormOf = s => (s.tags || []).some(t => t === 'form of' || t === 'alt of') || /^inflection of \S+/i.test(s.definition || '');
+
+// Начальная форма из определения словоформы: «plural of casa», «inflection of cercare:», «feminine singular of porto (…)»
+function fdLemmaOf(def) {
+  const m = (def || '').match(/\bof ([^\s:,;()]+)/);
+  return m ? m[1].replace(/[.…]+$/, '') : null;
+}
+const FD_FORM_RU = { plural: 'мн. ч.', participle: 'причастие', gerund: 'герундий', imperative: 'повелит. накл.', subjunctive: 'сослагат. накл.', past: 'прош. вр.', future: 'буд. вр.', conditional: 'условн. накл.' };
+const FD_SKIP_FORM_TAGS = ['alt of', 'obsolete', 'archaic', 'poetic', 'literary', 'dialectal', 'rare', 'Latinism'];
+
+// Все начальные формы, к которым отсылает слово: cerchi → cerchio (сущ.), cercare, cerchiare (гл.)
+function fdCollectLemmas(entries, skipEntry) {
+  const out = [];
+  entries.forEach(en => {
+    if (en === skipEntry) return;
+    const pos = FD_POS[en.partOfSpeech] || en.partOfSpeech || '';
+    (en.senses || []).forEach(s => {
+      const tags = s.tags || [];
+      if (!fdIsFormOf(s) || tags.some(t => FD_SKIP_FORM_TAGS.includes(t))) return;
+      const lemma = fdLemmaOf(s.definition);
+      if (!lemma || out.some(l => l.lemma === lemma)) return;
+      const tag = tags.find(t => FD_FORM_RU[t]);
+      const desc = tag ? `${FD_FORM_RU[tag]} от ${lemma}` : (pos === 'verbo' ? `форма глагола ${lemma}` : `форма слова ${lemma}`);
+      out.push({ lemma, pos, desc });
+    });
+  });
+  return out;
+}
 const fdHas = (tags, ...need) => need.every(t => tags.includes(t));
 
 function fdPerson(tags) {
@@ -3618,14 +3666,14 @@ function fdSenseLabel(def) { const m = (def || '').match(/^\s*\(([^)]*)\)/); ret
 function mapFreeDictionary(fd) {
   const entries = fd.entries;
   const primary = entries.find(en => (en.senses || []).some(s => !fdIsFormOf(s)));
-  if (!primary) {
-    // Все статьи — словоформы («sono» → essere, «case» → casa): достаём начальную форму
-    const formEntry = entries.find(en => (en.senses || []).some(s => (s.tags || []).includes('form of'))) || entries[0];
-    const sense = (formEntry.senses || []).find(fdIsFormOf);
-    const m = sense && sense.definition.match(/\bof ([^\s:,;()]+)/);
-    return m ? { lemma: m[1].replace(/[.…]+$/, '') } : null;
-  }
   const word = fd.word;
+  if (!primary) {
+    // Все статьи — словоформы («sono» → essere, «case» → casa). Если начальных форм несколько
+    // («cerchi» → cerchio / cercare / cerchiare), возвращаем список — пользователь выберет сам
+    const lemmas = fdCollectLemmas(entries).filter(l => l.lemma.toLowerCase() !== word.toLowerCase());
+    if (!lemmas.length) return null;
+    return lemmas.length === 1 ? { lemma: lemmas[0].lemma } : { lemmas };
+  }
   const posEn = primary.partOfSpeech || '';
   const isNoun = posEn === 'noun';
   const isVerb = posEn === 'verb';
@@ -3679,6 +3727,8 @@ function mapFreeDictionary(fd) {
       label: fdSenseLabel(s.definition),
       example: (s.examples && s.examples[0]) || (s.quotes && s.quotes[0] && s.quotes[0].text) || ''
     })),
+    // Слово одновременно является формой других слов («porta» → portare): покажем подсказку
+    alsoForms: fdCollectLemmas(entries, primary).filter(l => l.lemma.toLowerCase() !== word.toLowerCase()),
     source: 'wiktionary',
     sourceUrl: (fd.source && fd.source.url) || ''
   };
@@ -3806,6 +3856,13 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
   // 2. Викисловарь: транскрипция, формы, спряжения, глоссы — быстро и без LLM
   const fd = await fetchFreeDictionary(word);
   const mapped = fd ? mapFreeDictionary(fd) : null;
+  if (mapped && mapped.lemmas) {
+    // Словоформа сразу нескольких слов — показываем список на выбор
+    const items = mapped.lemmas.map(l => ({ italian: l.lemma, partOfSpeech: l.pos, shortDefinition: l.desc }));
+    renderRuResults(word, items, `«${word}» — форма нескольких слов`);
+    showState('rulist');
+    return;
+  }
   if (mapped && mapped.lemma) {
     // Введена словоформа («sono», «mangiato») — переходим к начальной форме
     if (_depth < 2 && mapped.lemma.toLowerCase() !== word.toLowerCase()) {
@@ -4131,14 +4188,15 @@ function formatGrammarTitle(title) {
 }
 
 // ── Рендер результатов поиска с русского ────────────────────────────────────
-function renderRuResults(query, results) {
+function renderRuResults(query, results, titleText) {
   currentRuQuery = query;
   currentRuResults = results;
+  currentRuTitle = titleText || '';
   const container = $('ruResults');
   container.innerHTML = '';
   const title = document.createElement('div');
   title.className = 'ru-results-title';
-  title.textContent = `Переводы слова «${query}»`;
+  title.textContent = titleText || `Переводы слова «${query}»`;
   container.appendChild(title);
   results.forEach(item => {
     const card = document.createElement('div');
@@ -4151,7 +4209,12 @@ function renderRuResults(query, results) {
       <div class="ru-word-arrow">→</div>
     `;
     card.onclick = () => {
-      setLang('it'); $('searchInput').value = item.italian; lookupWord(item.italian);
+      // Переключаем язык без setLang: тот сбрасывает состояние на initial и кладёт лишний шаг в историю «Назад»
+      currentLang = 'it';
+      $('btnIT').classList.add('active'); $('btnRU').classList.remove('active');
+      $('searchInput').placeholder = 'Cerca una parola italiana…';
+      $('searchInput').value = item.italian;
+      lookupWord(item.italian);
     };
     container.appendChild(card);
   });
@@ -4181,6 +4244,16 @@ function renderEntry(e) {
   }
   // Для глаголов вместо рода показываем вспомогательный глагол
   $('wordGender').textContent = e.gender || (e.isVerb && e.auxiliary ? `ausiliare ${e.auxiliary}` : '');
+  const alsoEl = $('wordAlso');
+  if (e.alsoForms && e.alsoForms.length) {
+    alsoEl.innerHTML = 'также форма слова: ' + e.alsoForms.map(l => {
+      const safe = l.lemma.replace(/'/g, "\\'");
+      return `<button type="button" title="${l.desc}" onclick="$('searchInput').value='${safe}'; lookupWord('${safe}')">${l.lemma}</button>`;
+    }).join(', ');
+    alsoEl.style.display = 'block';
+  } else {
+    alsoEl.style.display = 'none';
+  }
   if (e._pending && !e.russian?.main) {
     $('transRU').innerHTML = '<span class="pending-shimmer"></span>';
     $('transRUalt').innerHTML = '<span class="pending-shimmer short"></span>';
@@ -4392,6 +4465,7 @@ let currentDictWord = '';
 let currentGramTopic = '';
 let currentRuQuery = '';
 let currentRuResults = [];
+let currentRuTitle = '';
 
 async function getFavorites(type) {
   try {
