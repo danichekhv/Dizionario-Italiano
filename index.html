@@ -3749,7 +3749,59 @@ function mapFreeDictionary(fd, opts = {}) {
 }
 
 // Короткий промпт только на то, чего в Викисловаре нет: русский, категория, итальянские определения
-function fdCompletionPrompt(base) {
+// ── Русский перевод без LLM: раздел «Значение» итальянской статьи на ru.wiktionary ─
+const _ruWiktCache = {};
+async function fetchRuWiktionary(word) {
+  const w = (word || '').toLowerCase();
+  if (!w) return null;
+  if (_ruWiktCache[w] !== undefined) return _ruWiktCache[w];
+  let out = null;
+  try {
+    const url = `https://ru.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(w)}&prop=wikitext&format=json&formatversion=2&redirects=1&origin=*`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      const text = data.parse && data.parse.wikitext;
+      if (text) out = parseRuWiktionaryMeanings(text);
+    }
+  } catch(e) { console.warn('ru.wiktionary error:', e); }
+  _ruWiktCache[w] = out;
+  return out;
+}
+
+function parseRuWiktionaryMeanings(text) {
+  // Берём только итальянский раздел: от «= {{-it-}} =» до следующего языкового заголовка
+  const start = text.search(/=\s*\{\{-it-\}\}\s*=/);
+  if (start === -1) return null;
+  let section = text.slice(start + 1);
+  const next = section.search(/\n=\s*\{\{-[a-z-]+-\}\}\s*=/);
+  if (next !== -1) section = section.slice(0, next);
+  const m = section.match(/==+\s*Значение\s*==+[^\n]*\n([\s\S]*?)(?=\n=|$)/);
+  if (!m) return null;
+  const items = [];
+  m[1].split('\n').forEach(line => {
+    if (!/^#\s*[^#*:]/.test(line)) return; // только строки значений, без примеров (#*) и пояснений (#:)
+    let s = line.replace(/^#\s*/, '');
+    for (let i = 0; i < 6 && /\{\{/.test(s); i++) s = s.replace(/\{\{[^{}]*\}\}/g, ''); // {{пример|…}}, {{помета|…}}
+    s = s.replace(/\[\[([^\]|]*\|)?([^\]]*)\]\]/g, '$2')
+         .replace(/'{2,}/g, '')
+         .replace(/<[^>]+>/g, '')
+         .replace(/\s+/g, ' ')
+         .replace(/^[\s,;:.—–-]+|[\s,;:.—–-]+$/g, '')
+         .trim();
+    if (s && !/^\?+$/.test(s) && !/отсутствует/i.test(s)) items.push(s);
+  });
+  if (!items.length) return null;
+  const parts = items[0].split(/[;,]/).map(x => x.trim()).filter(Boolean);
+  const main = parts[0];
+  if (!main || main.length > 60) return null;
+  const alts = [];
+  parts.slice(1).concat(items.slice(1).map(x => x.split(/[;,]/)[0].trim()))
+    .forEach(a => { if (a && a !== main && a.length <= 60 && !alts.includes(a) && alts.length < 4) alts.push(a); });
+  return { main, alternatives: alts.join('; ') };
+}
+
+function fdCompletionPrompt(base, opts = {}) {
   const senseLines = base.senses.map((s, i) =>
     `${i + 1}. ${s.label ? '(' + s.label + ') ' : ''}${s.gloss}${s.example ? ` — e.g. "${s.example}"` : ''}`).join('\n');
   const needRelated = (base.relatedWords || []).length < 3;
@@ -3761,8 +3813,8 @@ Known senses from Wiktionary (English glosses, most common first):
 ${senseLines || '(none)'}
 
 Return ONLY valid JSON, no markdown:
-{
-  "russian": { "main": "primary Russian translation", "alternatives": "2-3 alternatives semicolon-separated or empty" },
+{${opts.skipRussian ? '' : `
+  "russian": { "main": "primary Russian translation", "alternatives": "2-3 alternatives semicolon-separated or empty" },`}
   "category": "cibo / natura / persone / lavoro / casa / viaggio / emozioni / tempo / corpo / cultura / altro",
   "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian" } ]${needRelated ? `,
   "relatedWords": ["3-5 semantically related Italian words (synonyms, antonyms, thematic)"]` : ''}
@@ -3770,7 +3822,7 @@ Return ONLY valid JSON, no markdown:
 meanings: ${meaningsRule}`;
 }
 
-function fdMergeCompletion(base, extra) {
+function fdMergeCompletion(base, extra, fastRu) {
   const meanings = Array.isArray(extra.meanings) && extra.meanings.some(m => m && m.definition)
     ? extra.meanings.filter(m => m && m.definition).map(m => ({ definition: m.definition, example: m.example || '' }))
     : base.senses.map(s => ({ definition: s.gloss, example: s.example }));
@@ -3781,7 +3833,9 @@ function fdMergeCompletion(base, extra) {
   const { senses, _pending, ...rest } = base;
   return {
     ...rest,
-    russian: { main: extra.russian?.main || '', alternatives: extra.russian?.alternatives || '' },
+    russian: fastRu && fastRu.main
+      ? fastRu
+      : { main: extra.russian?.main || '', alternatives: extra.russian?.alternatives || '' },
     category: extra.category || 'altro',
     meanings,
     relatedWords: related
@@ -3795,8 +3849,11 @@ async function lookupWordHybrid(query, base) {
   showState('result');
   addToHistory(base.word, 'dict');
   try {
-    const extra = await callGemini(fdCompletionPrompt(base));
-    const entry = fdMergeCompletion(base, extra);
+    // Русский перевод из ru.wiktionary приходит за полсекунды — показываем его, не дожидаясь Gemini
+    const fastRu = await fetchRuWiktionary(base.word).catch(() => null);
+    if (fastRu && currentDictWord === key) renderEntry({ ...base, russian: fastRu, _pending: true });
+    const extra = await callGemini(fdCompletionPrompt(base, { skipRussian: !!fastRu }));
+    const entry = fdMergeCompletion(base, extra, fastRu);
     const queryKey = query.toLowerCase();
     await sbSave('dictionary', 'word', key, entry);
     if (queryKey !== key) await sbSave('dictionary', 'word', queryKey, entry);
@@ -4981,6 +5038,9 @@ async function fetchPreviewData(word, isGrammar) {
 
 // Только русский перевод, короткий промпт с опорой на английские глоссы Викисловаря
 async function fetchQuickRussian(d) {
+  // Сначала ru.wiktionary (быстро и без LLM), Gemini только если статьи там нет
+  const fast = await fetchRuWiktionary(d.word).catch(() => null);
+  if (fast && fast.main) return fast;
   const glosses = (d.senses || []).map(s => s.gloss).filter(Boolean).slice(0, 3).join('; ') || d.english?.main || '';
   const prompt = `Italian ${d.partOfSpeech || 'word'} "${d.word}"${glosses ? ` (English: ${glosses})` : ''}.
 Return ONLY valid JSON, no markdown: {"russian":{"main":"primary Russian translation","alternatives":"1-3 alternatives semicolon-separated or empty"}}`;
