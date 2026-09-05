@@ -3751,22 +3751,39 @@ function mapFreeDictionary(fd, opts = {}) {
 // Короткий промпт только на то, чего в Викисловаре нет: русский, категория, итальянские определения
 // ── Русский перевод без LLM: раздел «Значение» итальянской статьи на ru.wiktionary ─
 const _ruWiktCache = {};
+let _ruWiktQueue = Promise.resolve();
 async function fetchRuWiktionary(word) {
   const w = (word || '').toLowerCase();
   if (!w) return null;
   if (_ruWiktCache[w] !== undefined) return _ruWiktCache[w];
-  let out = null;
-  try {
-    const url = `https://ru.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(w)}&prop=wikitext&format=json&formatversion=2&redirects=1&origin=*`;
-    const res = await fetch(url);
-    if (res.ok) {
-      const data = await res.json();
-      const text = data.parse && data.parse.wikitext;
-      if (text) out = parseRuWiktionaryMeanings(text);
-    }
-  } catch(e) { console.warn('ru.wiktionary error:', e); }
-  _ruWiktCache[w] = out;
-  return out;
+  // Wikimedia режет частые запросы: выполняем их по одному с небольшой паузой
+  const run = _ruWiktQueue.then(async () => {
+    if (_ruWiktCache[w] !== undefined) return _ruWiktCache[w];
+    let out = null, cacheable = true;
+    try {
+      const url = `https://ru.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(w)}&prop=wikitext&format=json&formatversion=2&redirects=1&origin=*`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.error) {
+          // MediaWiki отдаёт ошибки со статусом 200: «missingtitle» — статьи правда нет,
+          // «ratelimited» и прочее — временный сбой, запоминать нельзя
+          if (data.error.code !== 'missingtitle') { cacheable = false; console.warn('ru.wiktionary:', data.error.code); }
+        } else {
+          const text = data.parse && data.parse.wikitext;
+          if (text) out = parseRuWiktionaryMeanings(text);
+        }
+      } else {
+        cacheable = false; // 429 и прочие сбои не считаем за «статьи нет»
+        console.warn('ru.wiktionary status', res.status);
+      }
+    } catch(e) { cacheable = false; console.warn('ru.wiktionary error:', e); }
+    if (cacheable) _ruWiktCache[w] = out;
+    await new Promise(r => setTimeout(r, 400));
+    return out;
+  });
+  _ruWiktQueue = run.catch(() => {});
+  return run;
 }
 
 function parseRuWiktionaryMeanings(text) {
