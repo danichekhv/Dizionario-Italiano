@@ -198,7 +198,8 @@
     }
 
     canvas.addEventListener('pointerdown', e => {
-      canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) {} // синтетические события без активного указателя
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y), s0: G.scale, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, tx0: G.tx, ty0: G.ty }; drag = null; pan = null; return; }
       const n = hit(e.clientX, e.clientY);
       if (n) { drag = { node: n, x0: e.clientX, y0: e.clientY, moved: false, type: e.pointerType }; n.fx = n.x; n.fy = n.y; G.alpha = Math.max(G.alpha, 0.35); loop(); }
