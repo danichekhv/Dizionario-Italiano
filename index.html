@@ -2588,6 +2588,10 @@
     border-radius: 2px;
     margin-left: 8px;
     vertical-align: middle;
+    /* запасная окраска для темы без своего цвета — рамка есть всегда */
+    background: rgba(139,115,85,0.12);
+    border: 1px solid rgba(139,115,85,0.4);
+    color: var(--muted);
   }
 
   .cat-cibo       { background: rgba(230,126,34,0.15); color: #c0641a; border: 1px solid rgba(230,126,34,0.4); }
@@ -4970,7 +4974,16 @@ function renderEntry(e) {
   if (e.category) {
     const cat = document.createElement('span');
     cat.id = 'wordCategoryBadge';
-    cat.className = 'word-category-badge cat-' + (e.category || 'altro').toLowerCase().replace(/[^a-z]/g,'').slice(0,8);
+    // Цвет плашки берём из той же палитры, что и граф (graph.js), чтобы все ~40 тем были окрашены одинаково везде
+    const key = window.WordGraph ? WordGraph.catKey(e.category) : (e.category || 'altro').toLowerCase();
+    cat.className = 'word-category-badge cat-' + key.replace(/[^a-z]/g, '').slice(0, 8);
+    const hex = window.WordGraph && WordGraph.CAT_COLORS[key];
+    if (hex && /^#[0-9a-f]{6}$/i.test(hex)) {
+      const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+      cat.style.background = `rgba(${r},${g},${b},0.14)`;
+      cat.style.border = `1px solid rgba(${r},${g},${b},0.45)`;
+      cat.style.color = hex;
+    }
     cat.textContent = e.category;
     $('wordType').after(cat);
   }
