@@ -61,6 +61,18 @@
     return out;
   }
 
+  // Обратные ссылки: открытые слова, у которых в relatedWords есть хотя бы одно из заданных
+  async function fetchBacklinks(ids) {
+    const out = new Map(); const list = [...new Set(ids.map(norm).filter(Boolean))];
+    for (let i = 0; i < list.length; i += 30) {
+      const chunk = list.slice(i, i + 30);
+      const q = 'or=(' + chunk.map(w => 'data-%3ErelatedWords.cs.' + encodeURIComponent(JSON.stringify([w.replace(/"/g, '')]))).join(',') + ')';
+      const rows = await fetchRows(q).catch(() => []);
+      rows.map(rowToInfo).forEach(info => { if (info.id) out.set(info.id, info); });
+    }
+    return out;
+  }
+
   // Узлы и рёбра из набора известных слов. neighbors=true добавляет серыми ещё не открытые соседние слова
   const edgeKey = (a, b) => a < b ? a + '|' + b : b + '|' + a;
   function buildGraph(infos, opts = {}) {
@@ -82,23 +94,30 @@
     return buildGraph(infos, opts);
   }
   // Кольца вокруг слова: 1-е кольцо — relatedWords статьи, дальше — связи уже открытых слов
+  // Связи считаются в обе стороны: и те, что перечислены у слова, и те открытые слова,
+  // которые сами ссылаются на него (списки relatedWords модель пишет для каждого слова отдельно,
+  // поэтому mangiare может назвать rosicchiare, а rosicchiare — не назвать mangiare)
   async function buildAround(entry, depth) {
     const center = norm(entry.word);
     const infos = new Map([[center, entryToInfo(entry)]]);
     const depthOf = new Map([[center, 0]]);
     const unknown = new Set();
-    let frontier = infos.get(center).rel.filter(w => w !== center), d = 1;
-    while (frontier.length && d <= depth) {
-      const need = frontier.filter(w => !infos.has(w));
-      const fetched = need.length ? await fetchWords(need) : new Map();
+    let level = [center]; // известные слова текущего кольца
+    for (let d = 1; d <= depth && level.length; d++) {
+      const forward = [...new Set(level.flatMap(w => (infos.get(w) ? infos.get(w).rel : []).filter(t => t !== w && !depthOf.has(t))))];
+      const [fetched, back] = await Promise.all([
+        fetchWords(forward.filter(w => !infos.has(w))),
+        fetchBacklinks(level)
+      ]);
       const next = [];
-      frontier.forEach(w => {
-        if (!depthOf.has(w)) depthOf.set(w, d);
+      forward.forEach(w => {
+        if (depthOf.has(w)) return;
+        depthOf.set(w, d);
         const info = infos.get(w) || fetched.get(w);
-        if (info) { if (!infos.has(w)) infos.set(w, info); if (d < depth) info.rel.forEach(t => { if (!infos.has(t) && !depthOf.has(t)) next.push(t); }); }
-        else unknown.add(w);
+        if (info) { infos.set(w, info); next.push(w); } else unknown.add(w);
       });
-      frontier = [...new Set(next)]; d++;
+      back.forEach((info, id) => { if (depthOf.has(id) || infos.has(id)) return; depthOf.set(id, d); infos.set(id, info); next.push(id); });
+      level = next;
     }
     const g = buildGraph(infos, { depthOf });
     const seen = new Set(g.edges.map(e => edgeKey(e[0], e[1])));
