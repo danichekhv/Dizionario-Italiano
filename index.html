@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dizionario Italiano</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🇮🇹</text></svg>">
+<!-- PWA: установка на домашний экран и офлайн-оболочка -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#f5f0e8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Dizionario">
+<link rel="apple-touch-icon" href="/icon-512.png">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Gentium+Plus:ital@0;1&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -2940,6 +2948,7 @@
 
     <button class="apikey-btn" onclick="saveApiKey()">Начать →</button>
     <button class="apikey-back-btn" id="apikeyBackBtn" onclick="hideApiKeyScreen()">← Назад</button>
+    <button class="apikey-back-btn" id="installBtn" style="display:none" onclick="installApp()">📲 Установить как приложение</button>
     <p class="apikey-hint">
       Ключи: Gemini на <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>,
       Groq на <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a>,
@@ -5714,6 +5723,27 @@ document.addEventListener('click', (e) => {
   const isGrammar = currentMode === 'grammar';
   showBottomSheet(word, isGrammar);
 }, true);
+
+// ── PWA: service worker и кнопка установки ────────────────────────────────────
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(e => console.warn('Service worker:', e));
+  });
+}
+let _installPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _installPrompt = e;
+  const b = $('installBtn'); if (b) b.style.display = 'block';
+});
+window.addEventListener('appinstalled', () => { _installPrompt = null; const b = $('installBtn'); if (b) b.style.display = 'none'; });
+async function installApp() {
+  if (!_installPrompt) return;
+  _installPrompt.prompt();
+  try { await _installPrompt.userChoice; } catch(e) {}
+  _installPrompt = null;
+  $('installBtn').style.display = 'none';
+}
 
 </script>
 </body>
