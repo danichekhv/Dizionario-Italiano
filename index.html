@@ -2273,6 +2273,30 @@
   }
   .fav-remove:hover { color: #c44; opacity: 1; }
 
+  /* Избранное → колоды */
+  .fav-check { width: 18px; height: 18px; accent-color: var(--terracotta); cursor: pointer; flex-shrink: 0; }
+  .fav-todeck {
+    background: none; border: 1px solid var(--border); border-radius: 12px; cursor: pointer;
+    color: var(--muted); font-family: 'Crimson Pro', serif; font-size: 13px; font-style: italic;
+    padding: 3px 10px; white-space: nowrap; transition: all .2s;
+  }
+  .fav-todeck:hover { border-color: var(--terracotta); color: var(--terracotta); }
+  .fav-toolbar { display: flex; gap: 10px; margin-bottom: 14px; }
+  .fav-toolbar .cards-btn:first-child { flex: 0 0 auto; }
+  .deck-pick-list { display: flex; flex-direction: column; gap: 4px; margin: 12px 0 4px; max-height: 50vh; overflow: auto; }
+  .deck-pick {
+    display: flex; justify-content: space-between; align-items: center; text-align: left;
+    padding: 9px 12px 9px calc(12px + var(--depth, 0) * 18px);
+    background: white; border: 1px solid var(--border); border-radius: 4px; cursor: pointer;
+    font-family: 'Playfair Display', serif; font-size: 16px; color: var(--ink);
+  }
+  .deck-pick:hover { border-color: var(--terracotta); color: var(--terracotta); }
+  .deck-pick span { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); }
+  @media (max-width: 640px) {
+    .fav-todeck { display: none; }
+    .fav-toolbar .cards-btn { flex: 1; }
+  }
+
 
 
 
@@ -3205,6 +3229,7 @@
       <input type="text" class="fav-search" id="favSearch" placeholder="Поиск по избранному…" oninput="filterFavList()" autocomplete="off" spellcheck="false">
       <span class="fav-search-icon">🔍</span>
     </div>
+    <div class="fav-toolbar" id="favToolbar" style="display:none"></div>
     <div class="fav-list" id="favList"></div>
   </div>
 
@@ -3226,6 +3251,7 @@
 <button class="hero-action-btn refresh" id="dictRefreshBtn" title="Обновить статью" onclick="refreshEntry('dict')">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
+        <button class="hero-action-btn deck" id="dictDeckBtn" title="Добавить в колоду карточек" onclick="addEntryToDeck()">＋</button>
         <button class="hero-action-btn star" id="dictStarBtn" title="Добавить в избранное" onclick="toggleFav('dict')">☆</button>
       </div>
       <div class="word-type-badge" id="wordType">—</div>
@@ -5160,6 +5186,7 @@ function switchFavTab(tab) {
   $('favTabGram').classList.toggle('active', tab === 'grammar');
   const s = $('favSearch'); if (s) s.value = '';
   cachedFavRows = [];
+  favSelected.clear();
   renderFavList(tab);
 }
 
@@ -5179,6 +5206,7 @@ async function renderFavList(tab) {
     list.innerHTML = '';
     if (cachedFavRows.length === 0) {
       list.innerHTML = '<div class="fav-empty">Пока ничего не сохранено — нажмите ★ на любой статье</div>';
+      _favVisibleKeys = []; updateFavToolbar();
       return;
     }
     renderFavRows(cachedFavRows, tab);
@@ -5207,27 +5235,67 @@ function filterFavList() {
   renderFavRows(filtered, currentFavTab);
 }
 
+// ── Избранное → колоды карточек ──────────────────────────────────────────────
+const favSelected = new Set();
+let _favVisibleKeys = [];
+function toggleFavSelect(key, on) { if (on) favSelected.add(key); else favSelected.delete(key); updateFavToolbar(); }
+function favSelectAll() {
+  const all = _favVisibleKeys.length && _favVisibleKeys.every(k => favSelected.has(k));
+  if (all) favSelected.clear(); else _favVisibleKeys.forEach(k => favSelected.add(k));
+  document.querySelectorAll('#favList .fav-check').forEach(cb => { cb.checked = favSelected.has(cb.dataset.key); });
+  updateFavToolbar();
+}
+function updateFavToolbar() {
+  const tb = $('favToolbar'); if (!tb) return;
+  if (currentFavTab !== 'words' || !_favVisibleKeys.length) { tb.style.display = 'none'; return; }
+  const n = favSelected.size;
+  const all = _favVisibleKeys.every(k => favSelected.has(k));
+  tb.style.display = 'flex';
+  tb.innerHTML = `
+    <button class="cards-btn" onclick="favSelectAll()">${all ? 'Снять выделение' : 'Выбрать все'}</button>
+    <button class="cards-btn primary" ${n ? '' : 'disabled'} onclick="favAddSelectedToDeck()">＋ В колоду${n ? ` (${n})` : ''}</button>`;
+}
+function favAddSelectedToDeck() {
+  const entries = cachedFavRows.filter(r => favSelected.has(r.word)).map(r => r.data);
+  if (!entries.length || !window.Cards) return;
+  Cards.addEntries(entries);
+}
+function favAddOneToDeck(event, key) {
+  event.stopPropagation();
+  const row = cachedFavRows.find(r => r.word === key);
+  if (row && window.Cards) Cards.addEntries([row.data]);
+}
+function addEntryToDeck() {
+  if (!currentDictEntry || !window.Cards) return;
+  if (currentDictEntry._pending) { showToast('⏳ дождитесь загрузки статьи'); return; }
+  Cards.addEntries([currentDictEntry]);
+}
+
 function renderFavRows(rows, tab) {
   const list = $('favList');
   const keyCol = tab === 'words' ? 'word' : 'topic';
   list.innerHTML = '';
+  _favVisibleKeys = tab === 'words' ? rows.map(r => r.word) : [];
   rows.forEach(row => {
       const key = row[keyCol];
       const d = row.data;
       const card = document.createElement('div');
       card.className = 'fav-card';
       if (tab === 'words') {
+        const safeKey = key.replace(/'/g, "\\'");
         card.innerHTML = `
+          <input type="checkbox" class="fav-check" data-key="${escapeHtml(key)}" ${favSelected.has(key) ? 'checked' : ''} title="Выбрать" onclick="event.stopPropagation()" onchange="toggleFavSelect(this.dataset.key, this.checked)">
           <div class="fav-card-left">
             <div class="fav-card-word">${d.word || key}</div>
             <div class="fav-card-meta">${d.partOfSpeech || ''}${d.gender ? ' · ' + d.gender : ''} · ${d.russian?.main || ''}</div>
           </div>
           <div class="fav-card-right">
-            <button class="fav-remove" title="Удалить" onclick="removeFav(event,'${tab}','${key.replace(/'/g,"\\'")}')">✕</button>
+            <button class="fav-todeck" title="В колоду карточек" onclick="favAddOneToDeck(event,'${safeKey}')">＋ в колоду</button>
+            <button class="fav-remove" title="Удалить" onclick="removeFav(event,'${tab}','${safeKey}')">✕</button>
             <span class="fav-card-arrow">→</span>
           </div>`;
         card.onclick = (e) => {
-          if (e.target.classList.contains('fav-remove')) return;
+          if (e.target.classList.contains('fav-remove') || e.target.classList.contains('fav-check') || e.target.classList.contains('fav-todeck')) return;
           currentMode = 'dict';
           currentLang = 'it';
           applyModeUI('dict');
@@ -5261,6 +5329,7 @@ function renderFavRows(rows, tab) {
       }
       list.appendChild(card);
   });
+  updateFavToolbar();
 }
 
 async function removeFav(e, tab, key) {

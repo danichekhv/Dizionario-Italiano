@@ -547,6 +547,74 @@ ${JSON.stringify(list)}`;
   }
   const closeModal = () => { const m = $('cardsModal'); if (m) m.style.display = 'none'; };
 
+  // ── Добавление слов из словаря и избранного ─────────────────────────────────
+  // Словарная статья → заметка колоды: перевод, транскрипция, первый пример и первое значение
+  function entryToNote(e) {
+    const m0 = (e.meanings || [])[0] || {};
+    const ru = e.russian || {};
+    return {
+      word: e.word || '', pos: e.partOfSpeech || '',
+      translation: [ru.main, ru.alternatives].filter(Boolean).join('; '),
+      phonetic: e.phonetic || '',
+      example: m0.example || e.example || '',
+      meaning: m0.definition || e.definition || ''
+    };
+  }
+  let _pendingNotes = null;
+  async function addEntries(entries) {
+    const notes = (entries || []).map(entryToNote).filter(n => n.word);
+    if (!notes.length) { showToast('Нечего добавлять'); return; }
+    if (!S.loaded) await loadAll();
+    if (S.missingTables) { showToast('⚠ Сначала создайте таблицы карточек: откройте раздел Le Carte'); return; }
+    _pendingNotes = notes;
+    renderPicker();
+  }
+  function picker() {
+    let m = document.getElementById('deckPickerModal');
+    if (!m) { m = document.createElement('div'); m.id = 'deckPickerModal'; m.className = 'cards-modal'; m.addEventListener('click', e => { if (e.target === m) closePicker(); }); document.body.appendChild(m); }
+    return m;
+  }
+  function renderPicker() {
+    const m = picker(); const words = _pendingNotes.map(n => n.word);
+    const rows = [];
+    const walk = (pid, depth) => childrenOf(pid).forEach(d => { rows.push(`<button class="deck-pick" style="--depth:${depth}" onclick="Cards.pickDeck('${d.id}')">${esc(d.name)}<span>${notesInDeck(d.id).length}</span></button>`); walk(d.id, depth + 1); });
+    walk(null, 0);
+    m.innerHTML = `
+      <div class="cards-modal-box">
+        <div class="cards-title small">В какую колоду?</div>
+        <div class="cards-p">${words.length === 1 ? esc(words[0]) : `${words.length} слов: ${esc(words.slice(0, 6).join(', '))}${words.length > 6 ? '…' : ''}`}</div>
+        <input class="cards-input" id="deckPickTags" placeholder="теги через запятую (необязательно)" autocomplete="off">
+        <div class="deck-pick-list">${rows.join('') || '<div class="cards-empty">Колод пока нет</div>'}</div>
+        <div class="cards-actions">
+          <button class="cards-btn" onclick="Cards.pickNewDeck()">＋ Новая колода</button>
+          <button class="cards-btn" onclick="Cards.closePicker()">Отмена</button>
+        </div>
+      </div>`;
+    m.style.display = 'flex';
+  }
+  function closePicker() { const m = document.getElementById('deckPickerModal'); if (m) m.style.display = 'none'; _pendingNotes = null; }
+  async function pickDeck(deckId) {
+    if (!_pendingNotes) return;
+    const tags = (($('deckPickTags') || {}).value || '').split(/[,\s]+/).map(t => t.trim().replace(/^#/, '')).filter(Boolean);
+    const existing = new Set(notesInDeck(deckId).map(n => n.word.toLowerCase()));
+    const fresh = _pendingNotes.filter(n => !existing.has(n.word.toLowerCase()));
+    const skipped = _pendingNotes.length - fresh.length;
+    if (!fresh.length) { showToast('Эти слова уже есть в колоде'); closePicker(); return; }
+    try {
+      const notes = await sb('notes', { method: 'POST', body: fresh.map(n => ({ deck_id: deckId, ...n, tags })) });
+      const cards = await sb('cards', { method: 'POST', body: notes.flatMap(n => [{ note_id: n.id, direction: 'it' }, { note_id: n.id, direction: 'ru' }]) });
+      S.notes.push(...notes); S.cards.push(...cards.map(c => ({ ...c, dueMs: Date.parse(c.due) || 0 })));
+      showToast(`✓ ${notes.length} слов → ${deckPath(deckId)}${skipped ? ` (${skipped} уже были)` : ''}`);
+      closePicker();
+      if (_currentState === 'cards') render();
+    } catch (e) { showToast('⚠ ' + e.message); }
+  }
+  async function pickNewDeck() {
+    const name = prompt('Название новой колоды:'); if (!name || !name.trim()) return;
+    try { const [d] = await sb('decks', { method: 'POST', body: { name: name.trim(), parent_id: null } }); S.decks.push(d); await pickDeck(d.id); }
+    catch (e) { showToast('⚠ ' + e.message); }
+  }
+
   // ── Примерные колоды ─────────────────────────────────────────────────────────
   const EXAMPLES = {
     Cucina: [
@@ -617,6 +685,7 @@ ${JSON.stringify(list)}`;
     selectNote(id, v) { if (v) S.browseSelected.add(id); else S.browseSelected.delete(id); render(); },
     selectAll(v) { S.browseSelected.clear(); if (v) currentNotes().forEach(n => S.browseSelected.add(n.id)); render(); },
     tagSelected, untagSelected, moveSelected, deleteSelected, editNote, saveNote, closeModal,
+    addEntries, pickDeck, pickNewDeck, closePicker,
     _state: S, _schedule: schedule, _parseLines: parseLines, _fmt: fmtInterval
   };
 })();
