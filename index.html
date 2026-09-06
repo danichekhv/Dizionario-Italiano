@@ -3547,26 +3547,25 @@ function applyModeUI(mode) {
 
 // ── Переключение режима (Словарь / Грамматика / Избранное) ──────────────────
 function switchMode(mode, skipHistoryClear = false) {
-  currentMode = mode;
   if (!skipHistoryClear) {
-    navHistory.length = 0;
-    _currentState = 'initial';
+    // Смена раздела тоже записывается в историю: «Назад» вернёт прежний экран, даже из другого раздела.
+    // showState вызываем до смены currentMode, чтобы закладка запомнила старый режим.
+    if (mode === 'favorites') showState('favorites');
+    else if (mode === 'cards') showState('cards');
+    else { $('searchInput').value = ''; showState('initial'); }
   }
+  currentMode = mode;
   applyModeUI(mode);
   if (mode === 'favorites' && !skipHistoryClear) {
-    showState('favorites');
     renderFavList(currentFavTab);
     updateFavCount();
     return;
   }
   if (mode === 'cards' && !skipHistoryClear) {
-    showState('cards');
     if (window.Cards) Cards.open();
     return;
   }
   if (!skipHistoryClear) {
-    $('searchInput').value = '';
-    showState('initial');
     updateInitialMsg();
     renderHistory();
   }
@@ -3643,7 +3642,7 @@ const TRACKABLE = ['result','rulist','grammar','favorites','initial'];
 function showState(state) {
   // Push history when moving away from a meaningful state to another
   // Don't push if we're going to loading/error (transient states), or if suppressed
-  const pushable = ['result','rulist','grammar','favorites','initial'];
+  const pushable = ['result','rulist','grammar','favorites','cards','initial'];
   if (!_suppressHistory && state !== _currentState && pushable.includes(_currentState)) {
     const savedState = _currentState;
     const savedMode = currentMode;
@@ -3689,6 +3688,13 @@ function showState(state) {
         renderRuResults(query, results, ruTitle);
         _suppressHistory = true; showState('rulist'); _suppressHistory = false;
       });
+    } else if (savedState === 'cards') {
+      pushHistory(() => {
+        currentMode = 'cards';
+        applyModeUI('cards');
+        _suppressHistory = true; showState('cards'); _suppressHistory = false;
+        if (window.Cards) Cards.open();
+      });
     } else if (savedState === 'favorites') {
       const tab = currentFavTab;
       pushHistory(() => {
@@ -3701,7 +3707,7 @@ function showState(state) {
     } else if (savedState === 'initial') {
       // Поиск всегда идёт через 'loading', поэтому фиксируем начальный экран
       // и при уходе в loading — иначе кнопка «Назад» после первого поиска не появится
-      if (['result','rulist','grammar','favorites','loading'].includes(state)) {
+      if (['result','rulist','grammar','favorites','cards','loading'].includes(state)) {
         const m = savedMode;
         pushHistory(() => {
           currentMode = m;
