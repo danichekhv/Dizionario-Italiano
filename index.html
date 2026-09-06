@@ -603,6 +603,36 @@
   .cards-field span { display: block; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
   .cards-field input, .cards-field textarea { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 4px; background: white; font-family: 'Crimson Pro', serif; font-size: 15px; }
   .cards-field textarea { min-height: 60px; resize: vertical; }
+  /* Статистика */
+  .today-box { display: flex; align-items: center; justify-content: space-between; gap: 14px; background: white; border: 1.5px solid var(--border); border-radius: 6px; padding: 14px 18px; margin-bottom: 16px; flex-wrap: wrap; }
+  .today-line { font-size: 16px; color: var(--ink-light); line-height: 1.6; }
+  .today-line b { font-family: 'JetBrains Mono', monospace; font-weight: 500; color: var(--terracotta); }
+  .stat-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .25em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .stat-card { background: white; border: 1.5px solid var(--border); border-radius: 6px; padding: 14px 16px; }
+  .stat-big { font-family: 'Playfair Display', serif; font-size: 34px; color: var(--ink); line-height: 1.1; }
+  .stat-sub { font-size: 13px; color: var(--muted); font-style: italic; margin-top: 4px; line-height: 1.5; }
+  .stat-section { background: white; border: 1.5px solid var(--border); border-radius: 6px; padding: 16px 18px; margin-bottom: 14px; }
+  .stat-title { font-family: 'Playfair Display', serif; font-style: italic; font-size: 17px; margin-bottom: 10px; }
+  .chart { width: 100%; height: 150px; display: block; }
+  .chart .ax { font-family: 'JetBrains Mono', monospace; font-size: 10px; fill: var(--muted); }
+  .chart .gl { stroke: rgba(139,115,85,.2); stroke-width: 1; }
+  .hm-wrap { overflow-x: auto; padding-bottom: 6px; }
+  .hm-months { display: grid; grid-auto-columns: 11px; gap: 3px; height: 14px; margin-bottom: 3px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); }
+  .hm-months span { grid-row: 1; white-space: nowrap; }
+  .hm-grid { display: grid; grid-template-rows: repeat(7, 11px); grid-auto-columns: 11px; gap: 3px; width: max-content; }
+  .hm-cell { width: 11px; height: 11px; border-radius: 2px; background: rgba(139,115,85,.12); }
+  .hm-cell.l1 { background: #d6e8cb; } .hm-cell.l2 { background: #a9cf94; } .hm-cell.l3 { background: #6fa85a; } .hm-cell.l4 { background: #3f7a2e; }
+  .btn-row { display: flex; align-items: center; gap: 12px; margin: 6px 0; }
+  .btn-row-name { width: 120px; font-size: 14px; font-style: italic; color: var(--ink-light); flex-shrink: 0; }
+  .btn-row-name small { color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+  .btn-bar { flex: 1; display: flex; height: 22px; border-radius: 4px; overflow: hidden; background: rgba(139,115,85,.1); }
+  .btn-bar span { display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: rgba(26,18,8,.65); overflow: hidden; }
+  .btn-bar .again { background: #e7b3ac; } .btn-bar .hard { background: #ebd29a; } .btn-bar .good { background: #b9d8a8; } .btn-bar .easy { background: #b3c9ea; }
+  .cards-note { background: rgba(196,82,42,.08); border: 1px solid rgba(196,82,42,.25); border-radius: 6px; padding: 12px 14px; margin-bottom: 14px; font-size: 14px; line-height: 1.5; }
+  .cards-note .cards-btn { margin-top: 8px; }
+  @media (max-width: 640px) { .today-box .cards-btn { width: 100%; } .btn-row-name { width: 90px; font-size: 13px; } }
+
   .cards-setup { background: white; border: 1.5px solid var(--border); border-radius: 6px; padding: 22px 26px; }
   .cards-setup p { line-height: 1.5; margin-bottom: 12px; }
   .cards-sql { background: #1e1a14; color: #e8ddc8; font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 14px; border-radius: 6px; overflow: auto; max-height: 320px; white-space: pre; }

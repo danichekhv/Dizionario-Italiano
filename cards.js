@@ -14,7 +14,8 @@
     view: 'decks', deckId: null, tagFilter: '',
     queue: [], current: null, revealed: false, undo: null,
     collapsed: {}, loaded: false, missingTables: false,
-    build: null, browseSelected: new Set()
+    build: null, browseSelected: new Set(),
+    reviews: [], reviewsMissing: false, shownAt: 0, statsDeckId: null
   };
 
   // ── Supabase REST ────────────────────────────────────────────────────────────
@@ -66,7 +67,22 @@ create table if not exists cards (
   created_at timestamptz default now()
 );
 create index if not exists cards_note_idx on cards(note_id);
-create index if not exists notes_deck_idx on notes(deck_id);`;
+create index if not exists notes_deck_idx on notes(deck_id);
+-- История ответов для статистики
+create table if not exists reviews (
+  id uuid primary key default gen_random_uuid(),
+  card_id uuid references cards(id) on delete cascade,
+  note_id uuid references notes(id) on delete cascade,
+  deck_id uuid,
+  rating int not null,
+  prev_state text,
+  new_state text,
+  prev_interval real default 0,
+  interval_days real default 0,
+  took_ms int default 0,
+  reviewed_at timestamptz default now()
+);
+create index if not exists reviews_at_idx on reviews(reviewed_at);`;
 
   async function loadAll() {
     try {
@@ -81,6 +97,14 @@ create index if not exists notes_deck_idx on notes(deck_id);`;
     } catch (e) {
       if (isMissingTable(e)) { S.missingTables = true; S.loaded = true; }
       else { console.error('cards load:', e); showToast('⚠ Не удалось загрузить колоды: ' + e.message); }
+    }
+    // История ответов отдельно: её таблица могла появиться позже остальных
+    if (!S.missingTables) {
+      try {
+        const rv = await sb('reviews?select=*&order=reviewed_at');
+        S.reviews = (rv || []).map(r => ({ ...r, atMs: Date.parse(r.reviewed_at) || 0 }));
+        S.reviewsMissing = false;
+      } catch (e) { if (isMissingTable(e)) S.reviewsMissing = true; else console.warn('reviews load:', e); }
     }
   }
 
@@ -160,7 +184,7 @@ create index if not exists notes_deck_idx on notes(deck_id);`;
       const soon = cardsOfNotes(notesInDeck(S.deckId)).filter(c => (c.state === 'learning' || c.state === 'relearning') && c.dueMs <= now + LEARN_AHEAD_MIN * MIN).sort((a, b) => a.dueMs - b.dueMs);
       if (soon.length) S.queue = soon;
     }
-    S.current = S.queue.shift() || null; S.revealed = false;
+    S.current = S.queue.shift() || null; S.revealed = false; S.shownAt = Date.now();
   }
 
   // ── Рендер ───────────────────────────────────────────────────────────────────
@@ -179,7 +203,8 @@ create index if not exists notes_deck_idx on notes(deck_id);`;
     if (S.missingTables) { closeOverlay(); renderSetup(el); return; }
     if (S.view === 'study') { renderDecks(el); const o = overlay(); renderStudy(o); o.classList.add('open'); document.body.classList.add('study-open'); return; }
     closeOverlay();
-    ({ decks: renderDecks, add: renderAdd, browse: renderBrowse })[S.view](el);
+    if (S.view === 'sql') { renderSetup(el); return; }
+    ({ decks: renderDecks, add: renderAdd, browse: renderBrowse, stats: renderStats })[S.view](el);
   }
   // Переход на внутренний экран с записью в историю: «Назад» вернёт прежний вид
   function pushView(view) {
@@ -190,7 +215,7 @@ create index if not exists notes_deck_idx on notes(deck_id);`;
 
   function renderSetup(el) {
     el.innerHTML = `
-      <div class="cards-head"><div class="cards-title">Le Carte</div></div>
+      <div class="cards-head">${S.missingTables ? '' : '<button class="cards-back" onclick="goBack()">←</button>'}<div class="cards-title">Le Carte${S.missingTables ? '' : ' · SQL'}</div></div>
       <div class="cards-setup">
         <p>Для карточек нужны три таблицы в Supabase. Скопируйте SQL, вставьте в SQL Editor вашего проекта и нажмите Run, затем вернитесь сюда.</p>
         <pre class="cards-sql" id="cardsSql">${esc(SETUP_SQL)}</pre>
@@ -215,6 +240,7 @@ create index if not exists notes_deck_idx on notes(deck_id);`;
           <div class="deck-menu">
             <button onclick="Cards.openAdd('${d.id}')" title="Добавить слова">＋</button>
             <button onclick="Cards.browse('${d.id}')" title="Карточки">☰</button>
+            <button onclick="Cards.stats('${d.id}')" title="Статистика колоды">∿</button>
             <button onclick="Cards.newDeck('${d.id}')" title="Подколода">⤵</button>
             <button onclick="Cards.renameDeck('${d.id}')" title="Переименовать">✎</button>
             <button onclick="Cards.deleteDeck('${d.id}')" title="Удалить">✕</button>
@@ -224,10 +250,18 @@ create index if not exists notes_deck_idx on notes(deck_id);`;
     });
     walk(null, 0);
     const total = counts(S.cards);
+    const t = todayStats(null);
     el.innerHTML = `
       <div class="cards-head">
         <div class="cards-title">Le Carte</div>
         <div class="cards-head-counts" title="новые · заучиваемые · к повторению"><span class="c-new">${total.new}</span><span class="c-learn">${total.learn}</span><span class="c-due">${total.due}</span></div>
+      </div>
+      <div class="today-box">
+        <div>
+          <div class="stat-label">Сегодня</div>
+          <div class="today-line"><b>${t.count}</b> повторений · <b>${t.learned}</b> новых${t.correct !== null ? ` · <b>${t.correct}%</b> верно` : ''} · <b>${t.timeMin}</b> мин · серия <b>${t.streak}</b> дн.</div>
+        </div>
+        <button class="cards-btn" onclick="Cards.stats(null)">Статистика →</button>
       </div>
       <div class="deck-list">${rows.join('') || '<div class="cards-empty">Колод пока нет</div>'}</div>
       <div class="cards-actions">
@@ -236,6 +270,124 @@ create index if not exists notes_deck_idx on notes(deck_id);`;
         <label class="cards-inline">новых в день <input type="number" min="0" max="500" value="${newPerDay()}" onchange="Cards.setNewPerDay(this.value)"></label>
       </div>
       <div class="cards-legend"><span class="c-new">синие</span> новые · <span class="c-learn">красные</span> заучиваемые · <span class="c-due">зелёные</span> к повторению. Нажмите на название колоды, чтобы учить.</div>`;
+  }
+
+  // ── Статистика ───────────────────────────────────────────────────────────────
+  const dayKey = ms => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const startOfDay = ms => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const scopeNotes = deckId => deckId ? notesInDeck(deckId) : S.notes;
+  function scopeReviews(deckId) {
+    if (!deckId) return S.reviews;
+    const ids = new Set(scopeNotes(deckId).map(n => n.id));
+    return S.reviews.filter(r => ids.has(r.note_id));
+  }
+  function streak(deckId) {
+    const days = new Set(scopeReviews(deckId).map(r => dayKey(r.atMs)));
+    let n = 0, d = startOfDay(Date.now());
+    if (!days.has(dayKey(d))) d -= DAY; // сегодня ещё не занимались — серия считается до вчера
+    while (days.has(dayKey(d))) { n++; d -= DAY; }
+    return n;
+  }
+  function todayStats(deckId) {
+    const t0 = startOfDay(Date.now());
+    const rs = scopeReviews(deckId).filter(r => r.atMs >= t0);
+    const again = rs.filter(r => r.rating === 1).length;
+    const time = rs.reduce((s, r) => s + Math.min(r.took_ms || 0, 60000), 0);
+    return { count: rs.length, again, correct: rs.length ? Math.round((1 - again / rs.length) * 100) : null,
+      learned: rs.filter(r => r.prev_state === 'new').length, timeMin: Math.round(time / 6000) / 10, streak: streak(deckId) };
+  }
+  function cardStates(deckId) {
+    const s = { new: 0, learning: 0, young: 0, mature: 0 };
+    cardsOfNotes(scopeNotes(deckId)).forEach(c => { if (c.state === 'new') s.new++; else if (c.state !== 'review') s.learning++; else if ((c.interval_days || 0) < 21) s.young++; else s.mature++; });
+    return s;
+  }
+  function forecastItems(deckId, daysN = 30) {
+    const t0 = startOfDay(Date.now()); const b = new Array(daysN).fill(0);
+    cardsOfNotes(scopeNotes(deckId)).filter(c => c.state !== 'new').forEach(c => { const d = Math.max(0, Math.floor((c.dueMs - t0) / DAY)); if (d < daysN) b[d]++; });
+    return b.map((v, i) => ({ label: i === 0 ? 'сег.' : (i % 5 === 0 ? String(i) : ''), value: v, title: i === 0 ? `сегодня и просроченные: ${v}` : `через ${i} дн.: ${v}` }));
+  }
+  function reviewsPerDay(deckId, daysN = 30) {
+    const t0 = startOfDay(Date.now()) - (daysN - 1) * DAY; const b = new Array(daysN).fill(0);
+    scopeReviews(deckId).forEach(r => { const i = Math.floor((r.atMs - t0) / DAY); if (i >= 0 && i < daysN) b[i]++; });
+    return b.map((v, i) => { const d = new Date(t0 + i * DAY); return { label: (daysN - 1 - i) % 5 === 0 ? `${d.getDate()}.${d.getMonth() + 1}` : '', value: v, title: `${dayKey(t0 + i * DAY)}: ${v}` }; });
+  }
+  function intervalItems(deckId) {
+    const edges = [1, 3, 7, 14, 30, 90, 180, 365, Infinity], labels = ['1 д', '2–3', '4–7', '8–14', '15–30', '1–3 м', '3–6 м', '6–12 м', '> 1 г'];
+    const b = new Array(labels.length).fill(0);
+    cardsOfNotes(scopeNotes(deckId)).filter(c => c.state === 'review').forEach(c => { const i = edges.findIndex(e => (c.interval_days || 0) <= e); b[i === -1 ? b.length - 1 : i]++; });
+    return b.map((v, i) => ({ label: labels[i], value: v }));
+  }
+  function easeItems(deckId) {
+    const b = {};
+    cardsOfNotes(scopeNotes(deckId)).filter(c => c.state === 'review').forEach(c => { const e = Math.round((c.ease || 2.5) * 10) * 10; b[e] = (b[e] || 0) + 1; });
+    return Object.keys(b).map(Number).sort((a, b2) => a - b2).map(k => ({ label: k + '%', value: b[k] }));
+  }
+  function buttonStats(deckId) {
+    const g = { learning: [0, 0, 0, 0], young: [0, 0, 0, 0], mature: [0, 0, 0, 0] };
+    scopeReviews(deckId).forEach(r => { const k = r.prev_state === 'review' ? ((r.prev_interval || 0) >= 21 ? 'mature' : 'young') : 'learning'; g[k][Math.min(4, Math.max(1, r.rating || 3)) - 1]++; });
+    return g;
+  }
+  // Столбчатая диаграмма без библиотек: SVG со строками
+  function svgBars(items, opts = {}) {
+    const { height = 150, color = 'var(--terracotta)' } = opts;
+    const w = 600, h = height, padL = 36, padB = 22, padT = 10;
+    const max = Math.max(1, ...items.map(i => i.value));
+    const bw = (w - padL) / Math.max(1, items.length);
+    const bars = items.map((it, i) => {
+      const bh = (h - padB - padT) * it.value / max, x = padL + i * bw, y = h - padB - bh;
+      return `<rect x="${(x + bw * 0.15).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw * 0.7).toFixed(1)}" height="${bh.toFixed(1)}" fill="${it.color || color}" rx="2"><title>${esc(it.title || `${it.label}: ${it.value}`)}</title></rect>`
+        + (it.label ? `<text x="${(x + bw / 2).toFixed(1)}" y="${h - 6}" text-anchor="middle" class="ax">${esc(it.label)}</text>` : '');
+    }).join('');
+    const grid = [0, 0.5, 1].map(f => { const y = h - padB - (h - padB - padT) * f; return `<line x1="${padL}" x2="${w}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="gl"/><text x="${padL - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end" class="ax">${Math.round(max * f)}</text>`; }).join('');
+    return `<svg viewBox="0 0 ${w} ${h}" class="chart" preserveAspectRatio="none">${grid}${bars}</svg>`;
+  }
+  // Тепловая карта активности за год, как в Anki и на GitHub
+  function heatmapHtml(deckId) {
+    const counts = {}; scopeReviews(deckId).forEach(r => { const k = dayKey(r.atMs); counts[k] = (counts[k] || 0) + 1; });
+    const today = startOfDay(Date.now());
+    let start = today - 364 * DAY; start -= ((new Date(start).getDay() + 6) % 7) * DAY; // с понедельника
+    const cells = [], months = []; let lastMonth = -1;
+    const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+    for (let t = start, col = 0; t <= today; t += 7 * DAY, col++) {
+      for (let r = 0; r < 7; r++) {
+        const ms = t + r * DAY; if (ms > today) break;
+        const k = dayKey(ms), c = counts[k] || 0, lvl = c === 0 ? 0 : c < 10 ? 1 : c < 30 ? 2 : c < 60 ? 3 : 4;
+        cells.push(`<div class="hm-cell l${lvl}" style="grid-column:${col + 1};grid-row:${r + 1}" title="${k}: ${c}"></div>`);
+      }
+      const m = new Date(t).getMonth();
+      if (m !== lastMonth) { months.push(`<span style="grid-column:${col + 1}">${MONTHS[m]}</span>`); lastMonth = m; }
+    }
+    const total = Object.values(counts).reduce((a, b) => a + b, 0), activeDays = Object.keys(counts).length;
+    return `<div class="hm-wrap"><div class="hm-months">${months.join('')}</div><div class="hm-grid">${cells.join('')}</div></div>
+      <div class="cards-p">${total} повторений за год · ${activeDays} активных дней · текущая серия ${streak(deckId)} дн.</div>`;
+  }
+  function renderStats(el) {
+    const deckId = S.statsDeckId; const title = deckId ? deckPath(deckId) : 'Все колоды';
+    const t = todayStats(deckId), st = cardStates(deckId), rs = scopeReviews(deckId);
+    const totalCards = st.new + st.learning + st.young + st.mature;
+    const activeDays = new Set(rs.map(r => dayKey(r.atMs))).size;
+    const btn = buttonStats(deckId);
+    const btnRow = (name, arr) => {
+      const s = arr.reduce((a, b) => a + b, 0); const p = s ? arr.map(v => Math.round(v / s * 100)) : [0, 0, 0, 0];
+      const names = ['Снова', 'Трудно', 'Хорошо', 'Легко'], cls = ['again', 'hard', 'good', 'easy'];
+      return `<div class="btn-row"><div class="btn-row-name">${name} <small>${s}</small></div><div class="btn-bar">${arr.map((v, i) => v ? `<span class="${cls[i]}" style="width:${p[i]}%" title="${names[i]}: ${v} (${p[i]}%)">${p[i] >= 10 ? p[i] + '%' : ''}</span>` : '').join('')}</div></div>`;
+    };
+    const ease = easeItems(deckId);
+    el.innerHTML = `
+      <div class="cards-head"><button class="cards-back" onclick="goBack()">←</button><div class="cards-title small">Статистика</div><div class="cards-head-deck">${esc(title)}</div></div>
+      ${S.reviewsMissing ? `<div class="cards-note">История ответов не пишется: в Supabase нет таблицы <b>reviews</b>. Выполните SQL ещё раз, он добавит только недостающее. <button class="cards-btn" onclick="Cards.showSql()">Показать SQL</button></div>` : ''}
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Сегодня</div><div class="stat-big">${t.count}</div><div class="stat-sub">повторений · ${t.timeMin} мин${t.correct !== null ? ` · ${t.correct}% верно` : ''} · новых ${t.learned}</div></div>
+        <div class="stat-card"><div class="stat-label">Серия</div><div class="stat-big">${t.streak}</div><div class="stat-sub">дней подряд · активных дней ${activeDays}</div></div>
+        <div class="stat-card"><div class="stat-label">Карточки</div><div class="stat-big">${totalCards}</div><div class="stat-sub"><span class="c-new">${st.new} новых</span> · <span class="c-learn">${st.learning} учатся</span> · ${st.young} молодых · ${st.mature} зрелых</div></div>
+        <div class="stat-card"><div class="stat-label">Всего повторений</div><div class="stat-big">${rs.length}</div><div class="stat-sub">${activeDays ? Math.round(rs.length / activeDays) : 0} в активный день</div></div>
+      </div>
+      <div class="stat-section"><div class="stat-title">Активность за год</div>${heatmapHtml(deckId)}</div>
+      <div class="stat-section"><div class="stat-title">Повторения за 30 дней</div>${svgBars(reviewsPerDay(deckId))}</div>
+      <div class="stat-section"><div class="stat-title">Прогноз на 30 дней: сколько карточек подойдёт к повторению</div>${svgBars(forecastItems(deckId), { color: 'var(--sage)' })}</div>
+      <div class="stat-section"><div class="stat-title">Кнопки ответов</div>${btnRow('Заучивание', btn.learning)}${btnRow('Молодые', btn.young)}${btnRow('Зрелые', btn.mature)}<div class="cards-p">Молодые — выученные карточки с интервалом до 21 дня, зрелые — от 21 дня.</div></div>
+      <div class="stat-section"><div class="stat-title">Интервалы выученных карточек</div>${svgBars(intervalItems(deckId), { color: '#3b64b4' })}</div>
+      <div class="stat-section"><div class="stat-title">Лёгкость</div>${ease.length ? svgBars(ease, { color: 'var(--gold)' }) : '<div class="cards-empty">Пока нет выученных карточек</div>'}</div>`;
   }
 
   function cardFaces(card) {
@@ -394,14 +546,23 @@ create index if not exists notes_deck_idx on notes(deck_id);`;
     if (!S.current || !S.revealed) return;
     const before = { ...S.current }; const after = schedule(S.current, rating);
     Object.assign(S.current, after);
-    S.undo = { before, card: S.current };
+    // Запись в историю ответов — из неё строится статистика
+    const note = noteById(S.current.note_id);
+    const rev = { card_id: S.current.id, note_id: S.current.note_id, deck_id: note ? note.deck_id : null, rating,
+      prev_state: before.state, new_state: after.state, prev_interval: before.interval_days || 0, interval_days: after.interval_days || 0,
+      took_ms: Math.min(Math.max(0, Date.now() - (S.shownAt || Date.now())), 60000) };
+    const local = { ...rev, atMs: Date.now(), reviewed_at: new Date().toISOString() };
+    S.reviews.push(local);
+    if (!S.reviewsMissing) sb('reviews', { method: 'POST', body: rev }).then(rows => { if (rows && rows[0]) local.id = rows[0].id; }).catch(e => { if (isMissingTable(e)) S.reviewsMissing = true; });
+    S.undo = { before, card: S.current, review: local };
     const payload = { state: after.state, step: after.step, due: after.due, interval_days: after.interval_days, ease: after.ease, reps: after.reps, lapses: after.lapses };
     sb(`cards?id=eq.${S.current.id}`, { method: 'PATCH', body: payload }).catch(e => showToast('⚠ Не сохранилось: ' + e.message));
     nextCard(); render();
   }
   async function undo() {
     if (!S.undo) return;
-    const { before, card } = S.undo; S.undo = null;
+    const { before, card, review } = S.undo; S.undo = null;
+    if (review) { S.reviews = S.reviews.filter(r => r !== review); if (review.id) sb(`reviews?id=eq.${review.id}`, { method: 'DELETE' }).catch(() => {}); }
     Object.assign(card, before);
     sb(`cards?id=eq.${card.id}`, { method: 'PATCH', body: { state: before.state, step: before.step, due: before.due, interval_days: before.interval_days, ease: before.ease, reps: before.reps, lapses: before.lapses } }).catch(() => {});
     if (S.current) S.queue.unshift(S.current);
@@ -681,6 +842,8 @@ ${JSON.stringify(list)}`;
     toggleItem(i, v) { S.build.items[i].include = v; render(); },
     resetBuild() { S.build = null; render(); },
     browse(id) { pushView('browse'); S.deckId = id; S.view = 'browse'; S.tagFilter = ''; S.browseSelected.clear(); render(); },
+    stats(id) { pushView('stats'); S.statsDeckId = id || null; S.view = 'stats'; render(); },
+    showSql() { pushView('sql'); S.view = 'sql'; render(); },
     setTagFilter(t) { S.tagFilter = t; S.browseSelected.clear(); render(); },
     selectNote(id, v) { if (v) S.browseSelected.add(id); else S.browseSelected.delete(id); render(); },
     selectAll(v) { S.browseSelected.clear(); if (v) currentNotes().forEach(n => S.browseSelected.add(n.id)); render(); },
