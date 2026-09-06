@@ -35,11 +35,12 @@
   function posKey(p) { const s = norm(p); const k = Object.keys(POS_COLORS).find(k => k !== '?' && k !== 'altro' && s.startsWith(k)); return k || (s ? 'altro' : '?'); }
 
   // ── Данные из Supabase: только нужные поля статьи, без спряжений ─────────────
-  const SELECT = 'select=' + encodeURIComponent('word,w:data->>word,cat:data->>category,pos:data->>partOfSpeech,rel:data->relatedWords,ru:data->russian->>main');
+  const SELECT = 'select=' + encodeURIComponent('word,w:data->>word,cat:data->>category,pos:data->>partOfSpeech,rel:data->relatedWords,ru:data->russian->>main,unv:data->>unverified');
   async function fetchRows(extra) {
     const res = await fetch(`${SB_URL}/rest/v1/dictionary?${SELECT}${extra ? '&' + extra : ''}`, { headers: SB_H });
     if (!res.ok) throw new Error('Supabase HTTP ' + res.status);
-    return res.json();
+    // Статьи, помеченные выдуманными (слова нет в Викисловаре), на графах не показываем
+    return (await res.json()).filter(r => r.unv !== 'true');
   }
   const rowToInfo = r => ({ id: norm(r.w || r.word), label: r.w || r.word, cat: catKey(r.cat), pos: posKey(r.pos), rel: Array.isArray(r.rel) ? r.rel.map(norm).filter(Boolean) : [], ru: r.ru || '' });
   const entryToInfo = e => ({ id: norm(e.word), label: e.word || '', cat: catKey(e.category), pos: posKey(e.partOfSpeech), rel: (e.relatedWords || []).map(norm).filter(Boolean), ru: (e.russian && e.russian.main) || '' });

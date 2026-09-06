@@ -158,7 +158,8 @@ async function sbSave(table, keyCol, keyVal, data) {
       body: JSON.stringify({ [keyCol]: keyVal, data })
     });
     if (!res.ok) console.warn("Supabase sbSave error:", res.status, await res.text());
-  } catch(e) { console.warn("Supabase sbSave exception:", e); }
+    return res.ok;
+  } catch(e) { console.warn("Supabase sbSave exception:", e); return false; }
 }
 
 function showToast(text) {
@@ -702,21 +703,45 @@ async function pruneRelated(entry) {
 // изменившиеся записи сохраняются заново. Нужен вход, иначе писать в кэш нельзя.
 async function cleanupRelatedCache() {
   if (!(window.Auth && Auth.user())) { showToast('Нужно войти в аккаунт'); return; }
+  showToast('Проверяю кэш…');
   const res = await fetch(`${SB_URL}/rest/v1/dictionary?select=word,data&limit=2000`, { headers: SB_H });
+  if (!res.ok) { showToast('Не удалось прочитать кэш: HTTP ' + res.status); return; }
   const rows = await res.json();
-  let fixed = 0, removed = [];
+  let fixed = 0, failed = 0; const removed = new Set(), fake = [];
   for (const row of rows) {
-    const list = (row.data && row.data.relatedWords) || [];
-    if (!list.length) continue;
-    const ok = await verifyWords(list);
-    if (ok.length === list.length) continue;
-    removed.push(...list.filter(w => !ok.includes(w)));
-    row.data.relatedWords = ok; fixed++;
-    await sbSave('dictionary', 'word', row.word, row.data);
+    const d = row.data || {}; let changed = false;
+    const list = d.relatedWords || [];
+    if (list.length) {
+      const ok = await verifyWords(list);
+      if (ok.length !== list.length) { list.filter(w => !ok.includes(w)).forEach(w => removed.add(w)); d.relatedWords = ok; changed = true; }
+    }
+    // Заголовок статьи: одиночное слово, которого нет в Викисловаре, — выдумка модели.
+    // Удалять строки права не позволяют, поэтому помечаем: граф и «мои слова» такие статьи не показывают
+    const head = String(d.word || row.word || '');
+    if (!d.isPhrase && !/\s/.test(head) && !d.unverified && !(await wordExists(head))) { d.unverified = true; fake.push(head.toLowerCase()); changed = true; }
+    // Ключ с кавычками (fare “bella figura”) — след старого запроса из колоды; чистая статья у выражения уже есть
+    if (!d.unverified && cleanQuery(row.word) !== row.word) { d.unverified = true; fake.push(row.word.toLowerCase()); changed = true; }
+    if (changed) { if (await sbSave('dictionary', 'word', row.word, d)) fixed++; else failed++; }
   }
+  if (fake.length) {
+    const q = fake.map(w => '"' + w.replace(/"/g, '') + '"').join(',');
+    await fetch(`${SB_URL}/rest/v1/word_views?word=in.(${encodeURIComponent(q)})`, { method: 'DELETE', headers: SB_H }).catch(() => {});
+  }
+  // Слова в своих колодах с кавычками внутри приводим к чистому виду, чтобы карточка вела на нормальную статью
+  let notesFixed = 0;
+  try {
+    const nres = await fetch(`${SB_URL}/rest/v1/notes?select=id,word&limit=5000`, { headers: SB_H });
+    for (const n of nres.ok ? await nres.json() : []) {
+      const clean = cleanQuery(n.word);
+      if (clean && clean !== n.word) {
+        const r = await fetch(`${SB_URL}/rest/v1/notes?id=eq.${n.id}`, { method: 'PATCH', headers: { ...SB_H, 'Content-Type': 'application/json' }, body: JSON.stringify({ word: clean }) });
+        if (r.ok) notesFixed++;
+      }
+    }
+  } catch (e) { console.warn('notes cleanup:', e); }
   _mapInfos = null;
-  showToast(fixed ? `Исправлено статей: ${fixed}, убрано слов: ${removed.length}` : 'Выдуманных связей не найдено');
-  console.log('cleanupRelatedCache: убраны', [...new Set(removed)]);
+  console.log('cleanupRelatedCache: убраны связи', [...removed], '· помечены выдуманными', fake, '· ошибок сохранения', failed);
+  showToast(`Проверено статей: ${rows.length}. Исправлено: ${fixed}, связей убрано: ${removed.size}, скрыто статей: ${fake.length}, слов в колодах: ${notesFixed}${failed ? `, не сохранилось: ${failed}` : ''}`);
 }
 
 const FD_POS = {
@@ -1237,6 +1262,8 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
     const entry = await llmJson(prompt, 'dict');
     if (!entry.word) { $('errorText').textContent = `"${word}" — parola non trovata`; showState('error'); return; }
     entry.relatedWords = await verifyWords(entry.relatedWords);
+    // Слова нет в Викисловаре, статья целиком от модели: помечаем, в граф и «мои слова» оно не попадёт
+    entry.unverified = !(await wordExists(entry.word || word));
     const canonicalKey = (entry.word || word).toLowerCase();
     const queryKey = word.toLowerCase();
     await sbSave('dictionary', 'word', canonicalKey, entry);
@@ -1635,7 +1662,7 @@ function renderEntry(e) {
   currentDictEntry = e;
   currentDictWord = (e.word || '').toLowerCase();
   checkIfStarred('dict', (e.word || '').toLowerCase());
-  if (!e._pending && window.Auth) Auth.logView((e.word || '').toLowerCase()); // для личной карты слов
+  if (!e._pending && !e.unverified && window.Auth) Auth.logView((e.word || '').toLowerCase()); // для личной карты слов
     $('wordTitle').textContent = e.word;
   $('wordPhonetic').innerHTML = highlightStress(e.phonetic);
   $('wordType').textContent = e.partOfSpeech || '—';
@@ -1697,6 +1724,9 @@ function renderEntry(e) {
   if (e.source === 'wiktionary') {
     const href = e.sourceUrl || `https://en.wiktionary.org/wiki/${encodeURIComponent(e.word || '')}`;
     srcEl.innerHTML = `Fonte: <a href="${href}" target="_blank" rel="noopener">Wiktionary</a> · CC BY-SA 4.0${e.llm ? ` · definizioni: ${escapeHtml(e.llm)}` : ''}`;
+    srcEl.style.display = 'block';
+  } else if (e.unverified) {
+    srcEl.innerHTML = 'В Викисловаре этого слова нет: статья составлена моделью и может быть неточной или выдуманной';
     srcEl.style.display = 'block';
   } else {
     srcEl.style.display = 'none';
