@@ -182,7 +182,8 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const now = Date.now();
     if (!S.queue.length) {
       // Карточки, которые подойдут в ближайшие минуты, показываем сразу, как в Anki
-      const soon = cardsOfNotes(notesInDeck(S.deckId)).filter(c => (c.state === 'learning' || c.state === 'relearning') && c.dueMs <= now + LEARN_AHEAD_MIN * MIN).sort((a, b) => a.dueMs - b.dueMs);
+      let scope = notesInDeck(S.deckId); if (S.tagFilter) scope = scope.filter(n => (n.tags || []).includes(S.tagFilter));
+      const soon = cardsOfNotes(scope).filter(c => (c.state === 'learning' || c.state === 'relearning') && c.dueMs <= now + LEARN_AHEAD_MIN * MIN).sort((a, b) => a.dueMs - b.dueMs);
       if (soon.length) S.queue = soon;
     }
     S.current = S.queue.shift() || null; S.revealed = false; S.check = null; S.shownAt = Date.now();
