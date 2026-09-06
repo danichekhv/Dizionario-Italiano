@@ -352,25 +352,31 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     }).join('');
     return `<svg viewBox="0 0 ${w} ${h}" class="chart" preserveAspectRatio="none">${grid}${bars}</svg>`;
   }
-  // Тепловая карта активности за год, как в Anki и на GitHub
-  function heatmapHtml(deckId) {
+  // Календарь активности по месяцам: листается стрелками, в клетке число и количество повторений
+  function calendarHtml(deckId) {
     const counts = {}; scopeReviews(deckId).forEach(r => { const k = dayKey(r.atMs); counts[k] = (counts[k] || 0) + 1; });
-    const today = startOfDay(Date.now());
-    let start = today - 364 * DAY; start -= ((new Date(start).getDay() + 6) % 7) * DAY; // с понедельника
-    const cells = [], months = []; let lastMonth = -1;
-    const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
-    for (let t = start, col = 0; t <= today; t += 7 * DAY, col++) {
-      for (let r = 0; r < 7; r++) {
-        const ms = t + r * DAY; if (ms > today) break;
-        const k = dayKey(ms), c = counts[k] || 0, lvl = c === 0 ? 0 : c < 10 ? 1 : c < 30 ? 2 : c < 60 ? 3 : 4;
-        cells.push(`<div class="hm-cell l${lvl}" style="grid-column:${col + 1};grid-row:${r + 1}" title="${k}: ${c}"></div>`);
-      }
-      const m = new Date(t).getMonth();
-      if (m !== lastMonth) { months.push(`<span style="grid-column:${col + 1}">${MONTHS[m]}</span>`); lastMonth = m; }
+    const now = new Date(), off = S.statsMonth || 0;
+    const first = new Date(now.getFullYear(), now.getMonth() + off, 1);
+    const y = first.getFullYear(), m = first.getMonth(), daysIn = new Date(y, m + 1, 0).getDate();
+    const lead = (first.getDay() + 6) % 7; // неделя с понедельника
+    const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+    const todayKey = dayKey(Date.now());
+    let cells = ''; for (let i = 0; i < lead; i++) cells += '<div class="cal-cell empty"></div>';
+    let total = 0, active = 0;
+    for (let d = 1; d <= daysIn; d++) {
+      const ms = new Date(y, m, d).getTime(), k = dayKey(ms), c = counts[k] || 0;
+      if (c) { total += c; active++; }
+      const lvl = c === 0 ? 0 : c < 10 ? 1 : c < 30 ? 2 : c < 60 ? 3 : 4;
+      cells += `<div class="cal-cell l${lvl}${k === todayKey ? ' today' : ''}${ms > Date.now() ? ' future' : ''}" title="${k}: ${c}">${d}${c ? `<small>${c}</small>` : ''}</div>`;
     }
-    const total = Object.values(counts).reduce((a, b) => a + b, 0), activeDays = Object.keys(counts).length;
-    return `<div class="hm-wrap"><div class="hm-months">${months.join('')}</div><div class="hm-grid">${cells.join('')}</div></div>
-      <div class="cards-p">${total} повторений за год · ${activeDays} активных дней · текущая серия ${streak(deckId)} дн.</div>`;
+    return `<div class="cal-head">
+        <button class="cards-btn" onclick="Cards.statsMonth(-1)" title="Предыдущий месяц">${svgIcon('chevron-left')}</button>
+        <div class="cal-title">${MONTHS[m]} ${y}</div>
+        <button class="cards-btn" onclick="Cards.statsMonth(1)" ${off >= 0 ? 'disabled' : ''} title="Следующий месяц">${svgIcon('chevron-right')}</button>
+      </div>
+      <div class="cal-week">${['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'].map(d => `<span>${d}</span>`).join('')}</div>
+      <div class="cal-grid">${cells}</div>
+      <div class="cards-p">${total} повторений за месяц · ${active} активных дней · текущая серия ${streak(deckId)} дн.</div>`;
   }
   function renderStats(el) {
     const deckId = S.statsDeckId; const title = deckId ? deckPath(deckId) : 'Все колоды';
@@ -393,7 +399,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         <div class="stat-card"><div class="stat-label">Карточки</div><div class="stat-big">${totalCards}</div><div class="stat-sub"><span class="c-new">${st.new} новых</span> · <span class="c-learn">${st.learning} учатся</span> · ${st.young} молодых · ${st.mature} зрелых</div></div>
         <div class="stat-card"><div class="stat-label">Всего повторений</div><div class="stat-big">${rs.length}</div><div class="stat-sub">${activeDays ? Math.round(rs.length / activeDays) : 0} в активный день</div></div>
       </div>
-      <div class="stat-section"><div class="stat-title">Активность за год</div>${heatmapHtml(deckId)}</div>
+      <div class="stat-section"><div class="stat-title">Активность</div>${calendarHtml(deckId)}</div>
       <div class="stat-section"><div class="stat-title">Повторения за 30 дней</div>${svgBars(reviewsPerDay(deckId))}</div>
       <div class="stat-section"><div class="stat-title">Прогноз на 30 дней: сколько карточек подойдёт к повторению</div>${svgBars(forecastItems(deckId), { color: 'var(--sage)' })}</div>
       <div class="stat-section"><div class="stat-title">Кнопки ответов</div>${btnRow('Заучивание', btn.learning)}${btnRow('Молодые', btn.young)}${btnRow('Зрелые', btn.mature)}<div class="cards-p">Молодые — выученные карточки с интервалом до 21 дня, зрелые — от 21 дня.</div></div>
@@ -678,7 +684,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         </div>
         <div class="browse-list">${rows || '<div class="cards-empty">В колоде пока нет слов</div>'}</div>
       </div>
-      <div class="cards-modal" id="cardsModal" style="display:none"></div>`;
+`;
   }
 
   // ── Действия: колоды ─────────────────────────────────────────────────────────
@@ -885,8 +891,15 @@ ${JSON.stringify(list)}`;
       const gone = new Set(ids); S.notes = S.notes.filter(n => !gone.has(n.id)); S.cards = S.cards.filter(c => !gone.has(c.note_id)); S.browseSelected.clear(); render();
     } catch (e) { showToast('⚠ ' + e.message); }
   }
+  // Окно редактирования живёт в body, а не внутри экрана колод: у того есть анимация с transform,
+  // из-за которой position: fixed считался от экрана, и окно появлялось посреди длинного списка
+  function cardsModal() {
+    let m = $('cardsModal');
+    if (!m) { m = document.createElement('div'); m.id = 'cardsModal'; m.className = 'cards-modal'; m.style.display = 'none'; m.addEventListener('click', e => { if (e.target === m) closeModal(); }); document.body.appendChild(m); }
+    return m;
+  }
   function editNote(id) {
-    const n = noteById(id); if (!n) return; const m = $('cardsModal'); if (!m) return;
+    const n = noteById(id); if (!n) return; const m = cardsModal();
     m.style.display = 'flex';
     m.innerHTML = `
       <div class="cards-modal-box">
@@ -1096,7 +1109,8 @@ ${JSON.stringify(list)}`;
     toggleItem(i, v) { S.build.items[i].include = v; render(); },
     resetBuild() { S.build = null; render(); },
     browse(id) { pushView('browse'); S.deckId = id; S.view = 'browse'; S.tagFilter = ''; S.browseSelected.clear(); render(); },
-    stats(id) { pushView('stats'); S.statsDeckId = id || null; S.view = 'stats'; render(); },
+    stats(id) { pushView('stats'); S.statsDeckId = id || null; S.statsMonth = 0; S.view = 'stats'; render(); },
+    statsMonth(delta) { S.statsMonth = Math.min(0, (S.statsMonth || 0) + delta); render(); },
     shareDeck, copyShare, revokeShare, processPendingShare,
     // Переход из колоды к словарной статье; «Назад» вернёт тот же экран колод (см. snapshot/restore)
     openArticle(word) {
