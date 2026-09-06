@@ -226,7 +226,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         <p>Карточки ещё не настроены: в базе нет нужных таблиц. Обратитесь к владельцу сайта и попробуйте позже.</p>
         <div class="cards-actions"><button class="cards-btn" onclick="Cards.reload()">Проверить снова</button></div>`;
     el.innerHTML = `
-      <div class="cards-head">${S.missingTables ? '' : '<button class="cards-back" onclick="goBack()">←</button>'}<div class="cards-title">Le Carte${S.missingTables ? '' : ' · SQL'}</div></div>
+      <div class="cards-head"><div class="cards-title">Le Carte${S.missingTables ? '' : ' · SQL'}</div></div>
       <div class="cards-setup">${body}
       </div>`;
   }
@@ -384,7 +384,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     };
     const ease = easeItems(deckId);
     el.innerHTML = `
-      <div class="cards-head"><button class="cards-back" onclick="goBack()">←</button><div class="cards-title small">Статистика</div><div class="cards-head-deck">${esc(title)}</div></div>
+      <div class="cards-head"><div class="cards-title small">Статистика</div><div class="cards-head-deck">${esc(title)}</div></div>
       ${S.reviewsMissing ? `<div class="cards-note">История ответов не пишется: в Supabase нет таблицы <b>reviews</b>. ${isAdmin() ? 'Выполните SQL ещё раз, он добавит только недостающее. <button class="cards-btn" onclick="Cards.showSql()">Показать SQL</button>' : 'Обратитесь к владельцу сайта.'}</div>` : ''}
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-label">Сегодня</div><div class="stat-big">${t.count}</div><div class="stat-sub">повторений · ${t.timeMin} мин${t.correct !== null ? ` · ${t.correct}% верно` : ''} · новых ${t.learned}</div></div>
@@ -484,7 +484,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         </div>`;
     }
     el.innerHTML = `
-      <div class="cards-head"><button class="cards-back" onclick="goBack()">←</button><div class="cards-title small">Добавить слова</div><div class="cards-head-deck">${esc(deckPath(S.deckId))}</div></div>
+      <div class="cards-head"><div class="cards-title small">Добавить слова</div><div class="cards-head-deck">${esc(deckPath(S.deckId))}</div></div>
       <div class="cards-panel">${body}</div>`;
   }
 
@@ -506,7 +506,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         </div>`;
     }).join('');
     el.innerHTML = `
-      <div class="cards-head"><button class="cards-back" onclick="goBack()">←</button><div class="cards-title small">Карточки</div><div class="cards-head-deck">${esc(deckPath(S.deckId))} · ${filtered.length}</div></div>
+      <div class="cards-head"><div class="cards-title small">Карточки</div><div class="cards-head-deck">${esc(deckPath(S.deckId))} · ${filtered.length}</div></div>
       <div class="cards-panel">
         <div class="cards-actions wrap">
           <select class="cards-select" onchange="Cards.setTagFilter(this.value)">
