@@ -591,7 +591,11 @@
   .cards-done .cards-btn { margin-top: 20px; }
 
   .browse-list { display: flex; flex-direction: column; margin-top: 14px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-  .browse-row { display: grid; grid-template-columns: 20px 1.2fr 1.2fr 1fr 40px; gap: 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--cream); }
+  .browse-row { display: grid; grid-template-columns: 20px 1.2fr 22px 1.2fr 1fr 40px; gap: 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--cream); }
+  .browse-open { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 15px; padding: 0; line-height: 1; }
+  .browse-open:hover { color: var(--terracotta); }
+  .study-open { display: inline-block; margin-top: 14px; background: none; border: none; cursor: pointer; font-family: 'Crimson Pro', serif; font-style: italic; font-size: 14px; color: var(--muted); border-bottom: 1px dotted var(--border); padding: 0; }
+  .study-open:hover { color: var(--terracotta); border-bottom-color: var(--terracotta); }
   .browse-row:last-child { border-bottom: none; }
   .browse-word { background: none; border: none; text-align: left; cursor: pointer; font-family: 'Playfair Display', serif; font-size: 16px; color: var(--ink); padding: 0; }
   .browse-word:hover { color: var(--terracotta); }
@@ -738,7 +742,7 @@
     .study-card { padding: 28px 16px; }
     .study-buttons { gap: 6px; }
     .study-buttons .sb { font-size: 15px; padding: 8px 4px; }
-    .browse-row { grid-template-columns: 20px 1fr 1fr; }
+    .browse-row { grid-template-columns: 20px 1fr 22px 1fr; }
     .browse-tags, .browse-state { grid-column: 2 / -1; text-align: left; }
   }
 
@@ -3879,11 +3883,12 @@ function showState(state) {
         _suppressHistory = true; openWordMap(); _suppressHistory = false;
       });
     } else if (savedState === 'cards') {
+      const snap = window.Cards && Cards.snapshot ? Cards.snapshot() : null; // какой именно экран колод был открыт
       pushHistory(() => {
         currentMode = 'cards';
         applyModeUI('cards');
         _suppressHistory = true; showState('cards'); _suppressHistory = false;
-        if (window.Cards) Cards.open();
+        if (window.Cards) { if (snap && Cards.restore && window.Auth && Auth.user()) Cards.restore(snap); else Cards.open(); }
       });
     } else if (savedState === 'favorites') {
       const tab = currentFavTab;

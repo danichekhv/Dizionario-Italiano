@@ -422,7 +422,8 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         ${n.phonetic ? `<div class="study-ipa">${esc(n.phonetic)}</div>` : ''}
         ${n.example ? `<div class="study-box"><div class="study-box-label">Esempio</div><div class="study-box-text italic">«${esc(n.example)}»</div></div>` : ''}
         ${n.meaning ? `<div class="study-box"><div class="study-box-label">Significato</div><div class="study-box-text">${esc(n.meaning)}</div></div>` : ''}
-        ${(n.tags || []).length ? `<div class="study-tags">${n.tags.map(t => `<span class="tag-chip">#${esc(t)}</span>`).join('')}</div>` : ''}` : '';
+        ${(n.tags || []).length ? `<div class="study-tags">${n.tags.map(t => `<span class="tag-chip">#${esc(t)}</span>`).join('')}</div>` : ''}
+        <button class="study-open" onclick="Cards.openArticle('${esc(n.word || '').replace(/'/g, '&#39;')}')">открыть статью ↗</button>` : '';
     const buttons = S.revealed ? `
       <div class="study-buttons">
         <button class="sb again" onclick="Cards.answer(1)"><small>${previewLabel(S.current, 1)}</small>Снова</button>
@@ -492,6 +493,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         <div class="browse-row">
           <input type="checkbox" ${S.browseSelected.has(n.id) ? 'checked' : ''} onchange="Cards.selectNote('${n.id}', this.checked)">
           <button class="browse-word" onclick="Cards.editNote('${n.id}')">${esc(n.word)}</button>
+          <button class="browse-open" onclick="Cards.openArticle('${esc(n.word).replace(/'/g, '&#39;')}')" title="Открыть статью в словаре">↗</button>
           <div class="browse-ru">${esc(n.translation)}</div>
           <div class="browse-tags">${(n.tags || []).map(t => `<span class="tag-chip" onclick="Cards.setTagFilter('${esc(t)}')">#${esc(t)}</span>`).join('')}</div>
           <div class="browse-state" title="состояние карточек: н новая, з заучивается, п повторение">${st}</div>
@@ -816,6 +818,20 @@ ${JSON.stringify(list)}`;
     resetBuild() { S.build = null; render(); },
     browse(id) { pushView('browse'); S.deckId = id; S.view = 'browse'; S.tagFilter = ''; S.browseSelected.clear(); render(); },
     stats(id) { pushView('stats'); S.statsDeckId = id || null; S.view = 'stats'; render(); },
+    // Переход из колоды к словарной статье; «Назад» вернёт тот же экран колод (см. snapshot/restore)
+    openArticle(word) {
+      if (!word) return;
+      closeOverlay();
+      currentMode = 'dict'; applyModeUI('dict');
+      $('searchInput').value = word;
+      lookupWord(word);
+    },
+    snapshot() { return { view: S.view === 'study' ? 'decks' : S.view, deckId: S.deckId, tagFilter: S.tagFilter, statsDeckId: S.statsDeckId }; },
+    async restore(snap) {
+      closeOverlay(); S.build = null; S.browseSelected.clear();
+      if (!S.loaded) { render(); await loadAll(); }
+      Object.assign(S, snap || { view: 'decks' }); render();
+    },
     showSql() { pushView('sql'); S.view = 'sql'; render(); },
     setTagFilter(t) { S.tagFilter = t; S.browseSelected.clear(); render(); },
     selectNote(id, v) { if (v) S.browseSelected.add(id); else S.browseSelected.delete(id); render(); },
