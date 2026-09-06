@@ -2811,6 +2811,7 @@ async function refreshHomeDue() {
   box.style.display = '';
 }
 window.addEventListener('load', () => refreshHomeDue());
+renderHistory(); // «Недавние» на главной при первой загрузке: иначе список появлялся только после возврата на неё
 
 // ── Bottom sheet (mobile) ─────────────────────────────────────────────────────
 let _sheetWord = '';
