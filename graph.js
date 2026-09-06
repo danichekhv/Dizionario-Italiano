@@ -3,14 +3,35 @@
 // общая карта всех открытых слов и граф избранного. Связи берутся из relatedWords
 // уже сохранённых статей, новых запросов к модели не нужно.
 (function () {
-  const CAT_COLORS = { cibo: '#c4522a', natura: '#4a7c3a', persone: '#b8860b', lavoro: '#3b64b4', casa: '#8b5a2b', viaggio: '#2a8c8c', emozioni: '#b03a6a', tempo: '#6b6b9c', corpo: '#c97b3a', cultura: '#7a4fa0', altro: '#8b7355', '?': '#b8ae9c' };
-  const CAT_LABELS = { cibo: 'еда', natura: 'природа', persone: 'люди', lavoro: 'работа', casa: 'дом', viaggio: 'путешествия', emozioni: 'эмоции', tempo: 'время', corpo: 'тело', cultura: 'культура', altro: 'прочее', '?': 'ещё не открыто' };
+  // Та же таксономия, что в промптах (CATEGORY_KEYS в index.html): ключ → цвет и русская подпись
+  const CAT_COLORS = {
+    cibo: '#c4522a', bevande: '#d9773a', cucina: '#a8552c', natura: '#4a7c3a', animali: '#6f8f3a', piante: '#3f9a5a', geografia: '#2f7a6a', clima: '#5aa0b8',
+    tempo: '#6b6b9c', persone: '#b8860b', famiglia: '#c9a227', corpo: '#c97b3a', salute: '#d95f6a', emozioni: '#b03a6a', carattere: '#9c4f8a',
+    casa: '#8b5a2b', oggetti: '#a07850', vestiti: '#c96b8c', 'città': '#4f6fa0', viaggio: '#2a8c8c', trasporti: '#3a7ab8', lavoro: '#3b64b4', scuola: '#5b7fd6',
+    scienza: '#2f5f8f', tecnologia: '#4a6a8a', denaro: '#7a8a2a', diritto: '#6a5a4a', politica: '#8a3a3a', 'società': '#7a5a8a', cultura: '#7a4fa0', arte: '#a04fa0',
+    musica: '#c04f8a', sport: '#3a9a4a', comunicazione: '#4f8fc0', azioni: '#e08a3a', movimento: '#d4a017', pensiero: '#6a7ab0', 'quantità': '#8a8a5a',
+    astratto: '#7c7060', grammatica: '#a09a8a', altro: '#9a8f7c', '?': '#b8ae9c'
+  };
+  const CAT_LABELS = {
+    cibo: 'еда', bevande: 'напитки', cucina: 'кухня', natura: 'природа', animali: 'животные', piante: 'растения', geografia: 'география', clima: 'погода',
+    tempo: 'время', persone: 'люди', famiglia: 'семья', corpo: 'тело', salute: 'здоровье', emozioni: 'эмоции', carattere: 'характер',
+    casa: 'дом', oggetti: 'предметы', vestiti: 'одежда', 'città': 'город', viaggio: 'путешествия', trasporti: 'транспорт', lavoro: 'работа', scuola: 'учёба',
+    scienza: 'наука', tecnologia: 'технологии', denaro: 'деньги', diritto: 'право', politica: 'политика', 'società': 'общество', cultura: 'культура', arte: 'искусство',
+    musica: 'музыка', sport: 'спорт', comunicazione: 'общение', azioni: 'действия', movimento: 'движение', pensiero: 'мышление', 'quantità': 'количество',
+    astratto: 'абстрактное', grammatica: 'служебные слова', altro: 'прочее', '?': 'ещё не открыто'
+  };
   const POS_COLORS = { sostantivo: '#3b64b4', verbo: '#c4522a', aggettivo: '#4a7c3a', avverbio: '#b8860b', preposizione: '#7a4fa0', congiunzione: '#2a8c8c', pronome: '#b03a6a', articolo: '#6b6b9c', interiezione: '#c97b3a', altro: '#8b7355', '?': '#b8ae9c' };
   const POS_LABELS = { sostantivo: 'существительное', verbo: 'глагол', aggettivo: 'прилагательное', avverbio: 'наречие', preposizione: 'предлог', congiunzione: 'союз', pronome: 'местоимение', articolo: 'артикль', interiezione: 'междометие', altro: 'прочее', '?': 'ещё не открыто' };
 
   const norm = s => (s == null ? '' : String(s)).toLowerCase().trim();
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  function catKey(c) { const k = norm(c).replace(/[^a-z]/g, ''); return CAT_COLORS[k] ? k : (k ? 'altro' : '?'); }
+  function catKey(c) {
+    const s = norm(c); if (!s) return '?';
+    if (CAT_COLORS[s]) return s;
+    const k = s.replace(/[^a-zàèéìòù]/g, ''); if (CAT_COLORS[k]) return k;
+    const hit = Object.keys(CAT_COLORS).find(key => key !== '?' && key !== 'altro' && s.startsWith(key)); // «cibo e bevande» → cibo
+    return hit || 'altro';
+  }
   function posKey(p) { const s = norm(p); const k = Object.keys(POS_COLORS).find(k => k !== '?' && k !== 'altro' && s.startsWith(k)); return k || (s ? 'altro' : '?'); }
 
   // ── Данные из Supabase: только нужные поля статьи, без спряжений ─────────────
@@ -103,7 +124,7 @@
       <div class="wg-hint">${opts.hint || 'Тяните слова, крутите колесо для масштаба, тяните пустое место, чтобы двигать карту. Клик по слову открывает статью.'}</div>`;
     const canvas = container.querySelector('.wg-canvas'), wrap = container.querySelector('.wg-canvas-wrap'), ctx = canvas.getContext('2d');
     const emptyEl = container.querySelector('.wg-empty'), legendEl = container.querySelector('.wg-legend');
-    const G = { nodes: [], edges: [], byId: new Map(), scale: 1, tx: 0, ty: 0, alpha: 0, mode: 'cat', hidden: new Set(), hover: null, query: '', matches: new Set(), center: null, raf: 0, w: 0, h: 0, dpr: 1, destroyed: false };
+    const G = { nodes: [], edges: [], byId: new Map(), scale: 1, tx: 0, ty: 0, alpha: 0, mode: 'cat', hidden: new Set(), hover: null, query: '', matches: new Set(), center: null, centerMoved: false, raf: 0, w: 0, h: 0, dpr: 1, destroyed: false };
     const pointers = new Map(); let drag = null, pan = null, pinch = null, hoverTimer = 0;
 
     const colorOf = n => (G.mode === 'cat' ? CAT_COLORS[n.cat] : POS_COLORS[n.pos]) || '#8b7355';
@@ -120,7 +141,7 @@
     const ro = new ResizeObserver(resize); ro.observe(wrap);
 
     function setData(nodes, edges, o = {}) {
-      G.center = o.center || null;
+      G.center = o.center || null; G.centerMoved = false;
       const old = new Map(G.nodes.map(n => [n.id, n]));
       G.nodes = nodes.map(n => { const prev = old.get(n.id); return { ...n, deg: 0, x: prev ? prev.x : NaN, y: prev ? prev.y : NaN, vx: 0, vy: 0, fx: null, fy: null }; });
       G.byId = new Map(G.nodes.map(n => [n.id, n]));
@@ -151,7 +172,7 @@
         let dx = n.x - m.x, dy = n.y - m.y; let d2 = dx * dx + dy * dy; if (d2 > 160000) continue; if (d2 < 1) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1; }
         const f = 2600 * a / d2; const fx = dx * f / Math.sqrt(d2), fy = dy * f / Math.sqrt(d2); n.vx += fx; n.vy += fy; m.vx -= fx; m.vy -= fy; } }
       G.edges.forEach(([n, m]) => { if (!visible(n) || !visible(m)) return; const dx = m.x - n.x, dy = m.y - n.y, d = Math.max(1, Math.sqrt(dx * dx + dy * dy)); const rest = 70 + 18 * Math.max(n.depth || 0, m.depth || 0); const f = (d - rest) * 0.045 * a; n.vx += dx / d * f; n.vy += dy / d * f; m.vx -= dx / d * f; m.vy -= dy / d * f; });
-      N.forEach(n => { n.vx -= n.x * 0.012 * a; n.vy -= n.y * 0.012 * a; if (n.fx != null) { n.x = n.fx; n.y = n.fy; n.vx = n.vy = 0; return; } if (G.center === n.id && !drag) { n.x = n.y = 0; n.vx = n.vy = 0; return; } n.vx *= 0.55; n.vy *= 0.55; n.x += n.vx; n.y += n.vy; });
+      N.forEach(n => { n.vx -= n.x * 0.012 * a; n.vy -= n.y * 0.012 * a; if (n.fx != null) { n.x = n.fx; n.y = n.fy; n.vx = n.vy = 0; return; } if (G.center === n.id && !G.centerMoved) { n.x = n.y = 0; n.vx = n.vy = 0; return; } n.vx *= 0.55; n.vy *= 0.55; n.x += n.vx; n.y += n.vy; });
       G.alpha += (0 - G.alpha) * 0.022;
     }
     function loop() { if (G.destroyed) return; cancelAnimationFrame(G.raf); const step = () => { if (G.destroyed) return; if (G.alpha > 0.004 || drag) { tick(); draw(); G.raf = requestAnimationFrame(step); } else draw(); }; G.raf = requestAnimationFrame(step); }
@@ -202,7 +223,7 @@
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y), s0: G.scale, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, tx0: G.tx, ty0: G.ty }; drag = null; pan = null; return; }
       const n = hit(e.clientX, e.clientY);
-      if (n) { drag = { node: n, x0: e.clientX, y0: e.clientY, moved: false, type: e.pointerType }; n.fx = n.x; n.fy = n.y; G.alpha = Math.max(G.alpha, 0.35); loop(); }
+      if (n) { drag = { node: n, x0: e.clientX, y0: e.clientY, moved: false, type: e.pointerType, wasPinned: n.fx != null }; n.fx = n.x; n.fy = n.y; G.alpha = Math.max(G.alpha, 0.35); loop(); }
       else { pan = { x0: e.clientX, y0: e.clientY, tx0: G.tx, ty0: G.ty, moved: false }; canvas.style.cursor = 'grabbing'; }
       e.preventDefault();
     });
@@ -215,7 +236,12 @@
     });
     const finish = e => {
       pointers.delete(e.pointerId); if (pointers.size < 2) pinch = null;
-      if (drag) { const n = drag.node; n.fx = n.fy = null; if (!drag.moved) { if (drag.type === 'touch' || drag.type === 'pen') { if (opts.onTap) opts.onTap(n.label); } else if (opts.onOpen) opts.onOpen(n.label); } drag = null; G.alpha = Math.max(G.alpha, 0.15); loop(); }
+      if (drag) {
+        const n = drag.node;
+        if (drag.moved) { if (n.id === G.center) G.centerMoved = true; /* перетащенный узел остаётся там, где его оставили */ }
+        else { n.fx = n.fy = drag.wasPinned ? n.fx : null; if (drag.type === 'touch' || drag.type === 'pen') { if (opts.onTap) opts.onTap(n.label); } else if (opts.onOpen) opts.onOpen(n.label); }
+        drag = null; G.alpha = Math.max(G.alpha, 0.15); loop();
+      }
       if (pan) { pan = null; canvas.style.cursor = 'grab'; }
     };
     canvas.addEventListener('pointerup', finish); canvas.addEventListener('pointercancel', finish);

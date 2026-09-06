@@ -3451,6 +3451,11 @@
 // ── Конфигурация ─────────────────────────────────────────────────────────────
 const GEMINI_MODEL_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent`;
 
+// Темы слов: одна и та же таксономия в промптах и в легенде графа (graph.js).
+// Раньше было 10 тем и почти всё уходило в «altro», теперь модель выбирает из ~40.
+const CATEGORY_KEYS = ['cibo','bevande','cucina','natura','animali','piante','geografia','clima','tempo','persone','famiglia','corpo','salute','emozioni','carattere','casa','oggetti','vestiti','città','viaggio','trasporti','lavoro','scuola','scienza','tecnologia','denaro','diritto','politica','società','cultura','arte','musica','sport','comunicazione','azioni','movimento','pensiero','quantità','astratto','grammatica','altro'];
+const CATEGORY_PROMPT = CATEGORY_KEYS.join(' / ') + ' — choose the single most specific one; use altro only if nothing fits';
+
 function getApiKey() {
   return localStorage.getItem('dizionario_gemini_key') || '';
 }
@@ -4432,7 +4437,7 @@ ${senseLines || '(none)'}
 Return ONLY valid JSON, no markdown:
 {${opts.skipRussian ? '' : `
   "russian": { "main": "primary Russian translation", "alternatives": "2-3 alternatives semicolon-separated or empty" },`}
-  "category": "cibo / natura / persone / lavoro / casa / viaggio / emozioni / tempo / corpo / cultura / altro",
+  "category": "${CATEGORY_PROMPT}",
   "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian" } ]${needRelated ? `,
   "relatedWords": ["3-5 semantically related Italian words (synonyms, antonyms, thematic)"]` : ''}
 }
@@ -4523,7 +4528,7 @@ Return ONLY valid JSON, no markdown, no explanation. Schema:
 {
   "word": "canonical form",
   "partOfSpeech": "sostantivo / verbo / aggettivo / avverbio / preposizione / congiunzione / pronome / articolo / interiezione",
-  "category": "cibo / natura / persone / lavoro / casa / viaggio / emozioni / tempo / corpo / cultura / altro",
+  "category": "${CATEGORY_PROMPT}",
   "gender": "m. / f. / m./f. / null",
   "phonetic": "IPA with ˈ before stressed syllable",
   "singular": { "article": "il/lo/la/l'", "form": "word" },
@@ -5902,7 +5907,7 @@ function ensureQuickRussian(q, onUpdate) {
 // Слова нет в Викисловаре — старый запасной путь через Gemini
 async function fetchGeminiMiniPreview(word) {
   const prompt = `Italian word "${word}". Return ONLY valid JSON, no markdown:
-{"word":"canonical form","partOfSpeech":"sostantivo/verbo/aggettivo/etc","category":"cibo/natura/persone/lavoro/casa/viaggio/emozioni/tempo/corpo/cultura/altro","phonetic":"IPA with ˈ","russian":{"main":"перевод","alternatives":"alt1; alt2"}}
+{"word":"canonical form","partOfSpeech":"sostantivo/verbo/aggettivo/etc","category":"${CATEGORY_PROMPT}","phonetic":"IPA with ˈ","russian":{"main":"перевод","alternatives":"alt1; alt2"}}
 If not a real Italian word return {"word":null}.`;
   const result = await llmJson(prompt, 'dict');
   if (!result || !result.word) return null;
@@ -6028,13 +6033,16 @@ function showBottomSheet(word, isGrammar) {
     sheet.classList.add('open');
   });
 
-  // Load data
-  loadSheetData(word, isGrammar, content);
+  // Load data. Токен нужен, чтобы данные из кэша (они приходят раньше первого кадра анимации)
+  // не отбрасывались как устаревшие, а ответ для прежнего слова не попал в новую шторку
+  _sheetToken++;
+  loadSheetData(word, isGrammar, content, _sheetToken);
 }
+let _sheetToken = 0;
 
-async function loadSheetData(word, isGrammar, content) {
+async function loadSheetData(word, isGrammar, content, token) {
   const sheet = $('bottomSheet');
-  const stillMine = () => sheet.classList.contains('open') && _sheetWord === word;
+  const stillMine = () => _sheetToken === token && _sheetWord === word;
   let q = await fetchPreviewData(word, isGrammar, () => !stillMine());
   if (!stillMine()) return;
 
@@ -6077,6 +6085,7 @@ function renderSheetDict(container, d) {
 function hideBottomSheet() {
   const sheet = $('bottomSheet');
   const overlay = $('sheetOverlay');
+  _sheetToken++; // ответ для закрытой шторки уже не нужен
   sheet.classList.remove('open');
   sheet.classList.remove('dragging');
   sheet.style.transform = '';
