@@ -543,6 +543,21 @@
   .build-ex { font-style: italic; }
   .build-warn { font-size: 13px; color: var(--terracotta); font-style: italic; margin-top: 2px; }
 
+  /* Экран учёбы: поверх всего, на всю высоту, кнопки ответа прижаты к низу */
+  .study-overlay { position: fixed; inset: 0; z-index: 900; background: var(--cream); display: none; flex-direction: column; }
+  .study-overlay.open { display: flex; }
+  body.study-open { overflow: hidden; }
+  body.study-open .fav-float-btn, body.study-open .settings-float-btn { display: none !important; }
+  .study-topbar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top)); background: var(--parchment); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .study-topbar .cards-head-deck { margin-left: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .study-body { flex: 1; overflow: auto; padding: 18px 16px; display: flex; flex-direction: column; align-items: center; }
+  .study-body .study-card { width: 100%; max-width: 640px; }
+  .study-body .cards-done { padding: 40px 20px; }
+  .study-footer { flex-shrink: 0; padding: 10px 12px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); background: var(--parchment); border-top: 1px solid var(--border); }
+  .study-footer .study-buttons { margin: 0 auto; max-width: 640px; }
+  .study-footer .study-hint { margin-top: 8px; }
+  @media (max-width: 640px) { .study-footer .study-hint { display: none; } }
+
   .study-card { background: white; border: 1.5px solid var(--border); border-radius: 8px; padding: 36px 32px; text-align: center; min-height: 260px; box-shadow: 0 4px 24px rgba(26,18,8,.06); position: relative; overflow: hidden; }
   .study-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--terracotta), var(--gold), var(--terracotta)); }
   .study-card.ru::before { background: linear-gradient(90deg, #3b64b4, #6b9af0, #3b64b4); }
@@ -3588,19 +3603,33 @@ const navHistory = [];
 let _currentState = 'initial';
 let _suppressHistory = false;
 
+// Внутренняя история дублируется в историю браузера: кнопка «Назад» в браузере (и жест на телефоне)
+// возвращает предыдущий экран приложения, а не уводит с сайта. Выход — только с самого первого экрана.
 function pushHistory(restoreFn) {
   navHistory.push(restoreFn);
   updateBackBtn();
+  try { history.pushState({ diz: navHistory.length }, ''); } catch(e) {}
 }
 
-function goBack() {
+function performBack() {
   if (navHistory.length === 0) return;
   const restoreFn = navHistory.pop();
   _suppressHistory = true;
-  restoreFn();
-  _suppressHistory = false;
+  try { restoreFn(); } finally { _suppressHistory = false; }
   updateBackBtn();
 }
+
+// Кнопка «Назад» в интерфейсе: если запись есть и в истории браузера, идём через неё,
+// чтобы обе истории оставались синхронными; иначе откатываем сами
+function goBack() {
+  if (navHistory.length === 0) return;
+  if (history.state && history.state.diz === navHistory.length) { history.back(); return; }
+  performBack();
+}
+
+window.addEventListener('popstate', () => {
+  if (navHistory.length > 0) performBack();
+});
 
 function updateBackBtn() {
   const btn = $('backBtn');

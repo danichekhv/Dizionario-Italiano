@@ -166,11 +166,26 @@ create index if not exists notes_deck_idx on notes(deck_id);`;
   // ── Рендер ───────────────────────────────────────────────────────────────────
   const esc = s => escapeHtml(s == null ? '' : String(s));
   const root = () => $('cardsScreen');
+  // Экран учёбы живёт в отдельном слое поверх страницы (как в Anki), остальное — внутри вкладки
+  function overlay() {
+    let o = document.getElementById('studyOverlay');
+    if (!o) { o = document.createElement('div'); o.id = 'studyOverlay'; o.className = 'study-overlay'; document.body.appendChild(o); }
+    return o;
+  }
+  function closeOverlay() { const o = document.getElementById('studyOverlay'); if (o) { o.classList.remove('open'); o.innerHTML = ''; } document.body.classList.remove('study-open'); }
   function render() {
     const el = root(); if (!el) return;
     if (!S.loaded) { el.innerHTML = `<div class="cards-empty">Загрузка колод…</div>`; return; }
-    if (S.missingTables) { renderSetup(el); return; }
-    ({ decks: renderDecks, add: renderAdd, study: renderStudy, browse: renderBrowse })[S.view](el);
+    if (S.missingTables) { closeOverlay(); renderSetup(el); return; }
+    if (S.view === 'study') { renderDecks(el); const o = overlay(); renderStudy(o); o.classList.add('open'); document.body.classList.add('study-open'); return; }
+    closeOverlay();
+    ({ decks: renderDecks, add: renderAdd, browse: renderBrowse })[S.view](el);
+  }
+  // Переход на внутренний экран с записью в историю: «Назад» вернёт прежний вид
+  function pushView(view) {
+    const prev = { view: S.view, deckId: S.deckId, tagFilter: S.tagFilter };
+    if (prev.view === view) return;
+    pushHistory(() => { S.view = prev.view; S.deckId = prev.deckId; S.tagFilter = prev.tagFilter; S.build = null; S.browseSelected.clear(); render(); });
   }
 
   function renderSetup(el) {
@@ -234,14 +249,14 @@ create index if not exists notes_deck_idx on notes(deck_id);`;
   function renderStudy(el) {
     const deck = deckById(S.deckId); const c = counts(cardsOfNotes(notesInDeck(S.deckId)));
     const head = `
-      <div class="cards-head study">
-        <button class="cards-back" onclick="Cards.open()" title="К колодам">←</button>
+      <div class="study-topbar">
+        <button class="cards-back" onclick="goBack()" title="К колодам">←</button>
         <div class="cards-head-counts"><span class="c-new">${c.new}</span><span class="c-learn">${c.learn}</span><span class="c-due">${c.due}</span></div>
         <div class="cards-head-deck">${esc(deck ? deck.name : '')}${S.tagFilter ? ` · #${esc(S.tagFilter)}` : ''}</div>
         <button class="cards-undo ${S.undo ? '' : 'disabled'}" onclick="Cards.undo()" title="Отменить ответ">↶</button>
       </div>`;
     if (!S.current) {
-      el.innerHTML = head + `<div class="cards-done"><div class="cards-done-mark">✓</div><div>На сегодня в этой колоде всё.</div><button class="cards-btn" onclick="Cards.open()">К колодам</button></div>`;
+      el.innerHTML = head + `<div class="study-body"><div class="cards-done"><div class="cards-done-mark">✓</div><div>На сегодня в этой колоде всё.</div><button class="cards-btn" onclick="goBack()">К колодам</button></div></div>`;
       return;
     }
     const { n, front, answer } = cardFaces(S.current);
@@ -260,12 +275,14 @@ create index if not exists notes_deck_idx on notes(deck_id);`;
         <button class="sb easy" onclick="Cards.answer(4)"><small>${previewLabel(S.current, 4)}</small>Легко</button>
       </div>` : `<div class="study-buttons"><button class="sb show" onclick="Cards.reveal()">Показать ответ</button></div>`;
     el.innerHTML = head + `
-      <div class="study-card ${S.current.direction}">
-        <div class="study-dir">${S.current.direction === 'it' ? 'IT → RU' : 'RU → IT'}${S.current.state === 'new' ? ' · новая' : ''}</div>
-        <div class="study-front">${esc(front)}</div>
-        ${back}
-      </div>${buttons}
-      <div class="study-hint">Пробел — показать ответ, клавиши 1–4 — оценка</div>`;
+      <div class="study-body">
+        <div class="study-card ${S.current.direction}">
+          <div class="study-dir">${S.current.direction === 'it' ? 'IT → RU' : 'RU → IT'}${S.current.state === 'new' ? ' · новая' : ''}</div>
+          <div class="study-front">${esc(front)}</div>
+          ${back}
+        </div>
+      </div>
+      <div class="study-footer">${buttons}<div class="study-hint">Пробел — показать ответ, клавиши 1–4 — оценка, Esc — выйти</div></div>`;
   }
 
   function renderAdd(el) {
@@ -304,7 +321,7 @@ create index if not exists notes_deck_idx on notes(deck_id);`;
         </div>`;
     }
     el.innerHTML = `
-      <div class="cards-head"><button class="cards-back" onclick="Cards.open()">←</button><div class="cards-title small">Добавить слова</div><div class="cards-head-deck">${esc(deckPath(S.deckId))}</div></div>
+      <div class="cards-head"><button class="cards-back" onclick="goBack()">←</button><div class="cards-title small">Добавить слова</div><div class="cards-head-deck">${esc(deckPath(S.deckId))}</div></div>
       <div class="cards-panel">${body}</div>`;
   }
 
@@ -325,7 +342,7 @@ create index if not exists notes_deck_idx on notes(deck_id);`;
         </div>`;
     }).join('');
     el.innerHTML = `
-      <div class="cards-head"><button class="cards-back" onclick="Cards.open()">←</button><div class="cards-title small">Карточки</div><div class="cards-head-deck">${esc(deckPath(S.deckId))} · ${filtered.length}</div></div>
+      <div class="cards-head"><button class="cards-back" onclick="goBack()">←</button><div class="cards-title small">Карточки</div><div class="cards-head-deck">${esc(deckPath(S.deckId))} · ${filtered.length}</div></div>
       <div class="cards-panel">
         <div class="cards-actions wrap">
           <select class="cards-select" onchange="Cards.setTagFilter(this.value)">
@@ -367,6 +384,7 @@ create index if not exists notes_deck_idx on notes(deck_id);`;
 
   // ── Действия: учёба ──────────────────────────────────────────────────────────
   function study(deckId, tag) {
+    pushView('study');
     S.deckId = deckId; S.view = 'study'; S.undo = null;
     if (tag !== undefined) S.tagFilter = tag;
     buildQueue(); nextCard(); render();
@@ -577,11 +595,12 @@ ${JSON.stringify(list)}`;
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!S.revealed) reveal(); }
     else if (/^[1-4]$/.test(e.key) && S.revealed) answer(parseInt(e.key));
     else if (e.key === 'z' || e.key === 'Z') undo();
+    else if (e.key === 'Escape') goBack();
   });
 
   // ── Публичный интерфейс ──────────────────────────────────────────────────────
   window.Cards = {
-    async open() { S.view = 'decks'; S.build = null; S.browseSelected.clear(); render(); if (!S.loaded) { await loadAll(); render(); } },
+    async open() { S.view = 'decks'; S.build = null; S.browseSelected.clear(); closeOverlay(); render(); if (!S.loaded) { await loadAll(); render(); } },
     async reload() { S.loaded = false; render(); await loadAll(); render(); },
     copySql() { const t = SETUP_SQL; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => showToast('✓ SQL скопирован'), () => { const el = $('cardsSql'); const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); showToast('Выделено — скопируйте вручную'); }); },
     toggleDeck(id) { S.collapsed[id] = !S.collapsed[id]; render(); },
@@ -589,11 +608,11 @@ ${JSON.stringify(list)}`;
     setNewPerDay(v) { try { localStorage.setItem(NEW_PER_DAY_KEY, String(Math.max(0, parseInt(v) || 0))); } catch (e) {} render(); },
     study(id) { study(id, S.view === 'browse' ? S.tagFilter : ''); },
     reveal, answer, undo,
-    openAdd(id) { S.deckId = id; S.view = 'add'; S.build = null; render(); },
+    openAdd(id) { pushView('add'); S.deckId = id; S.view = 'add'; S.build = null; render(); },
     buildFromText, importFile, saveBuild,
     toggleItem(i, v) { S.build.items[i].include = v; render(); },
     resetBuild() { S.build = null; render(); },
-    browse(id) { S.deckId = id; S.view = 'browse'; S.tagFilter = ''; S.browseSelected.clear(); render(); },
+    browse(id) { pushView('browse'); S.deckId = id; S.view = 'browse'; S.tagFilter = ''; S.browseSelected.clear(); render(); },
     setTagFilter(t) { S.tagFilter = t; S.browseSelected.clear(); render(); },
     selectNote(id, v) { if (v) S.browseSelected.add(id); else S.browseSelected.delete(id); render(); },
     selectAll(v) { S.browseSelected.clear(); if (v) currentNotes().forEach(n => S.browseSelected.add(n.id)); render(); },
