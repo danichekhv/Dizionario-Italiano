@@ -423,7 +423,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         ${n.example ? `<div class="study-box"><div class="study-box-label">Esempio</div><div class="study-box-text italic">«${esc(n.example)}»</div></div>` : ''}
         ${n.meaning ? `<div class="study-box"><div class="study-box-label">Significato</div><div class="study-box-text">${esc(n.meaning)}</div></div>` : ''}
         ${(n.tags || []).length ? `<div class="study-tags">${n.tags.map(t => `<span class="tag-chip">#${esc(t)}</span>`).join('')}</div>` : ''}
-        <button class="study-open" onclick="Cards.openArticle('${esc(n.word || '').replace(/'/g, '&#39;')}')">открыть статью ↗</button>` : '';
+        <button class="study-article" onclick="Cards.openArticle('${esc(n.word || '').replace(/'/g, '&#39;')}')">открыть статью ↗</button>` : '';
     const buttons = S.revealed ? `
       <div class="study-buttons">
         <button class="sb again" onclick="Cards.answer(1)"><small>${previewLabel(S.current, 1)}</small>Снова</button>
