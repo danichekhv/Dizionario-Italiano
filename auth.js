@@ -362,7 +362,7 @@ grant execute on function import_shared_deck(text) to authenticated;`;
     m.innerHTML = `<div class="cards-modal-box wide"><div class="cards-title small">SQL для Supabase</div>
       <p class="cards-p">Supabase → SQL Editor → New query → вставить → Run. Скрипт можно запускать повторно, он ничего не удаляет. Затем в Authentication → URL Configuration укажите Site URL: <b>${location.origin}</b> и добавьте в Redirect URLs адрес <b>${location.origin}${location.pathname}</b> — иначе ссылки из писем о подтверждении почты и смене пароля ведут на localhost:3000, и браузер показывает ошибку «Не удаётся получить доступ к сайту».</p>
       <pre class="cards-sql">${window.DIZ_SETUP_SQL.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))}</pre>
-      <div class="cards-actions"><button class="cards-btn primary" onclick="Auth.copySql()">Скопировать SQL</button><button class="cards-btn" onclick="document.getElementById('sqlModal').style.display='none'">Закрыть</button></div></div>`;
+      <div class="cards-actions"><button class="cards-btn primary" onclick="Auth.copySql()">Скопировать SQL</button><button class="cards-btn" onclick="cleanupRelatedCache()" title="Убрать из связей всех статей слова, которых нет в Викисловаре">Почистить связи в кэше</button><button class="cards-btn" onclick="document.getElementById('sqlModal').style.display='none'">Закрыть</button></div></div>`;
     m.style.display = 'flex';
   }
   function copySql() { (navigator.clipboard ? navigator.clipboard.writeText(window.DIZ_SETUP_SQL) : Promise.reject()).then(() => showToast('✓ SQL скопирован'), () => showToast('Выделите текст и скопируйте вручную')); }

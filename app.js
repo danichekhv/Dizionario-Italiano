@@ -663,6 +663,62 @@ async function phrasePhonetic(phrase) {
   return '/' + ipa.map(x => x.trim().replace(/^[\/\[]|[\/\]]$/g, '')).join(' ') + '/';
 }
 
+// ── Проверка по Викисловарю: связи от модели не должны плодить выдуманные слова ────────
+// Модель иногда придумывает слова (fieraismo). Попав в relatedWords, такое слово становится кнопкой
+// под статьёй и узлом графа, а клик по нему рождает ещё одну выдуманную статью в общем кэше.
+// Поэтому всё, что модель предложила как связанное, сверяем с Викисловарём до сохранения,
+// а у уже сохранённых статей подчищаем список при показе.
+const _wordExists = {};
+async function wordExists(w) {
+  const k = cleanQuery(w).toLowerCase();
+  if (!k) return false;
+  if (_wordExists[k] === undefined) {
+    try {
+      const res = await fetch(FD_URL + encodeURIComponent(k));
+      if (!res.ok && res.status !== 404) return true; // сбой сервиса — не выбрасываем и не запоминаем
+      const data = res.ok ? await res.json() : {};
+      _wordExists[k] = (data.entries || []).some(en => !en.language || en.language.code === 'it');
+    } catch (e) { return true; }
+  }
+  return _wordExists[k];
+}
+async function verifyWords(words, trusted = []) {
+  const list = (words || []).filter(w => typeof w === 'string' && w.trim());
+  const flags = await Promise.all(list.map(w => trusted.includes(w) ? true : wordExists(w)));
+  return list.filter((w, i) => flags[i]);
+}
+async function pruneRelated(entry) {
+  const list = entry.relatedWords || [];
+  if (!list.length) return;
+  const ok = await verifyWords(list);
+  if (ok.length === list.length) return;
+  entry.relatedWords = ok;
+  if (currentDictEntry === entry) renderEntry(entry);
+  // запись в общем кэше чиним, если пользователь вошёл (анонимам писать нельзя)
+  if (window.Auth && Auth.user() && entry.word) sbSave('dictionary', 'word', entry.word.toLowerCase(), entry);
+}
+
+// Разовая чистка всего кэша (кнопка у владельца в окне SQL): у каждой статьи проверяются связи,
+// изменившиеся записи сохраняются заново. Нужен вход, иначе писать в кэш нельзя.
+async function cleanupRelatedCache() {
+  if (!(window.Auth && Auth.user())) { showToast('Нужно войти в аккаунт'); return; }
+  const res = await fetch(`${SB_URL}/rest/v1/dictionary?select=word,data&limit=2000`, { headers: SB_H });
+  const rows = await res.json();
+  let fixed = 0, removed = [];
+  for (const row of rows) {
+    const list = (row.data && row.data.relatedWords) || [];
+    if (!list.length) continue;
+    const ok = await verifyWords(list);
+    if (ok.length === list.length) continue;
+    removed.push(...list.filter(w => !ok.includes(w)));
+    row.data.relatedWords = ok; fixed++;
+    await sbSave('dictionary', 'word', row.word, row.data);
+  }
+  _mapInfos = null;
+  showToast(fixed ? `Исправлено статей: ${fixed}, убрано слов: ${removed.length}` : 'Выдуманных связей не найдено');
+  console.log('cleanupRelatedCache: убраны', [...new Set(removed)]);
+}
+
 const FD_POS = {
   noun: 'sostantivo', 'proper noun': 'nome proprio', verb: 'verbo', adjective: 'aggettivo', adverb: 'avverbio',
   preposition: 'preposizione', conjunction: 'congiunzione', pronoun: 'pronome', article: 'articolo',
@@ -1080,6 +1136,7 @@ async function lookupWordHybrid(query, base) {
     });
     await wiktJob;
     const entry = fdMergeCompletion(base, extra, shownRu);
+    entry.relatedWords = await verifyWords(entry.relatedWords, base.relatedWords || []); // синонимы Викисловаря доверенные, добавки модели — проверяем
     const queryKey = query.toLowerCase();
     await sbSave('dictionary', 'word', key, entry);
     if (queryKey !== key) await sbSave('dictionary', 'word', queryKey, entry);
@@ -1146,7 +1203,7 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
   // 1. Кэш Supabase — мгновенно
   const cachedWord = opts.force ? null : await sbGet('dictionary', word.toLowerCase());
   if (cachedWord) {
-    try { renderEntry(cachedWord); showState('result'); showCacheBadge(); addToHistory(cachedWord.word || word, 'dict'); }
+    try { renderEntry(cachedWord); showState('result'); showCacheBadge(); addToHistory(cachedWord.word || word, 'dict'); pruneRelated(cachedWord); }
     catch(e) { console.error("renderEntry from cache failed:", e); }
     return;
   }
@@ -1179,6 +1236,7 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
   try {
     const entry = await llmJson(prompt, 'dict');
     if (!entry.word) { $('errorText').textContent = `"${word}" — parola non trovata`; showState('error'); return; }
+    entry.relatedWords = await verifyWords(entry.relatedWords);
     const canonicalKey = (entry.word || word).toLowerCase();
     const queryKey = word.toLowerCase();
     await sbSave('dictionary', 'word', canonicalKey, entry);
@@ -1223,7 +1281,7 @@ meanings: 1-3 items, most frequent first. Do NOT include phonetic transcription,
       meanings: Array.isArray(raw.meanings) ? raw.meanings.filter(m => m && m.definition) : [],
       isNoun: false, isVerb: false, isPhrase: true,
       literal: raw.literal || '', register: raw.register || '',
-      relatedWords: Array.isArray(raw.relatedWords) ? raw.relatedWords.filter(w => typeof w === 'string') : [],
+      relatedWords: await verifyWords(raw.relatedWords),
       llm: _lastDictLlm
     };
     const key = entry.word.toLowerCase(), queryKey = phrase.toLowerCase();
