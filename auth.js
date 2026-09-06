@@ -498,6 +498,6 @@ grant execute on function import_shared_deck(text) to authenticated;`;
     }
   } catch (e) {}
 
-  window.Auth = { user: () => session && session.user, require, signIn, signUp, signOut, resetPassword, changePassword, pushProfile, pullProfile, logView, myWords, renderUi, signInUi, signUpUi, resetUi, changePasswordUi, showSql, copySql,
+  window.Auth = { user: () => session && session.user, isAdmin, require, signIn, signUp, signOut, resetPassword, changePassword, pushProfile, pullProfile, logView, myWords, renderUi, signInUi, signUpUi, resetUi, changePasswordUi, showSql, copySql,
     tagsFor, applyTagsToNodes, renameTagUi, addTagUi, loadTags };
 })();

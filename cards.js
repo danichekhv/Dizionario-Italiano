@@ -213,16 +213,21 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     pushHistory(() => { S.view = prev.view; S.deckId = prev.deckId; S.tagFilter = prev.tagFilter; S.build = null; S.browseSelected.clear(); render(); });
   }
 
+  // SQL показываем только владельцу сайта (см. ADMIN_EMAILS в auth.js); остальным — просьба подождать
+  const isAdmin = () => !!(window.Auth && Auth.isAdmin && Auth.isAdmin());
   function renderSetup(el) {
-    el.innerHTML = `
-      <div class="cards-head">${S.missingTables ? '' : '<button class="cards-back" onclick="goBack()">←</button>'}<div class="cards-title">Le Carte${S.missingTables ? '' : ' · SQL'}</div></div>
-      <div class="cards-setup">
+    const body = isAdmin() ? `
         <p>Для карточек нужны три таблицы в Supabase. Скопируйте SQL, вставьте в SQL Editor вашего проекта и нажмите Run, затем вернитесь сюда.</p>
         <pre class="cards-sql" id="cardsSql">${esc(window.DIZ_SETUP_SQL || SETUP_SQL)}</pre>
         <div class="cards-actions">
           <button class="cards-btn primary" onclick="Cards.copySql()">Скопировать SQL</button>
           <button class="cards-btn" onclick="Cards.reload()">Проверить снова</button>
-        </div>
+        </div>` : `
+        <p>Карточки ещё не настроены: в базе нет нужных таблиц. Обратитесь к владельцу сайта и попробуйте позже.</p>
+        <div class="cards-actions"><button class="cards-btn" onclick="Cards.reload()">Проверить снова</button></div>`;
+    el.innerHTML = `
+      <div class="cards-head">${S.missingTables ? '' : '<button class="cards-back" onclick="goBack()">←</button>'}<div class="cards-title">Le Carte${S.missingTables ? '' : ' · SQL'}</div></div>
+      <div class="cards-setup">${body}
       </div>`;
   }
 
@@ -380,7 +385,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const ease = easeItems(deckId);
     el.innerHTML = `
       <div class="cards-head"><button class="cards-back" onclick="goBack()">←</button><div class="cards-title small">Статистика</div><div class="cards-head-deck">${esc(title)}</div></div>
-      ${S.reviewsMissing ? `<div class="cards-note">История ответов не пишется: в Supabase нет таблицы <b>reviews</b>. Выполните SQL ещё раз, он добавит только недостающее. <button class="cards-btn" onclick="Cards.showSql()">Показать SQL</button></div>` : ''}
+      ${S.reviewsMissing ? `<div class="cards-note">История ответов не пишется: в Supabase нет таблицы <b>reviews</b>. ${isAdmin() ? 'Выполните SQL ещё раз, он добавит только недостающее. <button class="cards-btn" onclick="Cards.showSql()">Показать SQL</button>' : 'Обратитесь к владельцу сайта.'}</div>` : ''}
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-label">Сегодня</div><div class="stat-big">${t.count}</div><div class="stat-sub">повторений · ${t.timeMin} мин${t.correct !== null ? ` · ${t.correct}% верно` : ''} · новых ${t.learned}</div></div>
         <div class="stat-card"><div class="stat-label">Серия</div><div class="stat-big">${t.streak}</div><div class="stat-sub">дней подряд · активных дней ${activeDays}</div></div>
@@ -890,7 +895,7 @@ ${JSON.stringify(list)}`;
       if (!S.loaded) { render(); await loadAll(); }
       Object.assign(S, snap || { view: 'decks' }); render();
     },
-    showSql() { pushView('sql'); S.view = 'sql'; render(); },
+    showSql() { if (!isAdmin()) { showToast('SQL для базы доступен только владельцу сайта'); return; } pushView('sql'); S.view = 'sql'; render(); },
     setTagFilter(t) { S.tagFilter = t; S.browseSelected.clear(); render(); },
     selectNote(id, v) { if (v) S.browseSelected.add(id); else S.browseSelected.delete(id); render(); },
     selectAll(v) { S.browseSelected.clear(); if (v) currentNotes().forEach(n => S.browseSelected.add(n.id)); render(); },
