@@ -338,7 +338,12 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       return `<rect x="${(x + bw * 0.15).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw * 0.7).toFixed(1)}" height="${bh.toFixed(1)}" fill="${it.color || color}" rx="2"><title>${esc(it.title || `${it.label}: ${it.value}`)}</title></rect>`
         + (it.label ? `<text x="${(x + bw / 2).toFixed(1)}" y="${h - 6}" text-anchor="middle" class="ax">${esc(it.label)}</text>` : '');
     }).join('');
-    const grid = [0, 0.5, 1].map(f => { const y = h - padB - (h - padB - padT) * f; return `<line x1="${padL}" x2="${w}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="gl"/><text x="${padL - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end" class="ax">${Math.round(max * f)}</text>`; }).join('');
+    const seen = new Set();
+    const grid = [0, 0.5, 1].map(f => {
+      const y = h - padB - (h - padB - padT) * f, v = Math.round(max * f);
+      const label = seen.has(v) ? '' : String(v); seen.add(v); // на маленьких значениях подписи не дублируем
+      return `<line x1="${padL}" x2="${w}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="gl"/>${label ? `<text x="${padL - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end" class="ax">${label}</text>` : ''}`;
+    }).join('');
     return `<svg viewBox="0 0 ${w} ${h}" class="chart" preserveAspectRatio="none">${grid}${bars}</svg>`;
   }
   // Тепловая карта активности за год, как в Anki и на GitHub
