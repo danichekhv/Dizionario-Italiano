@@ -166,7 +166,8 @@ begin
   select deck_id into v_src from deck_shares where token = p_token;
   if v_src is null then raise exception 'Ссылка на колоду недействительна'; end if;
   create temp table if not exists deck_map (old_id uuid, new_id uuid) on commit drop;
-  delete from deck_map;
+  -- не delete без where: через API Supabase включает safeupdate, и такой delete падает
+  truncate deck_map;
   for r in (with recursive t as (select id, name, parent_id, 0 as lvl from decks where id = v_src
                                  union all select d.id, d.name, d.parent_id, t.lvl + 1 from decks d join t on d.parent_id = t.id)
             select * from t order by lvl) loop
@@ -229,12 +230,15 @@ grant execute on function import_shared_deck(text) to authenticated;`;
   }
 
   async function signIn(email, password) { const d = await authFetch('POST', 'token?grant_type=password', { email, password }); setSession(d); await afterLogin(); }
+  // Куда возвращать после перехода по ссылке из письма. Supabase примет этот адрес, только если он
+  // есть в Authentication → URL Configuration → Redirect URLs (иначе отправит на Site URL).
+  const backHere = () => encodeURIComponent(location.origin + location.pathname);
   async function signUp(email, password) {
-    const d = await authFetch('POST', 'signup', { email, password });
+    const d = await authFetch('POST', `signup?redirect_to=${backHere()}`, { email, password });
     if (d.access_token) { setSession(d); await afterLogin(); return 'ok'; }
     return 'confirm'; // включено подтверждение почты — сессия появится после перехода по ссылке из письма
   }
-  async function resetPassword(email) { await authFetch('POST', `recover?redirect_to=${encodeURIComponent(location.origin + location.pathname)}`, { email }); }
+  async function resetPassword(email) { await authFetch('POST', `recover?redirect_to=${backHere()}`, { email }); }
   async function changePassword(password) { if (!session) throw new Error('Нужно войти'); await authFetch('PUT', 'user', { password }, session.access_token); }
   async function signOut(silent) {
     if (session && !silent) authFetch('POST', 'logout', {}, session.access_token).catch(() => {});
@@ -352,7 +356,7 @@ grant execute on function import_shared_deck(text) to authenticated;`;
     let m = document.getElementById('sqlModal');
     if (!m) { m = document.createElement('div'); m.id = 'sqlModal'; m.className = 'cards-modal'; m.style.zIndex = '10001'; /* поверх экрана настроек (у него z-index 9999) */ m.addEventListener('click', e => { if (e.target === m) m.style.display = 'none'; }); document.body.appendChild(m); }
     m.innerHTML = `<div class="cards-modal-box wide"><div class="cards-title small">SQL для Supabase</div>
-      <p class="cards-p">Supabase → SQL Editor → New query → вставить → Run. Скрипт можно запускать повторно, он ничего не удаляет. Затем в Authentication → URL Configuration укажите Site URL: <b>${location.origin}</b>, чтобы ссылки из писем вели на сайт.</p>
+      <p class="cards-p">Supabase → SQL Editor → New query → вставить → Run. Скрипт можно запускать повторно, он ничего не удаляет. Затем в Authentication → URL Configuration укажите Site URL: <b>${location.origin}</b> и добавьте в Redirect URLs адрес <b>${location.origin}${location.pathname}</b> — иначе ссылки из писем о подтверждении почты и смене пароля ведут на localhost:3000, и браузер показывает ошибку «Не удаётся получить доступ к сайту».</p>
       <pre class="cards-sql">${window.DIZ_SETUP_SQL.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))}</pre>
       <div class="cards-actions"><button class="cards-btn primary" onclick="Auth.copySql()">Скопировать SQL</button><button class="cards-btn" onclick="document.getElementById('sqlModal').style.display='none'">Закрыть</button></div></div>`;
     m.style.display = 'flex';
@@ -369,9 +373,20 @@ grant execute on function import_shared_deck(text) to authenticated;`;
   }
 
   // Переход по ссылке из письма: #access_token=…&type=signup|recovery
+  // При ошибке Supabase присылает #error=…&error_code=…&error_description=…
   async function handleHash() {
-    if (!/access_token=/.test(location.hash)) return;
+    if (!/(access_token|error_code|error_description)=/.test(location.hash)) return;
     const p = new URLSearchParams(location.hash.slice(1));
+    if (p.get('error') || p.get('error_code')) {
+      history.replaceState(null, '', location.pathname + location.search);
+      const code = p.get('error_code') || '', desc = p.get('error_description') || p.get('error') || '';
+      const msg = /otp_expired/.test(code) || /invalid or has expired/i.test(desc)
+        ? 'Ссылка из письма устарела или уже использована. Попробуйте войти; если почта не подтверждена, запросите письмо ещё раз'
+        : desc;
+      showToast('⚠ ' + msg);
+      showApiKeyScreen(); fieldError(msg);
+      return;
+    }
     const access_token = p.get('access_token'), refresh_token = p.get('refresh_token'), type = p.get('type');
     if (!access_token) return;
     history.replaceState(null, '', location.pathname + location.search);
