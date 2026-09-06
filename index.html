@@ -67,6 +67,23 @@
 
   html, body { max-width: 100%; overflow-x: hidden; }
 
+  /* ── Базовые состояния интерактивных элементов ──────────────────────────
+     Одно место для всех кнопок, ссылок и полей: курсор, фокус с клавиатуры, нажатие, disabled.
+     Компоненты добавляют только свой hover-цвет, остальное наследуют отсюда. */
+  button, [role="button"], a, summary, label[for] { cursor: pointer; }
+  button, input, select, textarea { font-family: inherit; color: inherit; }
+  body { -webkit-tap-highlight-color: transparent; }
+  ::selection { background: rgba(var(--accent-rgb), .22); }
+  /* Фокус: с клавиатуры — кольцо акцентного цвета; клик мышью кольца не рисует */
+  :focus { outline: none; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  input:focus, textarea:focus, select:focus, [contenteditable]:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
+  /* Нажатие: лёгкий сдвиг вниз, если компонент не задал свой эффект */
+  button:not(:disabled):active { transform: translateY(1px); }
+  /* Недоступное: приглушено и не реагирует */
+  button:disabled, input:disabled, select:disabled, textarea:disabled { opacity: .45; cursor: not-allowed; }
+  button:disabled { pointer-events: none; }
+
   body {
     background: var(--cream);
     color: var(--ink);
@@ -556,7 +573,6 @@
   .cards-btn.primary { background: var(--terracotta); border-color: var(--terracotta); color: white; }
   .cards-btn.primary:hover { background: #a8411e; color: white; }
   .cards-btn.danger:hover { border-color: #b03030; color: #b03030; }
-  .cards-btn:disabled { opacity: .4; pointer-events: none; }
   .cards-inline { font-size: 14px; color: var(--muted); font-style: italic; display: flex; align-items: center; gap: 6px; }
   .cards-inline input { width: 60px; padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--radius); font-family: var(--font-mono); background: var(--parchment); }
   .cards-legend, .cards-p, .cards-empty { font-size: 14px; color: var(--muted); font-style: italic; margin-top: 12px; line-height: 1.5; }
