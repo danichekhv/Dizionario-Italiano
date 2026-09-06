@@ -285,7 +285,7 @@ grant execute on function claim_orphans() to authenticated;`;
   }
   function showSql() {
     let m = document.getElementById('sqlModal');
-    if (!m) { m = document.createElement('div'); m.id = 'sqlModal'; m.className = 'cards-modal'; m.addEventListener('click', e => { if (e.target === m) m.style.display = 'none'; }); document.body.appendChild(m); }
+    if (!m) { m = document.createElement('div'); m.id = 'sqlModal'; m.className = 'cards-modal'; m.style.zIndex = '10001'; /* поверх экрана настроек (у него z-index 9999) */ m.addEventListener('click', e => { if (e.target === m) m.style.display = 'none'; }); document.body.appendChild(m); }
     m.innerHTML = `<div class="cards-modal-box wide"><div class="cards-title small">SQL для Supabase</div>
       <p class="cards-p">Supabase → SQL Editor → New query → вставить → Run. Скрипт можно запускать повторно, он ничего не удаляет. Затем в Authentication → URL Configuration укажите Site URL: <b>${location.origin}</b>, чтобы ссылки из писем вели на сайт.</p>
       <pre class="cards-sql">${window.DIZ_SETUP_SQL.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))}</pre>
