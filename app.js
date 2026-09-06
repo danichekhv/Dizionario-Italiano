@@ -2760,6 +2760,8 @@ function sheetOpenFull() {
     $('searchInput').value = _sheetWord;
     if (_sheetIsGrammar) {
       lookupGrammar(_sheetWord);
+    } else if (document.body.classList.contains('study-open') && window.Cards) {
+      Cards.openArticle(_sheetWord); // из карточки: закрыть экран учёбы, «Назад» вернёт карточку
     } else {
       lookupWord(_sheetWord);
     }

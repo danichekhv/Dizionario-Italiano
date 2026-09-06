@@ -184,7 +184,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       const soon = cardsOfNotes(notesInDeck(S.deckId)).filter(c => (c.state === 'learning' || c.state === 'relearning') && c.dueMs <= now + LEARN_AHEAD_MIN * MIN).sort((a, b) => a.dueMs - b.dueMs);
       if (soon.length) S.queue = soon;
     }
-    S.current = S.queue.shift() || null; S.revealed = false; S.shownAt = Date.now();
+    S.current = S.queue.shift() || null; S.revealed = false; S.check = null; S.shownAt = Date.now();
   }
 
   // ── Рендер ───────────────────────────────────────────────────────────────────
@@ -408,6 +408,93 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     return { n, front, answer };
   }
 
+  // ── Cloze: пример с пропуском и проверка введённого ответа ───────────────────
+  // Слово в примере стоит в какой-то форме (cercare → cercando), поэтому ищем по основе:
+  // отбрасываем окончание леммы и берём токены, начинающиеся с неё.
+  const stripAccents = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const normAns = s => stripAccents(String(s || '').toLowerCase().replace(/ё/g, 'е')).replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+  const IT_ARTICLE = /^(il|lo|la|l|i|gli|le|un|uno|una|del|della|di|a|da|in|con|su|per)\s+/;
+  function itStem(word) {
+    const w = normAns(word);
+    const s = w.replace(/(arsi|ersi|irsi|are|ere|ire|zione|mente)$/, '').replace(/[aeio]$/, '');
+    return s.length >= 3 ? s : w;
+  }
+  // Разбивает пример на токены и помечает те, что относятся к слову карточки
+  function clozeTokens(example, word) {
+    if (!example || !word) return null;
+    const parts = normAns(word).split(' ').filter(w => w.length > 1);
+    const stems = parts.map(itStem);
+    const tokens = example.split(/(\p{L}[\p{L}'’]*)/u).filter(t => t !== '');
+    let hits = 0;
+    const out = tokens.map(t => {
+      if (!/^\p{L}/u.test(t)) return { t, hit: false, word: false };
+      const nt = normAns(t);
+      const hit = stems.some((s, i) => nt === parts[i] || (nt.startsWith(s) && nt.length <= s.length + 6));
+      if (hit) hits++;
+      return { t, hit, word: true };
+    });
+    // Если в примере не нашлось ни одного слова карточки (или меньше половины у выражения) — пропуска не будет
+    if (!hits || hits < Math.ceil(parts.length / 2)) return null;
+    return out;
+  }
+  // HTML примера: mode = 'gap' (слово скрыто) | 'mark' (слово выделено). Остальные слова кликабельны, как в статье.
+  function sentenceHtml(tokens, mode) {
+    return tokens.map(x => {
+      if (!x.word) return esc(x.t);
+      if (x.hit) return mode === 'gap' ? `<span class="cloze-gap" style="min-width:${Math.max(3, x.t.length) * 0.6}em"></span>` : `<span class="cloze-hit">${makeClickable(x.t)}</span>`;
+      return makeClickable(x.t);
+    }).join('');
+  }
+  // Что считается верным ответом: для RU→IT — слово, форма из примера, с артиклем и без;
+  // для IT→RU — любой из вариантов перевода через «;» или «,», без пояснений в скобках
+  function answerVariants(card, n, tokens) {
+    const out = [];
+    if (card.direction === 'it') {
+      (n.translation || '').replace(/\([^)]*\)/g, '').split(/[;,\/]/).map(s => s.trim()).filter(Boolean).forEach(s => out.push(s));
+    } else {
+      const w = (n.word || '').replace(/["“”„«»]/g, '').trim();
+      if (w) { out.push(w); const bare = w.replace(IT_ARTICLE, ''); if (bare !== w) out.push(bare); }
+      if (tokens) { const form = tokens.filter(x => x.hit).map(x => x.t).join(' '); if (form && !out.includes(form)) out.push(form); }
+    }
+    return out;
+  }
+  // Посимвольное сравнение через наибольшую общую подпоследовательность, как в Anki:
+  // в строке ответа лишние символы красные, пропущенные показаны дефисом; в строке образца пропущенные красные
+  function charDiff(typed, correct) {
+    const a = [...typed], b = [...correct];
+    const key = ch => stripAccents(ch.toLowerCase().replace('ё', 'е'));
+    const n = a.length, m = b.length, dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) dp[i][j] = key(a[i]) === key(b[j]) ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    const typedOut = [], correctOut = []; let i = 0, j = 0;
+    while (i < n && j < m) {
+      if (key(a[i]) === key(b[j])) { typedOut.push({ ch: a[i], cls: 'ok' }); correctOut.push({ ch: b[j], cls: 'ok' }); i++; j++; }
+      else if (dp[i + 1][j] >= dp[i][j + 1]) { typedOut.push({ ch: a[i], cls: 'bad' }); i++; }
+      else { typedOut.push({ ch: '-', cls: 'miss' }); correctOut.push({ ch: b[j], cls: 'miss' }); j++; }
+    }
+    while (i < n) { typedOut.push({ ch: a[i++], cls: 'bad' }); }
+    while (j < m) { typedOut.push({ ch: '-', cls: 'miss' }); correctOut.push({ ch: b[j++], cls: 'miss' }); }
+    return { typedOut, correctOut };
+  }
+  function checkTyped(typed, variants, italian) {
+    let t = normAns(typed);
+    if (!t) return null;
+    // Артикль перед итальянским словом не ошибка: убираем его и из проверки, и из показа
+    if (italian && IT_ARTICLE.test(t)) { t = t.replace(IT_ARTICLE, ''); typed = typed.trim().replace(/^\S+\s+/, ''); }
+    const tBare = t;
+    // точное совпадение с любым вариантом — без учёта регистра, знаков препинания, ударений и артикля
+    let best = variants.find(v => { const nv = normAns(v); return nv === t || nv === tBare || nv.replace(IT_ARTICLE, '') === tBare; });
+    if (best) return { ok: true, near: false, best, ...charDiff(typed.trim(), best) };
+    // иначе ближайший вариант по длине общей подпоследовательности; одна опечатка в длинном слове — «почти»
+    let bestScore = -1;
+    variants.forEach(v => { const d = charDiff(t, normAns(v)); const score = d.correctOut.filter(x => x.cls === 'ok').length / Math.max(t.length, normAns(v).length); if (score > bestScore) { bestScore = score; best = v; } });
+    if (!best) return null;
+    const d = charDiff(typed.trim(), best);
+    const errors = d.typedOut.filter(x => x.cls !== 'ok').length + d.correctOut.filter(x => x.cls === 'miss').length;
+    const near = normAns(best).length >= 5 && errors <= 2;
+    return { ok: false, near, best, ...d };
+  }
+  const diffHtml = arr => arr.map(x => `<span class="typed-${x.cls}">${esc(x.ch)}</span>`).join('');
+
   function renderStudy(el) {
     const deck = deckById(S.deckId); const c = counts(cardsOfNotes(notesInDeck(S.deckId)));
     const head = `
@@ -422,30 +509,52 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       return;
     }
     const { n, front, answer } = cardFaces(S.current);
+    const isIt = S.current.direction === 'it';
+    const tokens = clozeTokens(n.example, n.word);
+    // Лицевая сторона: пример с пропуском (RU→IT) или с выделенным словом (IT→RU); слова примера кликабельны
+    const sentence = tokens ? `<div class="study-box study-sentence"><div class="study-box-label">Esempio</div><div class="study-box-text italic">${sentenceHtml(tokens, S.revealed || isIt ? 'mark' : 'gap')}</div></div>`
+      : (S.revealed && n.example ? `<div class="study-box"><div class="study-box-label">Esempio</div><div class="study-box-text italic">«${makeClickable(n.example)}»</div></div>` : '');
+    const chk = S.check;
+    const typedBlock = S.revealed && chk ? `
+        <div class="study-typed ${chk.ok ? 'ok' : chk.near ? 'near' : 'bad'}">
+          <div class="study-typed-line">${diffHtml(chk.typedOut)}</div>
+          <div class="study-typed-arrow">${chk.ok ? '✓ верно' : chk.near ? '≈ почти' : '✗'}</div>
+          ${chk.ok ? '' : `<div class="study-typed-line correct">${diffHtml(chk.correctOut)}</div>`}
+        </div>` : '';
+    const input = !S.revealed ? `
+        <div class="study-input-wrap">
+          <input class="study-input" id="studyInput" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"
+            placeholder="${isIt ? 'перевод' : 'слово по-итальянски'}" onkeydown="if(event.key==='Enter'){event.preventDefault();Cards.submitTyped(this.value)}">
+        </div>` : '';
     const back = S.revealed ? `
         <div class="study-rule"></div>
+        ${typedBlock}
         <div class="study-answer">${esc(answer)}</div>
         ${n.phonetic ? `<div class="study-ipa">${esc(n.phonetic)}</div>` : ''}
-        ${n.example ? `<div class="study-box"><div class="study-box-label">Esempio</div><div class="study-box-text italic">«${esc(n.example)}»</div></div>` : ''}
-        ${n.meaning ? `<div class="study-box"><div class="study-box-label">Significato</div><div class="study-box-text">${esc(n.meaning)}</div></div>` : ''}
+        ${sentence}
+        ${n.meaning ? `<div class="study-box"><div class="study-box-label">Significato</div><div class="study-box-text">${makeClickable(n.meaning)}</div></div>` : ''}
         ${(n.tags || []).length ? `<div class="study-tags">${n.tags.map(t => `<span class="tag-chip">#${esc(t)}</span>`).join('')}</div>` : ''}
-        <button class="study-article" onclick="Cards.openArticle('${esc(n.word || '').replace(/'/g, '&#39;')}')">открыть статью ${svgIcon('external')}</button>` : '';
+        <button class="study-article" onclick="Cards.openArticle('${esc(n.word || '').replace(/'/g, '&#39;')}')">открыть статью ${svgIcon('external')}</button>` : `${sentence}${input}`;
+    const suggested = chk ? (chk.ok ? 3 : chk.near ? 2 : 1) : 0;
     const buttons = S.revealed ? `
       <div class="study-buttons">
-        <button class="sb again" onclick="Cards.answer(1)"><small>${previewLabel(S.current, 1)}</small>Снова</button>
-        <button class="sb hard" onclick="Cards.answer(2)"><small>${previewLabel(S.current, 2)}</small>Трудно</button>
-        <button class="sb good" onclick="Cards.answer(3)"><small>${previewLabel(S.current, 3)}</small>Хорошо</button>
+        <button class="sb again ${suggested === 1 ? 'suggested' : ''}" onclick="Cards.answer(1)"><small>${previewLabel(S.current, 1)}</small>Снова</button>
+        <button class="sb hard ${suggested === 2 ? 'suggested' : ''}" onclick="Cards.answer(2)"><small>${previewLabel(S.current, 2)}</small>Трудно</button>
+        <button class="sb good ${suggested === 3 ? 'suggested' : ''}" onclick="Cards.answer(3)"><small>${previewLabel(S.current, 3)}</small>Хорошо</button>
         <button class="sb easy" onclick="Cards.answer(4)"><small>${previewLabel(S.current, 4)}</small>Легко</button>
       </div>` : `<div class="study-buttons"><button class="sb show" onclick="Cards.reveal()">Показать ответ</button></div>`;
     el.innerHTML = head + `
       <div class="study-body">
         <div class="study-card ${S.current.direction}">
-          <div class="study-dir">${S.current.direction === 'it' ? 'IT → RU' : 'RU → IT'}${S.current.state === 'new' ? ' · новая' : ''}</div>
+          <div class="study-dir">${isIt ? 'IT → RU' : 'RU → IT'}${S.current.state === 'new' ? ' · новая' : ''}</div>
           <div class="study-front">${esc(front)}</div>
           ${back}
         </div>
       </div>
-      <div class="study-footer">${buttons}<div class="study-hint">Пробел — показать ответ, клавиши 1–4 — оценка, Esc — выйти</div></div>`;
+      <div class="study-footer">${buttons}<div class="study-hint">${S.revealed ? 'Клавиши 1–4 — оценка, Enter — «Хорошо», Esc — выйти' : 'Enter — проверить ответ, пустой Enter или пробел — показать, Esc — выйти'}</div></div>`;
+    // На компьютере курсор сразу в поле ответа; на телефоне клавиатуру не поднимаем, пока не тронут поле
+    const inp = document.getElementById('studyInput');
+    if (inp && !(typeof isTouchDevice === 'function' && isTouchDevice())) inp.focus();
   }
 
   function renderAdd(el) {
@@ -553,7 +662,15 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     if (tag !== undefined) S.tagFilter = tag;
     buildQueue(); nextCard(); render();
   }
-  function reveal() { if (S.current && !S.revealed) { S.revealed = true; render(); } }
+  function reveal(typed) {
+    if (!S.current || S.revealed) return;
+    S.revealed = true; S.check = null;
+    if (typed && typed.trim()) {
+      const { n } = cardFaces(S.current);
+      S.check = checkTyped(typed, answerVariants(S.current, n, clozeTokens(n.example, n.word)), S.current.direction !== 'it');
+    }
+    render();
+  }
   async function answer(rating) {
     if (!S.current || !S.revealed) return;
     const before = { ...S.current }; const after = schedule(S.current, rating);
@@ -578,7 +695,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     Object.assign(card, before);
     sb(`cards?id=eq.${card.id}`, { method: 'PATCH', body: { state: before.state, step: before.step, due: before.due, interval_days: before.interval_days, ease: before.ease, reps: before.reps, lapses: before.lapses } }).catch(() => {});
     if (S.current) S.queue.unshift(S.current);
-    S.current = card; S.revealed = false; render();
+    S.current = card; S.revealed = false; S.check = null; render();
   }
 
   // ── Действия: добавление слов ────────────────────────────────────────────────
@@ -864,11 +981,21 @@ ${JSON.stringify(list)}`;
   document.addEventListener('keydown', e => {
     if (_currentState !== 'cards' || S.view !== 'study' || !S.current) return;
     if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '')) return;
-    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!S.revealed) reveal(); }
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!S.revealed) reveal(); else if (e.key === 'Enter') answer(3); }
     else if (/^[1-4]$/.test(e.key) && S.revealed) answer(parseInt(e.key));
     else if (e.key === 'z' || e.key === 'Z') undo();
     else if (e.key === 'Escape') goBack();
   });
+
+  // Клик по слову в примере на карточке (компьютер): уходим в статью, закрыв экран учёбы;
+  // «Назад» вернёт ту же карточку (см. snapshot/restore). На телефоне слово открывает шторку, как везде.
+  document.addEventListener('click', e => {
+    if (S.view !== 'study' || (typeof isTouchDevice === 'function' && isTouchDevice())) return;
+    const el = e.target.closest('#studyOverlay .clickable-word');
+    if (!el) return;
+    e.preventDefault(); e.stopPropagation();
+    window.Cards.openArticle(el.textContent.trim());
+  }, true);
 
   // ── Публичный интерфейс ──────────────────────────────────────────────────────
   window.Cards = {
@@ -904,11 +1031,24 @@ ${JSON.stringify(list)}`;
       $('searchInput').value = word;
       lookupWord(word);
     },
-    snapshot() { return { view: S.view === 'study' ? 'decks' : S.view, deckId: S.deckId, tagFilter: S.tagFilter, statsDeckId: S.statsDeckId }; },
+    submitTyped(v) { if (!S.current) return; reveal(v); },
+    // Снимок для истории: из учёбы «Назад» возвращает ту же карточку в том же состоянии
+    snapshot() {
+      const study = S.view === 'study' && S.current ? { current: S.current.id, queue: S.queue.map(c => c.id), revealed: S.revealed, check: S.check, shownAt: S.shownAt } : null;
+      return { view: S.view, deckId: S.deckId, tagFilter: S.tagFilter, statsDeckId: S.statsDeckId, study };
+    },
     async restore(snap) {
       closeOverlay(); S.build = null; S.browseSelected.clear();
       if (!S.loaded) { render(); await loadAll(); }
-      Object.assign(S, snap || { view: 'decks' }); render();
+      const { study, ...rest } = snap || { view: 'decks' };
+      Object.assign(S, rest);
+      if (S.view === 'study') {
+        const byId = id => S.cards.find(c => c.id === id);
+        const cur = study && byId(study.current);
+        if (cur) { S.current = cur; S.queue = study.queue.map(byId).filter(Boolean); S.revealed = study.revealed; S.check = study.check; S.shownAt = study.shownAt || Date.now(); }
+        else { buildQueue(); nextCard(); }
+      }
+      render();
     },
     showSql() { if (!isAdmin()) { showToast('SQL для базы доступен только владельцу сайта'); return; } pushView('sql'); S.view = 'sql'; render(); },
     setTagFilter(t) { S.tagFilter = t; S.browseSelected.clear(); render(); },

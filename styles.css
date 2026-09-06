@@ -15,7 +15,7 @@
     /* RGB-основы для полупрозрачных оттенков: rgba(var(--x-rgb), .2). Других цветов в правилах нет. */
     --terracotta-rgb: 196,82,42; --gold-rgb: 184,134,11; --sage-rgb: 74,94,58; --stone-rgb: 139,115,85; --ink-rgb: 26,18,8;
     --terracotta-dark: #a8411e; /* hover терракотовых кнопок */
-    --danger: #c0392b;          /* удаление, ошибки */
+    --danger: #c0392b; --danger-rgb: 192,57,43; /* удаление, ошибки */
     /* Ночная палитра грамматики: фон, поверхность, текст, приглушённый, синий акцент и его оттенки */
     --night-bg: #111c36; --night-surface: #1a2540; --night-text: #e8edf8; --night-muted: #6b7fa8; --night-dim: #4a5e8a;
     --blue: #6b9af0; --blue-bright: #5b8aff; --blue-deep: #3b64b4; --blue-light: #91b8ff; --blue-pale: #dde5f8; --blue-soft: #8aa4d4;
@@ -3243,3 +3243,24 @@
     }
   }
 
+
+/* ── Учёба: пример с пропуском, ввод ответа, сравнение ответа как в Anki ─────────── */
+.study-sentence { text-align: center; }
+.cloze-gap { display: inline-block; border-bottom: 2px solid var(--terracotta); height: 1em; vertical-align: -.2em; margin: 0 .1em; }
+.study-card.ru .cloze-gap { border-color: var(--blue-deep); }
+.cloze-hit { color: var(--terracotta); font-weight: 600; font-style: normal; }
+.study-card.ru .cloze-hit { color: var(--blue-deep); }
+.study-input-wrap { margin: 20px auto 0; max-width: 420px; }
+.study-input { width: 100%; padding: 12px 16px; border: 1.5px solid var(--border); border-radius: var(--radius); background: var(--cream); font-family: var(--font-text); font-size: var(--fs-lead); text-align: center; color: var(--ink); }
+.study-input::placeholder { color: var(--stone); opacity: .6; font-style: italic; }
+.study-typed { margin: 0 auto 16px; max-width: 520px; font-family: var(--font-mono); font-size: var(--fs-lead); line-height: var(--lh-ui); }
+.study-typed-line { letter-spacing: .04em; overflow-wrap: anywhere; }
+.study-typed-arrow { font-family: var(--font-text); font-style: italic; font-size: var(--fs-small); color: var(--muted); margin: 4px 0; }
+.study-typed.ok .study-typed-arrow { color: var(--sage); }
+.study-typed.near .study-typed-arrow { color: var(--gold); }
+.study-typed.bad .study-typed-arrow { color: var(--danger); }
+.typed-ok { background: rgba(var(--sage-rgb), .18); color: var(--sage); border-radius: 2px; }
+.typed-bad, .typed-miss { background: rgba(var(--danger-rgb), .15); color: var(--danger); border-radius: 2px; }
+.study-typed-line.correct .typed-ok { background: none; color: var(--ink); }
+.study-buttons .sb.suggested { box-shadow: 0 0 0 2px currentColor; }
+@media (max-width: 640px) { .study-typed { font-size: var(--fs-body); } .study-input { font-size: var(--fs-body); } }
