@@ -688,6 +688,18 @@
     .wordmap-btn { margin-top: 14px; }
   }
 
+  /* Теги слова в статье: клик переименовывает, «+» добавляет */
+  .word-tag { cursor: pointer; transition: filter .15s, transform .15s; }
+  .word-tag:hover { filter: brightness(.85); transform: translateY(-1px); }
+  .word-tag-add {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; margin-left: 8px; vertical-align: middle;
+    border: 1px dashed var(--border); border-radius: var(--radius); background: none;
+    color: var(--muted); font-size: 15px; line-height: 1; cursor: pointer; padding: 0 0 2px;
+    transition: all .15s;
+  }
+  .word-tag-add:hover { border-color: var(--terracotta); color: var(--terracotta); border-style: solid; }
+
   /* Аккаунт на экране настроек */
   .auth-box { margin-bottom: 8px; }
   .auth-input { margin-bottom: 10px; font-family: 'Crimson Pro', serif; font-size: 15px; letter-spacing: 0; padding: 12px 16px; }
@@ -3371,7 +3383,9 @@
 <button class="hero-action-btn refresh" id="dictRefreshBtn" title="Обновить статью" onclick="refreshEntry('dict')">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
-        <button class="hero-action-btn deck" id="dictDeckBtn" title="Добавить в колоду карточек" onclick="addEntryToDeck()">＋</button>
+        <button class="hero-action-btn deck" id="dictDeckBtn" title="Добавить в колоду карточек" onclick="addEntryToDeck()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="13" height="13" rx="1.5"/><path d="M8 4h13v13"/></svg>
+        </button>
         <button class="hero-action-btn star" id="dictStarBtn" title="Добавить в избранное" onclick="toggleFav('dict')">☆</button>
       </div>
       <div class="word-type-badge" id="wordType">—</div>
@@ -5000,25 +5014,31 @@ function renderEntry(e) {
     $('wordTitle').textContent = e.word;
   $('wordPhonetic').innerHTML = highlightStress(e.phonetic);
   $('wordType').textContent = e.partOfSpeech || '—';
-  // Category badge
-  const existingCat = document.getElementById('wordCategoryBadge');
-  if (existingCat) existingCat.remove();
-  if (e.category) {
-    const cat = document.createElement('span');
-    cat.id = 'wordCategoryBadge';
-    // Цвет плашки берём из той же палитры, что и граф (graph.js), чтобы все ~40 тем были окрашены одинаково везде
-    const key = window.WordGraph ? WordGraph.catKey(e.category) : (e.category || 'altro').toLowerCase();
-    cat.className = 'word-category-badge cat-' + key.replace(/[^a-z]/g, '').slice(0, 8);
-    const hex = window.WordGraph && WordGraph.CAT_COLORS[key];
-    if (hex && /^#[0-9a-f]{6}$/i.test(hex)) {
-      const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
-      cat.style.background = `rgba(${r},${g},${b},0.14)`;
-      cat.style.border = `1px solid rgba(${r},${g},${b},0.45)`;
-      cat.style.color = hex;
-    }
-    cat.textContent = e.category;
-    $('wordType').after(cat);
-  }
+  // Теги слова: по умолчанию тема из статьи, у вошедшего пользователя — свои (клик переименовывает,
+  // «+» добавляет). Часть речи слева тегом не является и не редактируется.
+  document.querySelectorAll('.word-tag, .word-tag-add').forEach(x => x.remove());
+  const tags = window.Auth ? Auth.tagsFor(e.word, e.category) : (e.category && window.WordGraph ? [WordGraph.catKey(e.category)] : []);
+  let anchor = $('wordType');
+  tags.forEach((t, i) => {
+    const tag = document.createElement('span');
+    tag.className = 'word-category-badge word-tag';
+    // Цвет из общей палитры графа (graph.js); у своих тегов цвет назначен при создании
+    const color = window.WordGraph && WordGraph.CAT_COLORS[t];
+    if (color && /^#[0-9a-f]{6}$/i.test(color)) {
+      const [r, g, b] = [1, 3, 5].map(k => parseInt(color.slice(k, k + 2), 16));
+      tag.style.background = `rgba(${r},${g},${b},0.14)`;
+      tag.style.border = `1px solid rgba(${r},${g},${b},0.45)`;
+      tag.style.color = color;
+    } else if (color) { tag.style.color = color; tag.style.borderColor = color; }
+    tag.textContent = t;
+    tag.title = 'Нажмите, чтобы переименовать тег для этого слова';
+    tag.onclick = () => window.Auth && Auth.renameTagUi(e.word, e.category, i);
+    anchor.after(tag); anchor = tag;
+  });
+  const add = document.createElement('button');
+  add.className = 'word-tag-add'; add.type = 'button'; add.textContent = '+'; add.title = 'Добавить тег';
+  add.onclick = () => window.Auth && Auth.addTagUi(e.word, e.category);
+  anchor.after(add);
   // Для глаголов вместо рода показываем вспомогательный глагол
   $('wordGender').textContent = e.gender || (e.isVerb && e.auxiliary ? `ausiliare ${e.auxiliary}` : '');
   const alsoEl = $('wordAlso');
@@ -5464,6 +5484,7 @@ async function renderRelatedGraph(e, depth) {
   const g = _relatedGraph;
   try {
     const data = await WordGraph.buildAround(e, depth);
+    if (window.Auth) Auth.applyTagsToNodes(data.nodes);
     if (g === _relatedGraph) g.setData(data.nodes, data.edges, { center: word });
   } catch(err) { if (g === _relatedGraph) g.setLoading('Не удалось загрузить связи: ' + err.message); }
 }
@@ -5501,6 +5522,7 @@ async function loadWordMap() {
       if (mine) { infos = new Map(); _mapInfos.forEach((info, id) => { if (mine.has(id)) infos.set(id, info); }); }
     }
     const data = WordGraph.buildGraph(infos, { neighbors: _mapNeighbors });
+    if (window.Auth) Auth.applyTagsToNodes(data.nodes);
     if (g === _mapGraph) { g.setData(data.nodes, data.edges); if (!data.nodes.length) g.setLoading('Пока пусто: откройте несколько слов, и они появятся здесь'); }
   } catch(err) { if (g === _mapGraph) g.setLoading('Не удалось загрузить: ' + err.message); }
 }
@@ -5517,7 +5539,7 @@ function renderFavGraph(rows) {
   if (_favGraph) { _favGraph.destroy(); _favGraph = null; }
   list.innerHTML = '<div id="favGraphBox"></div>';
   let neighbors = false;
-  const build = () => { const data = WordGraph.buildFromEntries(rows.map(r => r.data), { neighbors }); _favGraph.setData(data.nodes, data.edges); };
+  const build = () => { const data = WordGraph.buildFromEntries(rows.map(r => r.data), { neighbors }); if (window.Auth) Auth.applyTagsToNodes(data.nodes); _favGraph.setData(data.nodes, data.edges); };
   _favGraph = WordGraph.create($('favGraphBox'), {
     height: window.innerWidth < 640 ? '60vh' : '65vh', neighborsToggle: true, neighbors,
     onNeighbors: v => { neighbors = v; build(); },

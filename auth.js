@@ -76,6 +76,7 @@ create table if not exists word_views (
   viewed_at timestamptz default now(),
   primary key (user_id, word)
 );
+alter table word_views add column if not exists tags text[]; -- личные теги слова (пусто = тема из статьи)
 create table if not exists profiles (
   user_id uuid primary key default auth.uid() references auth.users(id) on delete cascade,
   gemini_key text, fast_provider text, fast_key text,
@@ -212,7 +213,11 @@ grant execute on function claim_orphans() to authenticated;`;
       if (!res.ok) return;
       const p = (await res.json())[0];
       setupMissing = false;
-      if (!p) { await pushProfile(); return; } // первый вход — заливаем ключи из браузера в профиль
+      if (!p) { await pushProfile(); await loadTags(); return; } // первый вход — заливаем ключи из браузера в профиль
+      profileSettings = (p.settings && typeof p.settings === 'object') ? p.settings : {};
+      tagColors = profileSettings.tagColors || {};
+      applyTagColors();
+      loadTags();
       // ключи из профиля в браузер: на новом устройстве ничего вводить не надо
       const set = (k, v) => { try { if (v) localStorage.setItem(k, v); } catch (e) {} };
       set('dizionario_gemini_key', p.gemini_key); set('dizionario_fast_provider', p.fast_provider); set('dizionario_fast_key', p.fast_key);
@@ -328,10 +333,93 @@ grant execute on function claim_orphans() to authenticated;`;
     } catch (e) { showToast('⚠ Не удалось войти по ссылке: ' + e.message); }
   }
 
+
+  // ── Личные теги слов ─────────────────────────────────────────────────────────
+  // По умолчанию тег слова — тема из статьи. Пользователь может переименовать его или добавить
+  // свои; это хранится в word_views.tags (только для этого слова и этого пользователя).
+  // Новому тегу назначается случайный ещё не занятый цвет, цвета лежат в profiles.settings.tagColors.
+  const TAG_PALETTE = ['#c4522a', '#4a7c3a', '#3b64b4', '#b8860b', '#8b5a2b', '#2a8c8c', '#b03a6a', '#6b6b9c', '#c97b3a', '#7a4fa0', '#d95f6a', '#3f9a5a', '#5aa0b8', '#a04fa0', '#7a8a2a', '#c96b8c', '#4f8fc0', '#e08a3a', '#d4a017', '#6a7ab0', '#9c4f8a', '#2f7a6a', '#8a3a3a', '#5b7fd6', '#b5651d', '#3a7a7a', '#7d5aa6', '#a63a5a'];
+  let wordTags = new Map(), tagColors = {}, profileSettings = {};
+  const normTag = s => (s || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 30);
+  function applyTagColors() {
+    if (!window.WordGraph) return;
+    Object.entries(tagColors).forEach(([n, c]) => { WordGraph.CAT_COLORS[n] = c; WordGraph.CAT_LABELS[n] = n; });
+  }
+  async function loadTags() {
+    wordTags = new Map();
+    if (!session) return;
+    try {
+      const res = await fetch(`${SB_URL}/rest/v1/word_views?select=word,tags&limit=5000`, { headers: SB_H });
+      if (!res.ok) return;
+      (await res.json()).forEach(r => { if (Array.isArray(r.tags) && r.tags.length) wordTags.set(r.word, r.tags); });
+      // цвета для тегов, которых нет в палитре (например, заведены на другом устройстве до синхронизации)
+      wordTags.forEach(tags => tags.forEach(t => { if (window.WordGraph && !WordGraph.CAT_COLORS[t] && !tagColors[t]) ensureColor(t, true); }));
+      applyTagColors();
+    } catch (e) { console.warn('tags:', e); }
+  }
+  function tagsFor(word, category) {
+    const own = wordTags.get((word || '').toLowerCase());
+    if (own && own.length) return own;
+    const k = window.WordGraph ? WordGraph.catKey(category) : (category || '').toLowerCase();
+    return k && k !== '?' ? [k] : [];
+  }
+  function applyTagsToNodes(nodes) {
+    (nodes || []).forEach(n => { const t = wordTags.get(n.id); if (t && t.length) n.cat = t[0]; });
+  }
+  async function setTags(word, tags) {
+    const w = (word || '').toLowerCase(); const clean = [...new Set(tags.map(normTag).filter(Boolean))];
+    const res = await fetch(`${SB_URL}/rest/v1/word_views?on_conflict=user_id,word`, { method: 'POST', headers: { ...SB_H, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ word: w, tags: clean.length ? clean : null }) });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message || `HTTP ${res.status}`); }
+    if (clean.length) wordTags.set(w, clean); else wordTags.delete(w);
+  }
+  let colorSaveTimer = 0;
+  async function ensureColor(name, silent) {
+    if (!window.WordGraph) return;
+    if (WordGraph.CAT_COLORS[name] || tagColors[name]) { applyTagColors(); return; }
+    const used = new Set([...Object.values(WordGraph.CAT_COLORS), ...Object.values(tagColors)]);
+    const free = TAG_PALETTE.filter(c => !used.has(c));
+    tagColors[name] = free.length ? free[Math.floor(Math.random() * free.length)] : `hsl(${Math.floor(Math.random() * 360)} 45% 45%)`;
+    applyTagColors();
+    clearTimeout(colorSaveTimer);
+    colorSaveTimer = setTimeout(saveTagColors, silent ? 1500 : 0);
+  }
+  async function saveTagColors() {
+    if (!session) return;
+    profileSettings = { ...(profileSettings || {}), tagColors };
+    try { await fetch(`${SB_URL}/rest/v1/profiles?on_conflict=user_id`, { method: 'POST', headers: { ...SB_H, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ user_id: session.user.id, settings: profileSettings }) }); }
+    catch (e) { console.warn('tag colors:', e); }
+  }
+  function rerenderEntry(word) {
+    if (typeof currentDictEntry !== 'undefined' && currentDictEntry && currentDictWord === (word || '').toLowerCase()) renderEntry(currentDictEntry);
+  }
+  async function renameTagUi(word, category, index) {
+    if (!require('Войдите, чтобы менять теги')) return;
+    const tags = tagsFor(word, category).slice();
+    const v = prompt(`Тег для слова «${word}». Оставьте пустым, чтобы убрать:`, tags[index] || '');
+    if (v === null) return;
+    const name = normTag(v);
+    try {
+      if (!name) tags.splice(index, 1);
+      else { if (tags.some((t, i) => t === name && i !== index)) { showToast('Такой тег у слова уже есть'); return; } tags[index] = name; await ensureColor(name); }
+      await setTags(word, tags); rerenderEntry(word);
+    } catch (e) { showToast('⚠ ' + e.message); }
+  }
+  async function addTagUi(word, category) {
+    if (!require('Войдите, чтобы добавлять теги')) return;
+    const v = prompt(`Новый тег для слова «${word}»:`); if (v === null) return;
+    const name = normTag(v); if (!name) return;
+    const tags = tagsFor(word, category).slice();
+    if (tags.includes(name)) { showToast('Такой тег у слова уже есть'); return; }
+    try { await ensureColor(name); await setTags(word, [...tags, name]); rerenderEntry(word); }
+    catch (e) { showToast('⚠ ' + e.message); }
+  }
+
+  // Запуск: восстановить сессию, обработать ссылку из письма, подтянуть профиль и теги
   load();
   if (session && session.expires_at < Date.now()) { apply(); refresh(); } else { apply(); scheduleRefresh(); }
   handleHash();
   if (session) pullProfile();
 
-  window.Auth = { user: () => session && session.user, require, signIn, signUp, signOut, resetPassword, changePassword, pushProfile, pullProfile, logView, myWords, renderUi, signInUi, signUpUi, resetUi, changePasswordUi, showSql, copySql };
+  window.Auth = { user: () => session && session.user, require, signIn, signUp, signOut, resetPassword, changePassword, pushProfile, pullProfile, logView, myWords, renderUi, signInUi, signUpUi, resetUi, changePasswordUi, showSql, copySql,
+    tagsFor, applyTagsToNodes, renameTagUi, addTagUi, loadTags };
 })();
