@@ -395,7 +395,7 @@
   }
   .speak-btn:hover { color: var(--terracotta); transform: scale(1.15); }
   .speak-btn.speaking { color: var(--terracotta); animation: pulse 1s infinite; }
-  .speak-btn svg { display: block; }
+  .speak-btn .icon { display: block; width: 28px; height: 28px; }
 
   .word-phonetic {
     /* Шрифт с полным набором IPA: в JetBrains Mono нет ʃ, d͡ʒ, ɛ, ɔ, и на Android они превращались в квадраты */
@@ -1396,7 +1396,7 @@
     .word-title { font-size: var(--fs-title); }
     .word-phonetic { font-size: var(--fs-body); }
     .word-main { gap: 8px; flex-wrap: wrap; align-items: flex-end; }
-    .speak-btn svg { width: 20px; height: 20px; }
+    .speak-btn .icon { width: 20px; height: 20px; }
     .speak-btn { margin-bottom: 1px; }
     .lang-row { grid-template-columns: 48px 1fr; gap: 8px; }
     .translation-text { font-size: var(--fs-body); }
