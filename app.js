@@ -79,7 +79,7 @@ function onFastProviderChange() {
 
 function toggleKeyVisibility(id) {
   const inp = $(id);
-  inp.type = inp.type === 'password' ? 'text' : 'password';
+  inp.classList.toggle('masked'); // ключ маскируется CSS, а не type=password: иначе браузер предлагает «сохранить пароль» при каждом переходе
 }
 
 function hideApiKeyScreen() {
@@ -94,7 +94,7 @@ document.addEventListener('keydown', e => {
 
 function toggleApiKeyVisibility() {
   const inp = $('apikeyInput');
-  inp.type = inp.type === 'password' ? 'text' : 'password';
+  inp.classList.toggle('masked'); // ключ маскируется CSS, а не type=password: иначе браузер предлагает «сохранить пароль» при каждом переходе
 }
 
 function saveApiKey() {

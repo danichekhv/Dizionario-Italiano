@@ -29,7 +29,7 @@
     <div class="auth-box" id="authBox"></div>
     <div class="apikey-label apikey-label-opt">Gemini API Key</div>
     <div class="apikey-input-wrap">
-      <input class="apikey-input" id="apikeyInput" type="password"
+      <input class="apikey-input masked" id="apikeyInput" type="text"
         placeholder="AIzaSy…"
         autocomplete="off" spellcheck="false"
         onkeydown="if(event.key==='Enter') saveApiKey()"
@@ -47,7 +47,7 @@
       </select>
     </div>
     <div class="apikey-input-wrap">
-      <input class="apikey-input" id="fastKeyInput" type="password"
+      <input class="apikey-input masked" id="fastKeyInput" type="text"
         placeholder="gsk_…"
         autocomplete="off" spellcheck="false"
         onkeydown="if(event.key==='Enter') saveApiKey()"

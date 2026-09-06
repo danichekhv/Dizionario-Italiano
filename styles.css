@@ -3311,3 +3311,7 @@ body.mode-grammar .search-recent { background: var(--night-surface); border-colo
 .suggest-item b { font-weight: 600; color: var(--terracotta); }
 .suggest-item:hover, .suggest-item.active { background: var(--parchment); }
 .suggest-src { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+
+/* Ключи API: обычные текстовые поля, замаскированные точками. type="password" нельзя: Chrome видит
+   заполненное поле пароля на одностраничном сайте и при каждом pushState предлагает сохранить «пароль». */
+.apikey-input.masked { -webkit-text-security: disc; }
