@@ -2383,10 +2383,50 @@ function renderHistory() {
       ${h.map(i => `<button class="history-chip" onmousedown="event.preventDefault()" onclick="historyClick('${i.word.replace(/'/g,"\\'")}','${i.mode}')">${i.word}</button>`).join('')}
     </div>`;
 }
-function hideRecent() { const sec = $('searchRecent'); if (sec) sec.style.display = 'none'; }
-$('searchInput').addEventListener('focus', renderHistory);
-$('searchInput').addEventListener('click', renderHistory); // поле уже в фокусе после загрузки — по клику тоже показываем
-$('searchInput').addEventListener('input', renderHistory);
+let _freq = null, _freqLoading = null, _sugIndex = -1, _sugTimer = 0;
+function hideRecent() { const sec = $('searchRecent'); if (sec) sec.style.display = 'none'; _sugIndex = -1; }
+
+// ── Подсказки при вводе: свои слова (недавние, колоды, избранное) и частотный список ──
+// Список it-words.txt: 30 000 слов по убыванию частоты, грузится один раз при первом вводе.
+// Подсказки только для итальянского поиска: в русском ищется перевод, в грамматике — тема.
+function loadFreq() {
+  if (_freq) return Promise.resolve(_freq);
+  return _freqLoading || (_freqLoading = fetch('it-words.txt').then(r => r.text())
+    .then(t => { _freq = t.split('\n').filter(l => l && l[0] !== '#'); return _freq; })
+    .catch(() => (_freq = [])));
+}
+function myWordsForSuggest() {
+  const out = new Map(); // слово → откуда
+  getHistory().filter(i => i.mode === 'dict').forEach(i => out.set(i.word.toLowerCase(), 'недавнее'));
+  if (window.Cards && Cards.allWords) Cards.allWords().forEach(w => { if (!out.has(w)) out.set(w, 'в колоде'); });
+  (typeof cachedFavRows !== 'undefined' && cachedFavRows || []).forEach(r => { const w = String(r.word || '').toLowerCase(); if (w && !out.has(w)) out.set(w, 'избранное'); });
+  return out;
+}
+async function renderSuggest() {
+  const inp = $('searchInput'), sec = $('searchRecent');
+  const q = inp.value.trim().toLowerCase();
+  if (currentMode !== 'dict' || currentLang !== 'it' || q.length < 2) { hideRecent(); return; }
+  const items = [];
+  for (const [w, src] of myWordsForSuggest()) if (w.startsWith(q) && w !== q) items.push({ w, src });
+  items.sort((a, b) => a.w.length - b.w.length);
+  const freq = await loadFreq();
+  if (inp.value.trim().toLowerCase() !== q) return; // пока грузили, ввод изменился
+  for (const w of freq) { if (items.length >= 8) break; if (w.startsWith(q) && w !== q && !items.some(i => i.w === w)) items.push({ w, src: '' }); }
+  if (!items.length) { hideRecent(); return; }
+  _sugIndex = -1;
+  sec.innerHTML = `<div class="suggest-list">${items.slice(0, 8).map(i =>
+    `<button class="suggest-item" onmousedown="event.preventDefault()" onclick="pickSuggest('${i.w.replace(/'/g, "\\'")}')"><span><b>${escapeHtml(q)}</b>${escapeHtml(i.w.slice(q.length))}</span>${i.src ? `<span class="suggest-src">${i.src}</span>` : ''}</button>`).join('')}</div>`;
+  sec.style.display = 'block';
+}
+function pickSuggest(w) { hideRecent(); $('searchInput').value = w; lookupWord(w); }
+function onSearchInput() {
+  clearTimeout(_sugTimer);
+  if (!$('searchInput').value.trim()) { renderHistory(); return; }
+  _sugTimer = setTimeout(renderSuggest, 80);
+}
+$('searchInput').addEventListener('focus', onSearchInput);
+$('searchInput').addEventListener('click', onSearchInput); // поле уже в фокусе после загрузки — по клику тоже показываем
+$('searchInput').addEventListener('input', onSearchInput);
 $('searchInput').addEventListener('blur', () => setTimeout(hideRecent, 150));
 document.addEventListener('pointerdown', e => { if (!e.target.closest('.search-wrapper')) hideRecent(); }); // тап мимо поля закрывает список
 $('searchInput').addEventListener('keydown', e => { if (e.key === 'Escape') hideRecent(); });
@@ -2457,7 +2497,18 @@ function doSearch() {
 }
 
 $('searchBtn').addEventListener('click', doSearch);
-$('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+// Enter ищет; стрелки ходят по подсказкам, Enter на выделенной берёт её
+$('searchInput').addEventListener('keydown', e => {
+  const items = [...document.querySelectorAll('#searchRecent .suggest-item')];
+  const open = items.length && $('searchRecent').style.display !== 'none';
+  if (open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    e.preventDefault();
+    _sugIndex = (_sugIndex + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+    items.forEach((el, i) => el.classList.toggle('active', i === _sugIndex));
+    return;
+  }
+  if (e.key === 'Enter') { if (open && _sugIndex >= 0) { items[_sugIndex].click(); return; } hideRecent(); doSearch(); }
+});
 
 // ── Floating fav button logic ─────────────────────────────────────────────────
 let _modeBeforeFav = 'dict';

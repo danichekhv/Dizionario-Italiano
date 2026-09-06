@@ -269,7 +269,10 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
           <div class="stat-label">Сегодня</div>
           <div class="today-line"><b>${t.count}</b> повторений · <b>${t.learned}</b> новых${t.correct !== null ? ` · <b>${t.correct}%</b> верно` : ''} · <b>${t.timeMin}</b> мин · серия <b>${t.streak}</b> дн.</div>
         </div>
-        <button class="cards-btn" onclick="Cards.stats(null)">Статистика →</button>
+        <div class="today-actions">
+          ${(() => { const n = total.learn + total.due + Math.min(total.new, newPerDay()); return n ? `<button class="cards-btn primary" onclick="Cards.studyAll()">Учить сегодняшнее · ${n}</button>` : ''; })()}
+          <button class="cards-btn" onclick="Cards.stats(null)">Статистика →</button>
+        </div>
       </div>
       <div class="deck-list">${rows.join('') || '<div class="cards-empty">Колод пока нет</div>'}</div>
       <div class="cards-actions">
@@ -1095,6 +1098,7 @@ ${JSON.stringify(list)}`;
     setNewPerDay(v) { try { localStorage.setItem(NEW_PER_DAY_KEY, String(Math.max(0, parseInt(v) || 0))); } catch (e) {} render(); },
     study(id) { study(id, S.view === 'browse' ? S.tagFilter : ''); },
     // Все колоды разом: deckId = null, notesInDeck(null) обходит дерево от корня
+    allWords() { return S.notes.map(n => String(n.word || '').toLowerCase()); }, // для подсказок в поиске
     studyAll() { if (window.Auth && !Auth.require('Войдите, чтобы учить карточки')) return; if (currentMode !== 'cards') { currentMode = 'cards'; applyModeUI('cards'); showState('cards'); } (S.loaded ? Promise.resolve() : loadAll()).then(() => study(null, '')); },
     // Сводка на сегодня для главной: к повторению и новых (в пределах дневного лимита)
     async dueSummary() {

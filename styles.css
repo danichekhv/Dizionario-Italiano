@@ -730,7 +730,8 @@
   .btn-bar .again { background: #e7b3ac; } .btn-bar .hard { background: #ebd29a; } .btn-bar .good { background: #b9d8a8; } .btn-bar .easy { background: #b3c9ea; }
   .cards-note { background: rgba(var(--terracotta-rgb),.08); border: 1px solid rgba(var(--terracotta-rgb),.25); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 16px; font-size: var(--fs-body); line-height: var(--lh-ui); }
   .cards-note .cards-btn { margin-top: 8px; }
-  @media (max-width: 640px) { .today-box .cards-btn { width: 100%; } .btn-row-name { width: 90px; font-size: var(--fs-small); } }
+  .today-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  @media (max-width: 640px) { .today-actions { width: 100%; flex-direction: column; } .today-box .cards-btn { width: 100%; } .btn-row-name { width: 90px; font-size: var(--fs-small); } }
 
   /* ── Граф слов ─────────────────────────────────────────────── */
   .wg { background: white; border: 1.5px solid var(--border); border-radius: var(--radius); overflow: hidden; }
@@ -3303,3 +3304,10 @@ body.mode-grammar .search-recent { background: var(--night-surface); border-colo
 .sheet-actions .sheet-open-btn { flex: 1; width: auto; margin: 0; padding: 12px; min-height: 48px; font-family: var(--font-text); font-style: normal; font-size: var(--fs-body); white-space: nowrap; }
 .sheet-add-btn, .sheet-add-btn:hover { background: white; color: var(--ink); border: 1.5px solid var(--border); }
 .grammar-sheet .sheet-add-btn { display: none; }
+
+/* ── Подсказки при вводе в поиске ── */
+.suggest-list { display: flex; flex-direction: column; }
+.suggest-item { display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left; background: none; border: none; padding: 8px 8px; border-radius: var(--radius); font-family: var(--font-text); font-size: var(--fs-lead); color: var(--ink); cursor: pointer; }
+.suggest-item b { font-weight: 600; color: var(--terracotta); }
+.suggest-item:hover, .suggest-item.active { background: var(--parchment); }
+.suggest-src { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); white-space: nowrap; }
