@@ -143,15 +143,14 @@
   </button>
 
   <!-- States -->
-  <!-- Search history -->
-  <div class="history-section" id="historySection" style="display:none"></div>
-
+  <!-- Главная: действия сверху, недавние слова под ними -->
   <div class="state-msg active" id="initialMsg">
-    <div id="initialMsgText">Inserisci una parola italiana per iniziare</div>
-    <div style="font-size:13px;margin-top:8px;color:var(--stone)" id="initialMsgSub">Введите итальянское слово для поиска</div>
-    <div class="home-due" id="homeDue" style="display:none"></div>
-    <button class="wordmap-btn" onclick="openWordMap()" title="Все открытые слова и связи между ними"><span data-icon="graph"></span> Карта слов</button>
+    <div class="home-actions">
+      <div class="home-due" id="homeDue" style="display:none"></div>
+      <button class="wordmap-btn" onclick="openWordMap()" title="Все открытые слова и связи между ними"><span data-icon="graph"></span> Карта слов</button>
+    </div>
   </div>
+  <div class="history-section" id="historySection" style="display:none"></div>
 
   <!-- Карта всех открытых слов -->
   <div class="graph-screen" id="graphScreen"></div>

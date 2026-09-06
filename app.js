@@ -254,18 +254,8 @@ function switchMode(mode, skipHistoryClear = false) {
   }
 }
 
-function updateInitialMsg() {
-  if (currentMode === 'grammar') {
-    $('initialMsgText').textContent = 'Введите тему для поиска правила';
-    $('initialMsgSub').textContent = 'Например: pronomi, articoli, congiuntivo, passato prossimo…';
-  } else if (currentLang === 'ru') {
-    $('initialMsgText').textContent = 'Введите русское слово для поиска';
-    $('initialMsgSub').textContent = 'Будет показан список итальянских переводов';
-  } else {
-    $('initialMsgText').textContent = 'Inserisci una parola italiana per iniziare';
-    $('initialMsgSub').textContent = 'Введите итальянское слово для поиска';
-  }
-}
+// Подсказок «введите слово» на начальном экране больше нет: место занимают действия и недавние
+function updateInitialMsg() {}
 
 // ── Переключение языка в словаре ─────────────────────────────────────────────
 function setLang(lang) {
@@ -2807,7 +2797,7 @@ async function refreshHomeDue() {
   if (!box) return;
   if (!total) { hide(); if (badge) badge.style.display = 'none'; return; }
   const parts = [repeat ? `${repeat} к повторению` : '', s.newToday ? `${s.newToday} новых` : ''].filter(Boolean).join(' · ');
-  box.innerHTML = `<button class="cards-btn primary" onclick="Cards.studyAll()">Учить сегодняшнее · ${total}</button><div class="home-due-sub">${parts}</div>`;
+  box.innerHTML = `<button class="cards-btn primary" onclick="Cards.studyAll()" title="${parts}">Учить сегодняшнее · ${total}</button>`;
   box.style.display = '';
 }
 window.addEventListener('load', () => refreshHomeDue());
