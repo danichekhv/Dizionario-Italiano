@@ -511,6 +511,8 @@
   .deck-name { flex: 1; text-align: left; background: none; border: none; cursor: pointer; font-family: 'Playfair Display', serif; font-size: 18px; color: var(--ink); padding: 4px 0; }
   .deck-name:hover { color: var(--terracotta); }
   .deck-counts { display: flex; gap: 10px; font-family: 'JetBrains Mono', monospace; font-size: 13px; min-width: 90px; justify-content: flex-end; }
+  .deck-play { width: 32px; height: 32px; border-radius: 50%; border: none; background: var(--terracotta); color: white; cursor: pointer; font-size: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding-left: 2px; }
+  .deck-play:hover { background: #a8411e; }
   .deck-menu { display: flex; gap: 2px; }
   .deck-menu button { background: none; border: 1px solid transparent; border-radius: 4px; width: 28px; height: 28px; cursor: pointer; color: var(--muted); font-size: 14px; }
   .deck-menu button:hover { border-color: var(--border); color: var(--terracotta); background: var(--parchment); }
@@ -605,11 +607,24 @@
   .cards-setup p { line-height: 1.5; margin-bottom: 12px; }
   .cards-sql { background: #1e1a14; color: #e8ddc8; font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 14px; border-radius: 6px; overflow: auto; max-height: 320px; white-space: pre; }
   @media (max-width: 640px) {
-    .deck-row { flex-wrap: wrap; padding: 8px 10px 8px calc(10px + var(--depth) * 14px); gap: 6px; }
-    .deck-counts { min-width: 0; font-size: 12px; gap: 6px; }
-    .deck-name { font-size: 17px; }
-    .deck-menu { width: 100%; justify-content: flex-end; }
+    /* Колода на телефоне — карточкой: название и кнопка «учить», под ними счётчики словами, ниже действия */
+    .deck-row {
+      display: grid;
+      grid-template-columns: 18px 1fr auto;
+      grid-template-areas: "tg name play" "tg counts play" "tg menu menu";
+      gap: 4px 8px;
+      align-items: center;
+      padding: 10px 12px 8px calc(12px + var(--depth) * 14px);
+    }
+    .deck-toggle { grid-area: tg; }
+    .deck-name { grid-area: name; font-size: 18px; padding: 0; }
+    .deck-counts { grid-area: counts; justify-content: flex-start; gap: 12px; font-size: 12px; min-width: 0; flex-wrap: wrap; }
+    .deck-counts span::after { content: ' ' attr(data-l); font-family: 'Crimson Pro', serif; font-style: italic; font-size: 13px; opacity: .85; }
+    .deck-play { grid-area: play; width: 40px; height: 40px; font-size: 15px; }
+    .deck-menu { grid-area: menu; justify-content: flex-start; gap: 6px; margin-top: 4px; }
+    .deck-menu button { width: 36px; height: 30px; border: 1px solid var(--border); background: white; color: var(--muted); }
     .cards-head-counts { font-size: 13px; gap: 8px; }
+    .cards-actions .cards-btn { flex: 1 1 auto; text-align: center; }
     .cards-panel { padding: 16px 14px; }
     .study-card { padding: 28px 16px; }
     .study-buttons { gap: 6px; }
@@ -1159,18 +1174,19 @@
     .subtitle { font-size: 13px; }
     .header-ornament { font-size: 11px; letter-spacing: 0.25em; }
 
-    /* Nav — two rows on mobile */
+    /* Nav — три равные кнопки в одну строку, без артиклей */
     .app-nav {
       width: 100% !important;
       max-width: 100% !important;
-      flex-wrap: wrap;
-      justify-content: center;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
       margin-left: 0 !important;
       margin-right: 0 !important;
       overflow: visible;
     }
-    .app-nav-btn { padding: 8px 10px; font-size: 13px; flex: 1; min-width: 120px; gap: 5px; }
+    .app-nav-btn { padding: 9px 4px; font-size: 13px; min-width: 0; gap: 5px; justify-content: center; }
     .app-nav-btn .nav-icon { font-size: 14px; }
+    .app-nav-btn .nav-article { display: none; }
 
     /* Lang toggle — full width */
     .lang-toggle { width: auto; display: flex; margin-left: auto; margin-right: auto; }
@@ -1948,7 +1964,6 @@
 
   @media (max-width: 640px) {
     .grammar-hero, .grammar-section { padding-left: 24px; padding-right: 24px; }
-    .app-nav-btn { padding: 8px 16px; font-size: 14px; }
   }
 
 
@@ -3110,15 +3125,15 @@
   <nav class="app-nav">
     <button class="app-nav-btn active" id="navDict" onclick="switchMode('dict')">
       <span class="nav-icon">📖</span>
-      <span>Il <span class="nav-label-it">Dizionario</span></span>
+      <span><span class="nav-article">Il </span><span class="nav-label-it">Dizionario</span></span>
     </button>
     <button class="app-nav-btn" id="navGram" onclick="switchMode('grammar')">
       <span class="nav-icon">📐</span>
-      <span>La <span class="nav-label-it">Grammatica</span></span>
+      <span><span class="nav-article">La </span><span class="nav-label-it">Grammatica</span></span>
     </button>
     <button class="app-nav-btn" id="navCards" onclick="switchMode('cards')">
       <span class="nav-icon">🃏</span>
-      <span>Le <span class="nav-label-it">Carte</span></span>
+      <span><span class="nav-article">Le </span><span class="nav-label-it">Carte</span></span>
     </button>
   </nav>
 

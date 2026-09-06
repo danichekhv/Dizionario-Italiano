@@ -210,9 +210,9 @@ create index if not exists notes_deck_idx on notes(deck_id);`;
         <div class="deck-row" style="--depth:${depth}">
           <button class="deck-toggle ${kids.length ? '' : 'hidden'} ${collapsed ? 'closed' : ''}" onclick="Cards.toggleDeck('${d.id}')" title="Свернуть/развернуть"></button>
           <button class="deck-name" onclick="Cards.study('${d.id}')" title="Учить">${esc(d.name)}</button>
-          <div class="deck-counts"><span class="c-new">${c.new}</span><span class="c-learn">${c.learn}</span><span class="c-due">${c.due}</span></div>
+          <div class="deck-counts"><span class="c-new" data-l="новых">${c.new}</span><span class="c-learn" data-l="учить">${c.learn}</span><span class="c-due" data-l="повторить">${c.due}</span></div>
+          <button class="deck-play" onclick="Cards.study('${d.id}')" title="Учить">▶</button>
           <div class="deck-menu">
-            <button onclick="Cards.study('${d.id}')" title="Учить">▶</button>
             <button onclick="Cards.openAdd('${d.id}')" title="Добавить слова">＋</button>
             <button onclick="Cards.browse('${d.id}')" title="Карточки">☰</button>
             <button onclick="Cards.newDeck('${d.id}')" title="Подколода">⤵</button>
