@@ -663,7 +663,8 @@
   .wordmap-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
   body.mode-grammar .wordmap-btn { display: none; }
   .fav-view-toggle { margin-left: 0; } /* три элемента заголовка расставляет сам flex, без принудительного прижатия */
-  .fav-header .fav-tabs { margin-left: auto; }
+  .fav-header .fav-tabs { margin-left: auto; margin-bottom: 0; } /* нижний отступ вкладок сдвигал их вверх относительно строки */
+  .fav-view-toggle .view-toggle-btn { padding: 8px 14px; font-size: 14px; } /* одна высота с вкладками */
   body.mode-grammar .fav-view-toggle { display: none !important; }
   @media (max-width: 640px) { .wg-hint { display: none; } .wg-bar { padding: 8px; gap: 6px; } .wg-legend { padding: 6px 8px; } }
 
