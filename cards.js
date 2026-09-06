@@ -453,7 +453,8 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   function sentenceHtml(tokens, mode) {
     return tokens.map(x => {
       if (!x.word) return esc(x.t);
-      if (x.hit) return mode === 'gap' ? `<span class="cloze-gap" style="min-width:${Math.max(3, x.t.length) * 0.6}em"></span>` : `<span class="cloze-hit">${makeClickable(x.t)}</span>`;
+      // Изучаемое слово не кликабельно: подсказка по нему выдала бы ответ
+      if (x.hit) return mode === 'gap' ? `<span class="cloze-gap" style="min-width:${Math.max(3, x.t.length) * 0.6}em"></span>` : `<span class="cloze-hit">${esc(x.t)}</span>`;
       return makeClickable(x.t);
     }).join('');
   }
