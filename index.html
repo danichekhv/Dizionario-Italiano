@@ -3245,7 +3245,7 @@
     <div class="apikey-error" id="fastKeyError">Ключ выглядит некорректно</div>
     <div class="apikey-hint-small" id="fastHint">С ключом словарные статьи и подсказки идут через выбранный сервис, грамматика и поиск с русского остаются на Gemini. Если сервис отказывает, запрос уходит в Gemini.</div>
 
-    <button class="apikey-btn" onclick="saveApiKey()">Начать →</button>
+    <button class="apikey-btn" onclick="saveApiKey()">Сохранить</button>
     <button class="apikey-back-btn" id="apikeyBackBtn" onclick="hideApiKeyScreen()">← Назад</button>
     <button class="apikey-back-btn" id="installBtn" style="display:none" onclick="installApp()">📲 Установить как приложение</button>
     <p class="apikey-hint">
@@ -3542,7 +3542,7 @@ function showApiKeyScreen() {
   onFastProviderChange();
   if (window.Auth) Auth.renderUi();
   // Назад можно только если ключ уже сохранён — при первом запуске возвращаться некуда
-  $('apikeyBackBtn').classList.toggle('visible', !!existing);
+  $('apikeyBackBtn').classList.add('visible'); // экран всегда можно закрыть, ключ не обязателен
   $('apikeyError').classList.remove('visible');
   $('fastKeyError').classList.remove('visible');
   setTimeout(() => $('apikeyInput').focus(), 100);
@@ -3570,7 +3570,7 @@ function hideApiKeyScreen() {
 
 // Escape тоже закрывает экран ключа, если ключ уже есть
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && $('apikeyOverlay').classList.contains('open') && getApiKey()) hideApiKeyScreen();
+  if (e.key === 'Escape' && $('apikeyOverlay').classList.contains('open')) hideApiKeyScreen();
 });
 
 function toggleApiKeyVisibility() {
@@ -3581,7 +3581,8 @@ function toggleApiKeyVisibility() {
 function saveApiKey() {
   const val = $('apikeyInput').value.trim();
   const err = $('apikeyError');
-  if (!val.startsWith('AIza') || val.length < 20) {
+  // Ключ Gemini можно оставить пустым: читать кэш и учить карточки можно и без него
+  if (val && (!val.startsWith('AIza') || val.length < 20)) {
     err.classList.add('visible');
     return;
   }
@@ -3591,7 +3592,7 @@ function saveApiKey() {
   const ferr = $('fastKeyError');
   if (fk && fk.length < 20) { ferr.classList.add('visible'); return; }
   ferr.classList.remove('visible');
-  localStorage.setItem('dizionario_gemini_key', val);
+  if (val) localStorage.setItem('dizionario_gemini_key', val); else localStorage.removeItem('dizionario_gemini_key');
   const providerId = $('fastProviderSelect').value;
   localStorage.setItem('dizionario_fast_provider', providerId);
   if (fk) localStorage.setItem('dizionario_fast_key', fk); else localStorage.removeItem('dizionario_fast_key');
@@ -3601,12 +3602,8 @@ function saveApiKey() {
   hideApiKeyScreen();
 }
 
-// Показать экран ввода ключа при первом запуске
-window.addEventListener('DOMContentLoaded', () => {
-  if (!getApiKey()) {
-    showApiKeyScreen();
-  }
-});
+// Экран ключей и входа при запуске не показываем: словарь читает общий кэш и без них.
+// Ключ спросится, когда понадобится генерация, вход — когда понадобятся личные данные.
 
 // ── Supabase ──────────────────────────────────────────────────────────────────
 const SB_URL = "https://qmsgumhvbsefpbbkvxgs.supabase.co";
@@ -3946,6 +3943,7 @@ function geminiRequestBody(prompt) {
 const isThinkingParamError = msg => /thinking/i.test(msg || '');
 
 async function callGemini(prompt) {
+  if (!getApiKey()) throw new Error('NO_GEMINI_KEY');
   const response = await fetch(getApiUrl(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -4098,6 +4096,7 @@ function extractJson(text) {
 // Потоковый вариант: тот же один запрос, но onText получает накопленный текст по мере генерации.
 // Это позволяет показать начало ответа (русский перевод), пока модель дописывает остальное.
 async function callGeminiStream(prompt, onText) {
+  if (!getApiKey()) throw new Error('NO_GEMINI_KEY');
   const url = `${GEMINI_MODEL_URL.replace(':generateContent', ':streamGenerateContent')}?alt=sse&key=${getApiKey()}`;
   const response = await fetch(url, {
     method: 'POST',
@@ -4678,6 +4677,7 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 function describeApiError(msg) {
+  if (/NO_GEMINI_KEY/.test(msg)) return `🔑 Этого слова ещё нет в общей базе, для генерации статьи нужен ключ Gemini — <u style="cursor:pointer" onclick="showApiKeyScreen()">указать ключ</u> (бесплатно, минута)`;
   const isQuota = /quota|RESOURCE_EXHAUSTED|429|rate limit/i.test(msg);
   const isBadKey = /API[ _]key|API_KEY|PERMISSION_DENIED|leaked|403|401|Unauthorized|invalid_api_key/i.test(msg);
   const who = (msg.match(/^(Groq|Cerebras|Mistral)/i) || [])[1] || 'Gemini';
