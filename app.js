@@ -403,14 +403,14 @@ function showState(state) {
   ['initialMsg','loadingMsg','errorMsg','resultCard','ruResults','grammarCard','favScreen','cardsScreen','graphScreen']
     .forEach(id => $(id).classList.remove('active'));
   if (state === 'initial')        { $('initialMsg').classList.add('active'); renderHistory(); hideInlineHistory(); }
-  else if (state === 'loading')   { $('loadingMsg').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
-  else if (state === 'error')     { $('errorMsg').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
-  else if (state === 'result')    { $('resultCard').classList.add('active'); $('historySection').style.display='none'; renderInlineHistory('dict'); }
-  else if (state === 'rulist')    { $('ruResults').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
-  else if (state === 'grammar')   { $('grammarCard').classList.add('active'); $('historySection').style.display='none'; renderInlineHistory('grammar'); }
-  else if (state === 'favorites') { $('favScreen').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
-  else if (state === 'cards')     { $('cardsScreen').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
-  else if (state === 'graph')     { $('graphScreen').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
+  else if (state === 'loading')   { $('loadingMsg').classList.add('active'); hideRecent(); hideInlineHistory(); }
+  else if (state === 'error')     { $('errorMsg').classList.add('active'); hideRecent(); hideInlineHistory(); }
+  else if (state === 'result')    { $('resultCard').classList.add('active'); hideRecent(); renderInlineHistory('dict'); }
+  else if (state === 'rulist')    { $('ruResults').classList.add('active'); hideRecent(); hideInlineHistory(); }
+  else if (state === 'grammar')   { $('grammarCard').classList.add('active'); hideRecent(); renderInlineHistory('grammar'); }
+  else if (state === 'favorites') { $('favScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
+  else if (state === 'cards')     { $('cardsScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
+  else if (state === 'graph')     { $('graphScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
 
   updateBackBtn();
 }
@@ -2365,23 +2365,31 @@ function clearHistory() {
   renderHistory();
 }
 
+// Недавние слова живут в выпадающем списке под полем поиска: показываются, когда поле в фокусе
+// и пустое, как история в адресной строке. На главной они больше места не занимают.
 function renderHistory() {
-  const sec = $('historySection');
-  if (!sec) return;
-  // Показываем историю только на начальном экране в нужном режиме
-  if (_currentState !== 'initial') { sec.style.display = 'none'; return; }
-  const h = getHistory().filter(i => i.mode === currentMode);
-  if (h.length === 0) { sec.style.display = 'none'; return; }
+  const sec = $('searchRecent'), input = $('searchInput');
+  if (!sec || !input) return;
+  const h = getHistory().filter(i => i.mode === (currentMode === 'grammar' ? 'grammar' : 'dict'));
+  if (document.activeElement !== input || input.value.trim() || h.length === 0) { sec.style.display = 'none'; return; }
   sec.style.display = 'block';
+  // mousedown с preventDefault: клик по слову не должен снимать фокус с поля раньше, чем сработает
   sec.innerHTML = `
     <div class="history-label">
       <span>Недавние</span>
-      <button class="history-clear" onclick="clearHistory()">очистить</button>
+      <button class="history-clear" onmousedown="event.preventDefault()" onclick="clearHistory()">очистить</button>
     </div>
     <div class="history-chips">
-      ${h.map(i => `<button class="history-chip" onclick="historyClick('${i.word.replace(/'/g,"\\'")}','${i.mode}')">${i.word}</button>`).join('')}
+      ${h.map(i => `<button class="history-chip" onmousedown="event.preventDefault()" onclick="historyClick('${i.word.replace(/'/g,"\\'")}','${i.mode}')">${i.word}</button>`).join('')}
     </div>`;
 }
+function hideRecent() { const sec = $('searchRecent'); if (sec) sec.style.display = 'none'; }
+$('searchInput').addEventListener('focus', renderHistory);
+$('searchInput').addEventListener('click', renderHistory); // поле уже в фокусе после загрузки — по клику тоже показываем
+$('searchInput').addEventListener('input', renderHistory);
+$('searchInput').addEventListener('blur', () => setTimeout(hideRecent, 150));
+document.addEventListener('pointerdown', e => { if (!e.target.closest('.search-wrapper')) hideRecent(); }); // тап мимо поля закрывает список
+$('searchInput').addEventListener('keydown', e => { if (e.key === 'Escape') hideRecent(); });
 
 function renderInlineHistory(mode) {
   const id = mode === 'dict' ? 'inlineHistoryDict' : 'inlineHistoryGrammar';
@@ -2408,6 +2416,7 @@ function hideInlineHistory() {
 }
 
 function historyClick(word, mode) {
+  hideRecent();
   $('searchInput').value = word;
   if (mode === 'grammar') lookupGrammar(word);
   else lookupWord(word);
@@ -2568,6 +2577,7 @@ function renderPreviewDict(popup, d) {
     <div class="wp-translation">${previewRussianHtml(d)}</div>
     ${d.english?.main ? `<div class="wp-en">${d.english.main}</div>` : ''}
     <button class="wp-add" onclick="addPreviewToDeck()">${svgIcon('deck')} в колоду</button>`;
+  positionPreview(popup); // высота изменилась — подгоняем к якорю
 }
 
 // Быстрые данные для превью: кэш Supabase и Викисловарь запрашиваем параллельно.
@@ -2676,7 +2686,7 @@ function showPreview(el, word, isGrammar, x, y) {
   popup.className = 'word-preview' + (isGrammar ? ' grammar-preview' : '');
   popup.innerHTML = `<div class="wp-loading">…</div>`;
   popup.dataset.word = word;
-  positionPreview(popup, x, y);
+  positionPreview(popup, el.getBoundingClientRect());
   popup.classList.add('visible');
   const stillMine = () => popup.classList.contains('visible') && popup.dataset.word === word;
 
@@ -2700,6 +2710,7 @@ function showPreview(el, word, isGrammar, x, y) {
           ${data.category ? `<span class="wp-badge">${data.category}</span>` : ''}
         </div>
         <div class="wp-translation">${data.titleRu || ''}</div>`;
+      positionPreview(popup);
       return;
     }
 
@@ -2709,18 +2720,18 @@ function showPreview(el, word, isGrammar, x, y) {
   }, 80);
 }
 
-function positionPreview(popup, x, y) {
-  popup.style.left = '0px'; popup.style.top = '0px';
+// Подсказка стоит под словом (у нижнего края экрана — над ним) и за курсором не ходит,
+// иначе до кнопки «в колоду» внутри неё не довести мышь. Без rect — пересчёт по прежнему якорю.
+function positionPreview(popup, rect) {
+  if (rect) popup._anchor = rect; else rect = popup._anchor;
+  if (!rect) return;
   requestAnimationFrame(() => {
-    const pw = popup.offsetWidth || 260;
-    const ph = popup.offsetHeight || 120;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    let left = x + 12;
-    let top = y - ph / 2;
-    if (left + pw > vw - 12) left = x - pw - 12;
+    const pw = popup.offsetWidth || 260, ph = popup.offsetHeight || 120;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    let left = rect.left, top = rect.bottom + 6;
+    if (left + pw > vw - 12) left = Math.max(12, vw - pw - 12);
+    if (top + ph > vh - 8) top = rect.top - ph - 6;
     if (top < 8) top = 8;
-    if (top + ph > vh - 8) top = vh - ph - 8;
     popup.style.left = left + 'px';
     popup.style.top = top + 'px';
   });
@@ -2749,15 +2760,6 @@ document.addEventListener('mouseover', (e) => {
   if (!word || word.length < 3) return;
   const isGrammar = el.classList.contains('history-chip') && currentMode === 'grammar';
   showPreview(el, word, isGrammar, e.clientX, e.clientY);
-});
-
-document.addEventListener('mousemove', (e) => {
-  if (isTouchDevice()) return;
-  if (e.target.closest('#wordPreview')) return; // над самой подсказкой её не двигаем
-  const popup = $('wordPreview');
-  if (popup.classList.contains('visible')) {
-    positionPreview(popup, e.clientX, e.clientY);
-  }
 });
 
 document.addEventListener('mouseout', (e) => {
@@ -2797,7 +2799,7 @@ async function refreshHomeDue() {
   if (!box) return;
   if (!total) { hide(); if (badge) badge.style.display = 'none'; return; }
   const parts = [repeat ? `${repeat} к повторению` : '', s.newToday ? `${s.newToday} новых` : ''].filter(Boolean).join(' · ');
-  box.innerHTML = `<button class="cards-btn primary" onclick="Cards.studyAll()" title="${parts}">Учить сегодняшнее · ${total}</button>`;
+  box.innerHTML = `<button class="cards-btn primary" onclick="Cards.studyAll()">Учить сегодняшнее · ${total}</button><div class="home-due-sub">${parts}</div>`;
   box.style.display = '';
 }
 window.addEventListener('load', () => refreshHomeDue());

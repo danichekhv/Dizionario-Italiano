@@ -2095,10 +2095,6 @@
   .clickable-word:hover { color: var(--terracotta); }
 
   /* ── Search history ──────────────────────────────────────── */
-  .history-section {
-    margin-bottom: 32px;
-    animation: fadeUp 0.3s ease;
-  }
   .history-label {
     font-size: var(--fs-micro);
     letter-spacing: var(--ls-wide);
@@ -3284,10 +3280,18 @@
 /* ── Сегодняшние карточки: кнопка на главной, бейдж на вкладке, итог сессии ─────────── */
 .nav-badge { font-family: var(--font-mono); font-size: var(--fs-micro); line-height: 1; background: var(--terracotta); color: white; border-radius: 10px; padding: 3px 6px; margin-left: 6px; font-style: normal; vertical-align: 1px; }
 .app-nav-btn.active .nav-badge { background: white; color: var(--terracotta); }
-/* Главная: ряд действий над недавними, без подсказок «введите слово» */
+/* Главная: ряд действий под поиском, без подсказок «введите слово» */
 #initialMsg { padding: 8px 0 16px; }
-.home-actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; }
+.home-actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 8px; }
 .home-actions .wordmap-btn, .home-actions .home-due .cards-btn { margin: 0; }
+.home-due { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.home-due-sub { font-size: var(--fs-small); color: var(--muted); font-style: italic; }
+@media (max-width: 640px) { .home-actions { flex-direction: column; align-items: center; gap: 12px; } }
+
+/* Недавние слова под полем поиска */
+.search-recent { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 60; background: var(--cream); border: 1.5px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 12px 16px; text-align: left; }
+body.mode-grammar .search-recent { background: var(--night-surface); border-color: rgba(var(--blue-rgb),.25); }
+.search-recent .history-label { margin-bottom: 8px; }
 .study-summary { margin-top: 8px; font-size: var(--fs-body); color: var(--ink); font-style: normal; }
 .study-summary.sub { color: var(--muted); font-style: italic; margin-top: 4px; }
 
@@ -3296,5 +3300,6 @@
 .wp-add { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: white; font-family: var(--font-text); font-size: var(--fs-small); color: var(--ink); cursor: pointer; }
 .wp-add:hover { border-color: var(--terracotta); color: var(--terracotta); }
 .sheet-actions { display: flex; gap: 8px; margin: 16px 24px 8px; }
-.sheet-actions .sheet-open-btn { flex: 1; width: auto; margin: 0; }
-.sheet-add-btn, .sheet-add-btn:hover { background: var(--parchment); color: var(--ink); }
+.sheet-actions .sheet-open-btn { flex: 1; width: auto; margin: 0; padding: 12px; min-height: 48px; font-family: var(--font-text); font-style: normal; font-size: var(--fs-body); white-space: nowrap; }
+.sheet-add-btn, .sheet-add-btn:hover { background: white; color: var(--ink); border: 1.5px solid var(--border); }
+.grammar-sheet .sheet-add-btn { display: none; }
