@@ -633,6 +633,39 @@
   .cards-note .cards-btn { margin-top: 8px; }
   @media (max-width: 640px) { .today-box .cards-btn { width: 100%; } .btn-row-name { width: 90px; font-size: 13px; } }
 
+  /* ── Граф слов ─────────────────────────────────────────────── */
+  .wg { background: white; border: 1.5px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .wg-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--parchment); }
+  .wg-search { flex: 1 1 140px; min-width: 120px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 4px; font-family: 'Crimson Pro', serif; font-size: 14px; background: white; }
+  .wg-mode, .wg-depth { padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: white; font-family: 'Crimson Pro', serif; font-size: 14px; }
+  .wg-inline { font-size: 13px; color: var(--muted); font-style: italic; display: flex; align-items: center; gap: 5px; }
+  .wg-btn { padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: white; cursor: pointer; font-family: 'Crimson Pro', serif; font-size: 14px; color: var(--ink); }
+  .wg-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
+  .wg-legend { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .wg-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border: 1px solid var(--border); border-radius: 12px; background: white; cursor: pointer; font-family: 'Crimson Pro', serif; font-size: 13px; color: var(--ink); letter-spacing: 0; text-transform: none; }
+  .wg-chip i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .wg-chip span { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); }
+  .wg-chip.off { opacity: .4; text-decoration: line-through; }
+  .wg-chip-all { border: none; background: none; cursor: pointer; font-family: 'Crimson Pro', serif; font-style: italic; font-size: 13px; color: var(--muted); padding: 3px 6px; }
+  .wg-chip-all:hover { color: var(--terracotta); }
+  .wg-canvas-wrap { position: relative; background: radial-gradient(ellipse at 50% 40%, #fcf9f3 0%, var(--cream) 100%); }
+  .wg-canvas { display: block; width: 100%; height: 100%; }
+  .wg-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-style: italic; pointer-events: none; text-align: center; padding: 20px; }
+  .wg-hint { font-size: 12px; color: var(--stone); font-style: italic; padding: 8px 12px; border-top: 1px solid var(--border); line-height: 1.5; }
+  .view-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-left: 10px; flex-shrink: 0; }
+  .view-toggle-btn { background: none; border: none; padding: 2px 10px; font-family: 'Crimson Pro', serif; font-size: 12px; font-style: italic; letter-spacing: 0; text-transform: none; color: var(--muted); cursor: pointer; }
+  .view-toggle-btn.active { background: var(--terracotta); color: white; font-style: normal; }
+  .related-graph { margin-top: 4px; }
+  .graph-screen { display: none; animation: fadeUp .4s ease both; }
+  .graph-screen.active { display: block; }
+  .graph-screen-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
+  .wordmap-btn { margin-top: 22px; padding: 9px 18px; border: 1.5px solid var(--border); border-radius: 20px; background: white; cursor: pointer; font-family: 'Crimson Pro', serif; font-size: 15px; color: var(--ink); font-style: normal; transition: all .2s; }
+  .wordmap-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
+  body.mode-grammar .wordmap-btn { display: none; }
+  .fav-view-toggle { margin-left: auto; }
+  body.mode-grammar .fav-view-toggle { display: none !important; }
+  @media (max-width: 640px) { .wg-hint { display: none; } .wg-bar { padding: 8px; gap: 6px; } .wg-legend { padding: 6px 8px; } }
+
   .cards-setup { background: white; border: 1.5px solid var(--border); border-radius: 6px; padding: 22px 26px; }
   .cards-setup p { line-height: 1.5; margin-bottom: 12px; }
   .cards-sql { background: #1e1a14; color: #e8ddc8; font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 14px; border-radius: 6px; overflow: auto; max-height: 320px; white-space: pre; }
@@ -3235,7 +3268,11 @@
   <div class="state-msg active" id="initialMsg">
     <div id="initialMsgText">Inserisci una parola italiana per iniziare</div>
     <div style="font-size:13px;margin-top:8px;color:var(--stone)" id="initialMsgSub">Введите итальянское слово для поиска</div>
+    <button class="wordmap-btn" onclick="openWordMap()" title="Все открытые слова и связи между ними">🕸 Карта слов</button>
   </div>
+
+  <!-- Карта всех открытых слов -->
+  <div class="graph-screen" id="graphScreen"></div>
 
   <!-- Russian results list -->
   <div class="ru-results" id="ruResults"></div>
@@ -3254,6 +3291,10 @@
         <button class="fav-tab active" id="favTabWords" onclick="switchFavTab('words')">Слова</button>
         <button class="fav-tab" id="favTabGram" onclick="switchFavTab('grammar')">Грамматика</button>
       </div>
+      <span class="view-toggle fav-view-toggle" id="favViewToggle">
+        <button class="view-toggle-btn active" data-v="list" onclick="setFavView('list')">список</button>
+        <button class="view-toggle-btn" data-v="graph" onclick="setFavView('graph')">граф</button>
+      </span>
     </div>
     <div class="fav-search-wrap">
       <input type="text" class="fav-search" id="favSearch" placeholder="Поиск по избранному…" oninput="filterFavList()" autocomplete="off" spellcheck="false">
@@ -3352,8 +3393,14 @@
 
     <!-- Related words -->
     <div class="related-words-section" id="relatedWordsSection" style="display:none">
-      <div class="section-label">Parole correlate</div>
+      <div class="section-label">Parole correlate
+        <span class="view-toggle" id="relatedViewToggle">
+          <button class="view-toggle-btn" data-v="graph" onclick="setRelatedView('graph')">граф</button>
+          <button class="view-toggle-btn" data-v="list" onclick="setRelatedView('list')">список</button>
+        </span>
+      </div>
       <div class="related-words" id="relatedWordsList"></div>
+      <div class="related-graph" id="relatedGraph" style="display:none"></div>
     </div>
 
   </div>
@@ -3520,6 +3567,7 @@ async function sbGet(table, key) {
 async function sbGetTopic(table, key) { return sbGet(table, key); }
 
 async function sbSave(table, keyCol, keyVal, data) {
+  if (table === 'dictionary' && typeof _mapInfos !== 'undefined') _mapInfos = null; // карта слов подтянет новое слово при следующем открытии
   try {
     const res = await fetch(`${SB_URL}/rest/v1/${table}`, {
       method: "POST",
@@ -3713,7 +3761,7 @@ const TRACKABLE = ['result','rulist','grammar','favorites','initial'];
 function showState(state) {
   // Push history when moving away from a meaningful state to another
   // Don't push if we're going to loading/error (transient states), or if suppressed
-  const pushable = ['result','rulist','grammar','favorites','cards','initial'];
+  const pushable = ['result','rulist','grammar','favorites','cards','graph','initial'];
   if (!_suppressHistory && state !== _currentState && pushable.includes(_currentState)) {
     const savedState = _currentState;
     const savedMode = currentMode;
@@ -3759,6 +3807,12 @@ function showState(state) {
         renderRuResults(query, results, ruTitle);
         _suppressHistory = true; showState('rulist'); _suppressHistory = false;
       });
+    } else if (savedState === 'graph') {
+      pushHistory(() => {
+        currentMode = 'dict';
+        applyModeUI('dict');
+        _suppressHistory = true; openWordMap(); _suppressHistory = false;
+      });
     } else if (savedState === 'cards') {
       pushHistory(() => {
         currentMode = 'cards';
@@ -3778,7 +3832,7 @@ function showState(state) {
     } else if (savedState === 'initial') {
       // Поиск всегда идёт через 'loading', поэтому фиксируем начальный экран
       // и при уходе в loading — иначе кнопка «Назад» после первого поиска не появится
-      if (['result','rulist','grammar','favorites','cards','loading'].includes(state)) {
+      if (['result','rulist','grammar','favorites','cards','graph','loading'].includes(state)) {
         const m = savedMode;
         pushHistory(() => {
           currentMode = m;
@@ -3791,7 +3845,7 @@ function showState(state) {
   }
 
   _currentState = state;
-  ['initialMsg','loadingMsg','errorMsg','resultCard','ruResults','grammarCard','favScreen','cardsScreen']
+  ['initialMsg','loadingMsg','errorMsg','resultCard','ruResults','grammarCard','favScreen','cardsScreen','graphScreen']
     .forEach(id => $(id).classList.remove('active'));
   if (state === 'initial')        { $('initialMsg').classList.add('active'); renderHistory(); hideInlineHistory(); }
   else if (state === 'loading')   { $('loadingMsg').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
@@ -3801,6 +3855,7 @@ function showState(state) {
   else if (state === 'grammar')   { $('grammarCard').classList.add('active'); $('historySection').style.display='none'; renderInlineHistory('grammar'); }
   else if (state === 'favorites') { $('favScreen').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
   else if (state === 'cards')     { $('cardsScreen').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
+  else if (state === 'graph')     { $('graphScreen').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
 
   updateBackBtn();
 }
@@ -5003,8 +5058,10 @@ function renderEntry(e) {
     // rounded bottom only if no conjugation
     relSec.className = 'related-words-section' + (e.isVerb ? ' has-conj' : '');
     relSec.style.display = 'block';
+    applyRelatedView(e);
   } else {
     relSec.style.display = 'none';
+    destroyRelatedGraph();
   }
 
   const conjSection = $('conjugationSection');
@@ -5217,6 +5274,7 @@ function switchFavTab(tab) {
   const s = $('favSearch'); if (s) s.value = '';
   cachedFavRows = [];
   favSelected.clear();
+  const vt = $('favViewToggle'); if (vt) vt.style.display = tab === 'words' ? '' : 'none';
   renderFavList(tab);
 }
 
@@ -5301,9 +5359,106 @@ function addEntryToDeck() {
   Cards.addEntries([currentDictEntry]);
 }
 
+// ── Графы: связанные слова, карта всех слов, избранное ──────────────────────
+const graphHandlers = () => ({
+  onOpen: w => { $('searchInput').value = w; lookupWord(w); },
+  onTap: w => showBottomSheet(w, false),
+  onHover: (w, x, y) => showPreview(null, w, false, x, y),
+  onHoverEnd: () => hidePreview()
+});
+let _relatedGraph = null, _relatedGraphKey = '';
+const getRelatedView = () => { try { return localStorage.getItem('dizionario_related_view') || 'graph'; } catch(e) { return 'graph'; } };
+const getRelatedDepth = () => { try { return parseInt(localStorage.getItem('dizionario_related_depth')) || 2; } catch(e) { return 2; } };
+function setRelatedView(v) {
+  try { localStorage.setItem('dizionario_related_view', v); } catch(e) {}
+  if (currentDictEntry) applyRelatedView(currentDictEntry);
+}
+function destroyRelatedGraph() {
+  if (_relatedGraph) { _relatedGraph.destroy(); _relatedGraph = null; }
+  _relatedGraphKey = '';
+  const g = $('relatedGraph'); if (g) g.innerHTML = '';
+}
+function applyRelatedView(e) {
+  const view = window.WordGraph ? getRelatedView() : 'list';
+  document.querySelectorAll('#relatedViewToggle .view-toggle-btn').forEach(b => b.classList.toggle('active', b.dataset.v === view));
+  $('relatedWordsList').style.display = view === 'list' ? '' : 'none';
+  $('relatedGraph').style.display = view === 'graph' ? 'block' : 'none';
+  if (view !== 'graph') { destroyRelatedGraph(); return; }
+  // Статья перерисовывается при дозагрузке; граф пересобираем, только если сменилось слово или список связей
+  const key = (e.word || '').toLowerCase() + '|' + (e.relatedWords || []).join(',');
+  if (_relatedGraph && _relatedGraphKey === key) return;
+  renderRelatedGraph(e, getRelatedDepth());
+}
+async function renderRelatedGraph(e, depth) {
+  destroyRelatedGraph();
+  const word = (e.word || '').toLowerCase();
+  _relatedGraphKey = word + '|' + (e.relatedWords || []).join(',');
+  _relatedGraph = WordGraph.create($('relatedGraph'), {
+    height: window.innerWidth < 640 ? '360px' : '440px', depthControl: true, depth,
+    onDepth: d => { try { localStorage.setItem('dizionario_related_depth', d); } catch(e2) {} if (currentDictEntry) renderRelatedGraph(currentDictEntry, d); },
+    extraButtons: '<button class="wg-btn" onclick="openWordMap()" title="Все открытые слова">вся карта</button>',
+    hint: 'В центре это слово, вокруг его связи, дальше связи уже открытых слов. Серые точки ещё не открывались. Тяните, крутите колесо, кликайте.',
+    ...graphHandlers()
+  });
+  const g = _relatedGraph;
+  try {
+    const data = await WordGraph.buildAround(e, depth);
+    if (g === _relatedGraph) g.setData(data.nodes, data.edges, { center: word });
+  } catch(err) { if (g === _relatedGraph) g.setLoading('Не удалось загрузить связи: ' + err.message); }
+}
+
+// Карта всех открытых слов
+let _mapGraph = null, _mapInfos = null;
+function openWordMap() {
+  if (currentMode !== 'dict') { currentMode = 'dict'; applyModeUI('dict'); }
+  showState('graph');
+  if (_mapGraph) { _mapGraph.destroy(); _mapGraph = null; }
+  const box = $('graphScreen');
+  box.innerHTML = '<div class="graph-screen-head"><div class="cards-title">Карта слов</div><div class="cards-head-deck">все открытые слова и связи между ними</div></div><div id="mapGraphBox"></div>';
+  _mapGraph = WordGraph.create($('mapGraphBox'), {
+    height: window.innerWidth < 640 ? '65vh' : '70vh', neighborsToggle: true, neighbors: false,
+    onNeighbors: v => loadWordMap(v),
+    hint: 'Каждая точка это открытое слово, линии это связи из статей. Слова одной темы сбиваются в кучки. Тяните, крутите колесо, кликайте.',
+    ...graphHandlers()
+  });
+  loadWordMap(false);
+}
+async function loadWordMap(withNeighbors) {
+  const g = _mapGraph; if (!g) return;
+  try {
+    if (!_mapInfos) _mapInfos = await WordGraph.loadAllWords();
+    const data = WordGraph.buildGraph(_mapInfos, { neighbors: withNeighbors });
+    if (g === _mapGraph) g.setData(data.nodes, data.edges);
+  } catch(err) { if (g === _mapGraph) g.setLoading('Не удалось загрузить: ' + err.message); }
+}
+
+// Избранное: список или граф
+let favView = 'list', _favGraph = null;
+function setFavView(v) {
+  favView = v;
+  document.querySelectorAll('#favViewToggle .view-toggle-btn').forEach(b => b.classList.toggle('active', b.dataset.v === v));
+  filterFavList();
+}
+function renderFavGraph(rows) {
+  const list = $('favList');
+  if (_favGraph) { _favGraph.destroy(); _favGraph = null; }
+  list.innerHTML = '<div id="favGraphBox"></div>';
+  let neighbors = false;
+  const build = () => { const data = WordGraph.buildFromEntries(rows.map(r => r.data), { neighbors }); _favGraph.setData(data.nodes, data.edges); };
+  _favGraph = WordGraph.create($('favGraphBox'), {
+    height: window.innerWidth < 640 ? '60vh' : '65vh', neighborsToggle: true, neighbors,
+    onNeighbors: v => { neighbors = v; build(); },
+    hint: 'Связи между избранными словами. Включите соседей, чтобы увидеть, к чему они ведут.',
+    ...graphHandlers()
+  });
+  build();
+}
+
 function renderFavRows(rows, tab) {
   const list = $('favList');
   const keyCol = tab === 'words' ? 'word' : 'topic';
+  if (tab === 'words' && favView === 'graph' && window.WordGraph) { _favVisibleKeys = []; updateFavToolbar(); renderFavGraph(rows); return; }
+  if (_favGraph) { _favGraph.destroy(); _favGraph = null; }
   list.innerHTML = '';
   _favVisibleKeys = tab === 'words' ? rows.map(r => r.word) : [];
   // Выделение не должно ссылаться на слова, которых в списке уже нет
@@ -6037,5 +6192,7 @@ async function installApp() {
 </script>
 <!-- Колоды и карточки (Le Carte) — отдельный модуль, использует функции словаря выше -->
 <script src="cards.js"></script>
+<!-- Граф слов: связанные слова, карта всех слов, граф избранного -->
+<script src="graph.js"></script>
 </body>
 </html>
