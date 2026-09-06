@@ -113,7 +113,7 @@
     container.innerHTML = `
       <div class="wg-bar">
         <input class="wg-search" placeholder="найти слово…" autocomplete="off" spellcheck="false">
-        <select class="wg-mode" title="Чем раскрашивать узлы"><option value="cat">цвет: тема</option><option value="pos">цвет: часть речи</option></select>
+        <select class="wg-mode" title="Чем раскрашивать узлы"><option value="cat">colore: tema</option><option value="pos">colore: parte del discorso</option></select>
         ${opts.depthControl ? `<label class="wg-inline">кольца <select class="wg-depth">${[1, 2, 3, 4, 5].map(n => `<option value="${n}" ${n === (opts.depth || 2) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>` : ''}
         ${opts.neighborsToggle ? `<label class="wg-inline"><input type="checkbox" class="wg-neigh" ${opts.neighbors ? 'checked' : ''}> ещё не открытые соседи</label>` : ''}
         <button class="wg-btn wg-fit" title="Вписать всё">⤢</button>
@@ -201,8 +201,10 @@
       const counts = {}; G.nodes.forEach(n => { const k = keyOf(n); counts[k] = (counts[k] || 0) + 1; });
       const colors = G.mode === 'cat' ? CAT_COLORS : POS_COLORS, labels = G.mode === 'cat' ? CAT_LABELS : POS_LABELS;
       const keys = Object.keys(colors).filter(k => counts[k]);
-      legendEl.innerHTML = keys.map(k => `<button class="wg-chip ${G.hidden.has(k) ? 'off' : ''}" data-k="${k}"><i style="background:${colors[k]}"></i>${labels[k] || k}<span>${counts[k]}</span></button>`).join('')
-        + (keys.length > 1 ? `<button class="wg-chip-all" data-all="1">все</button><button class="wg-chip-all" data-all="0">ничего</button>` : '');
+      // Подписи по-итальянски (это и есть тег слова), русский перевод во всплывающей подсказке
+      const it = k => k === '?' ? 'non aperte' : k;
+      legendEl.innerHTML = keys.map(k => `<button class="wg-chip ${G.hidden.has(k) ? 'off' : ''}" data-k="${k}" title="${labels[k] || k}"><i style="background:${colors[k]}"></i>${it(k)}<span>${counts[k]}</span></button>`).join('')
+        + (keys.length > 1 ? `<button class="wg-chip-all" data-all="1">tutte</button><button class="wg-chip-all" data-all="0">nessuna</button>` : '');
       legendEl.querySelectorAll('.wg-chip').forEach(b => b.onclick = () => { const k = b.dataset.k; if (G.hidden.has(k)) G.hidden.delete(k); else G.hidden.add(k); buildLegend(); G.alpha = Math.max(G.alpha, 0.3); loop(); });
       legendEl.querySelectorAll('.wg-chip-all').forEach(b => b.onclick = () => { if (b.dataset.all === '1') G.hidden.clear(); else keys.forEach(k => G.hidden.add(k)); buildLegend(); G.alpha = Math.max(G.alpha, 0.3); loop(); });
     }

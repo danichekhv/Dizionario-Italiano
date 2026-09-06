@@ -666,6 +666,17 @@
   body.mode-grammar .fav-view-toggle { display: none !important; }
   @media (max-width: 640px) { .wg-hint { display: none; } .wg-bar { padding: 8px; gap: 6px; } .wg-legend { padding: 6px 8px; } }
 
+  /* Стартовый экран на десктопе должен помещаться в экран целиком: отступы плотнее */
+  @media (min-width: 641px) {
+    .container { padding-top: 24px; }
+    header { margin-bottom: 30px; }
+    .app-nav { margin-bottom: 24px; }
+    .lang-toggle { margin-bottom: 14px; }
+    .search-area { margin-bottom: 24px; }
+    #initialMsg { padding: 20px 20px 28px; }
+    .wordmap-btn { margin-top: 16px; }
+  }
+
   .cards-setup { background: white; border: 1.5px solid var(--border); border-radius: 6px; padding: 22px 26px; }
   .cards-setup p { line-height: 1.5; margin-bottom: 12px; }
   .cards-sql { background: #1e1a14; color: #e8ddc8; font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 14px; border-radius: 6px; overflow: auto; max-height: 320px; white-space: pre; }
