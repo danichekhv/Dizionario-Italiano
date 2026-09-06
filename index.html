@@ -104,7 +104,7 @@
     </button>
     <button class="app-nav-btn" id="navCards" onclick="switchMode('cards')">
       <span class="nav-icon" data-icon="layers"></span>
-      <span><span class="nav-article">Le </span><span class="nav-label-it">Carte</span></span>
+      <span><span class="nav-article">Le </span><span class="nav-label-it">Carte</span><span class="nav-badge" id="navCardsBadge" style="display:none"></span></span>
     </button>
   </nav>
 
@@ -149,6 +149,7 @@
   <div class="state-msg active" id="initialMsg">
     <div id="initialMsgText">Inserisci una parola italiana per iniziare</div>
     <div style="font-size:13px;margin-top:8px;color:var(--stone)" id="initialMsgSub">Введите итальянское слово для поиска</div>
+    <div class="home-due" id="homeDue" style="display:none"></div>
     <button class="wordmap-btn" onclick="openWordMap()" title="Все открытые слова и связи между ними"><span data-icon="graph"></span> Карта слов</button>
   </div>
 
@@ -301,7 +302,10 @@
     <div class="sheet-handle"></div>
   </div>
   <div class="sheet-content" id="sheetContent"></div>
-  <button class="sheet-open-btn" id="sheetOpenBtn">Открыть полную статью →</button>
+  <div class="sheet-actions">
+    <button class="sheet-open-btn sheet-add-btn" id="sheetAddBtn">В колоду</button>
+    <button class="sheet-open-btn" id="sheetOpenBtn">Открыть статью →</button>
+  </div>
 </div>
 
 <!-- Floating favorites button (mobile) -->

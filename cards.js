@@ -163,6 +163,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     return `${(d / 365).toFixed(1).replace('.0', '')} г.`;
   }
   const previewLabel = (card, r) => fmtInterval(schedule(card, r).dueMs - Date.now());
+  const pluralRu = (n, one, few, many) => { const m = n % 10, h = n % 100; return (m === 1 && h !== 11) ? one : (m >= 2 && m <= 4 && (h < 10 || h >= 20)) ? few : many; };
 
   // ── Очередь на сегодня ───────────────────────────────────────────────────────
   function buildQueue() {
@@ -540,11 +541,19 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       <div class="study-topbar">
         <button class="cards-back" onclick="goBack()" title="К колодам">←</button>
         <div class="cards-head-counts"><span class="c-new">${c.new}</span><span class="c-learn">${c.learn}</span><span class="c-due">${c.due}</span></div>
-        <div class="cards-head-deck">${esc(deck ? deck.name : '')}${S.tagFilter ? ` · #${esc(S.tagFilter)}` : ''}</div>
+        <div class="cards-head-deck">${esc(deck ? deck.name : 'все колоды')}${S.tagFilter ? ` · #${esc(S.tagFilter)}` : ''}</div>
         <button class="cards-undo ${S.undo ? '' : 'disabled'}" onclick="Cards.undo()" title="Отменить ответ">${svgIcon('undo')}</button>
       </div>`;
     if (!S.current) {
-      el.innerHTML = head + `<div class="study-body"><div class="cards-done"><div class="cards-done-mark">✓</div><div>На сегодня в этой колоде всё.</div><button class="cards-btn" onclick="goBack()">К колодам</button></div></div>`;
+      // Итог сессии: сколько прошли, доля верных, когда подойдут следующие
+      const s = S.session || { start: Date.now(), n: 0, again: 0 };
+      const scopeNotes = S.tagFilter ? notesInDeck(S.deckId).filter(n => (n.tags || []).includes(S.tagFilter)) : notesInDeck(S.deckId);
+      const now = Date.now();
+      const next = cardsOfNotes(scopeNotes).filter(k => k.state !== 'new' && k.dueMs > now).reduce((m, k) => Math.min(m, k.dueMs), Infinity);
+      const mins = Math.max(1, Math.round((now - s.start) / 60000));
+      const summary = s.n ? `<div class="study-summary">${s.n} ${pluralRu(s.n, 'карточка', 'карточки', 'карточек')} за ${mins} мин · верно ${Math.round((1 - s.again / s.n) * 100)}%</div>` : '';
+      const nextTxt = isFinite(next) ? `Следующие подойдут через ${fmtInterval(next - now)}` : (scopeNotes.length ? '' : 'Здесь пока нет карточек');
+      el.innerHTML = head + `<div class="study-body"><div class="cards-done"><div class="cards-done-mark">✓</div><div>На сегодня ${S.deckId ? 'в этой колоде' : 'по всем колодам'} всё.</div>${summary}${nextTxt ? `<div class="study-summary sub">${nextTxt}</div>` : ''}<button class="cards-btn" onclick="goBack()">К колодам</button></div></div>`;
       return;
     }
     const { n, front, answer } = cardFaces(S.current);
@@ -698,6 +707,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   function study(deckId, tag) {
     pushView('study');
     S.deckId = deckId; S.view = 'study'; S.undo = null;
+    S.session = { start: Date.now(), n: 0, again: 0 }; // для итога в конце сессии
     if (tag !== undefined) S.tagFilter = tag;
     buildQueue(); nextCard(); render();
   }
@@ -723,6 +733,8 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     S.reviews.push(local);
     if (!S.reviewsMissing) sb('reviews', { method: 'POST', body: rev }).then(rows => { if (rows && rows[0]) local.id = rows[0].id; }).catch(e => { if (isMissingTable(e)) S.reviewsMissing = true; });
     S.undo = { before, card: S.current, review: local };
+    if (S.session) { S.session.n++; if (rating === 1) S.session.again++; }
+    if (window.refreshHomeDue) refreshHomeDue();
     const payload = { state: after.state, step: after.step, due: after.due, interval_days: after.interval_days, ease: after.ease, reps: after.reps, lapses: after.lapses };
     sb(`cards?id=eq.${S.current.id}`, { method: 'PATCH', body: payload }).catch(e => showToast('⚠ Не сохранилось: ' + e.message));
     nextCard(); render();
@@ -794,7 +806,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const BATCH = 15; let used = null;
     for (let i = 0; i < need.length; i += BATCH) {
       const chunk = need.slice(i, i + BATCH);
-      S.build.status = `Модель дописывает недостающее: ${Math.min(i + BATCH, need.length)} из ${need.length}…`; render();
+      if (S.build) { S.build.status = `Модель дописывает недостающее: ${Math.min(i + BATCH, need.length)} из ${need.length}…`; render(); }
       const list = chunk.map(x => ({ word: x.word, isPhrase: x.isPhrase || undefined, partOfSpeech: x.pos || undefined, englishGlosses: x.glosses.length ? x.glosses : undefined,
         missing: fieldsOf(x).filter(f => !x[f]) }));
       const prompt = `You are an expert Italian lexicographer. For each Italian item below, provide ONLY the fields listed in "missing".
@@ -946,13 +958,27 @@ ${JSON.stringify(list)}`;
     const skipped = _pendingNotes.length - fresh.length;
     if (!fresh.length) { showToast('Эти слова уже есть в колоде'); closePicker(); return; }
     try {
+      // Слово из подсказки приходит с одним переводом: пример, значение и транскрипцию добираем
+      // тем же путём, что при добавлении списком (кэш → Викисловарь → модель)
+      const thin = fresh.filter(n => !n.example || !n.meaning || !n.translation || !n.phonetic);
+      if (thin.length) { showToast('Дополняю карточки…'); await enrichNotes(thin); }
       const notes = await sb('notes', { method: 'POST', body: fresh.map(n => ({ deck_id: deckId, ...n, tags })) });
       const cards = await sb('cards', { method: 'POST', body: notes.flatMap(n => [{ note_id: n.id, direction: 'it' }, { note_id: n.id, direction: 'ru' }]) });
       S.notes.push(...notes); S.cards.push(...cards.map(c => ({ ...c, dueMs: Date.parse(c.due) || 0 })));
       showToast(`✓ ${notes.length} слов → ${deckPath(deckId)}${skipped ? ` (${skipped} уже были)` : ''}`);
       closePicker();
       if (_currentState === 'cards') render();
+      if (window.refreshHomeDue) refreshHomeDue();
     } catch (e) { showToast('⚠ ' + e.message); }
+  }
+  async function enrichNotes(notes) {
+    const items = await Promise.all(notes.map(n => lookupOne({ word: n.word, translation: n.translation || '', example: n.example || '', meaning: n.meaning || '' }).catch(() => null)));
+    await completeWithLlm(items.filter(Boolean));
+    notes.forEach((n, i) => {
+      const d = items[i]; if (!d) return;
+      n.word = d.word || n.word; n.pos = n.pos || d.pos || '';
+      ['translation', 'phonetic', 'example', 'meaning'].forEach(f => { if (!n[f] && d[f]) n[f] = d[f]; });
+    });
   }
   async function pickNewDeck() {
     const name = prompt('Название новой колоды:'); if (!name || !name.trim()) return;
@@ -1054,6 +1080,16 @@ ${JSON.stringify(list)}`;
     newDeck, renameDeck, deleteDeck,
     setNewPerDay(v) { try { localStorage.setItem(NEW_PER_DAY_KEY, String(Math.max(0, parseInt(v) || 0))); } catch (e) {} render(); },
     study(id) { study(id, S.view === 'browse' ? S.tagFilter : ''); },
+    // Все колоды разом: deckId = null, notesInDeck(null) обходит дерево от корня
+    studyAll() { if (window.Auth && !Auth.require('Войдите, чтобы учить карточки')) return; if (currentMode !== 'cards') { currentMode = 'cards'; applyModeUI('cards'); showState('cards'); } (S.loaded ? Promise.resolve() : loadAll()).then(() => study(null, '')); },
+    // Сводка на сегодня для главной: к повторению и новых (в пределах дневного лимита)
+    async dueSummary() {
+      if (!(window.Auth && Auth.user())) return null;
+      if (!S.loaded) await loadAll();
+      if (S.missingTables) return null;
+      const c = counts(S.cards);
+      return { learn: c.learn, due: c.due, newToday: Math.min(c.new, newPerDay()) };
+    },
     reveal, answer, undo,
     openAdd(id) { pushView('add'); S.deckId = id; S.view = 'add'; S.build = null; render(); },
     buildFromText, importFile, saveBuild,

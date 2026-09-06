@@ -2574,7 +2574,8 @@ function renderPreviewDict(popup, d) {
   popup.innerHTML = `
     ${previewHeaderHtml(d, 'wp')}
     <div class="wp-translation">${previewRussianHtml(d)}</div>
-    ${d.english?.main ? `<div class="wp-en">${d.english.main}</div>` : ''}`;
+    ${d.english?.main ? `<div class="wp-en">${d.english.main}</div>` : ''}
+    <button class="wp-add" onclick="addPreviewToDeck()">${svgIcon('deck')} в колоду</button>`;
 }
 
 // Быстрые данные для превью: кэш Supabase и Викисловарь запрашиваем параллельно.
@@ -2678,7 +2679,7 @@ If not a real Italian word return {"word":null}.`;
 }
 
 function showPreview(el, word, isGrammar, x, y) {
-  clearTimeout(_previewTimeout);
+  clearTimeout(_previewTimeout); clearTimeout(_hideTimer);
   const popup = $('wordPreview');
   popup.className = 'word-preview' + (isGrammar ? ' grammar-preview' : '');
   popup.innerHTML = `<div class="wp-loading">…</div>`;
@@ -2744,11 +2745,14 @@ function hidePreview() {
 // ноутбук с сенсорным экраном и мышью должен работать как десктоп
 const isTouchDevice = () => window.matchMedia('(hover: none) and (pointer: coarse)').matches;
 
-// Desktop: hover preview
+// Desktop: hover preview. Подсказка не исчезает, пока курсор на ней самой: в ней есть кнопка «в колоду»
+let _hideTimer = 0;
+function scheduleHidePreview() { clearTimeout(_hideTimer); _hideTimer = setTimeout(hidePreview, 250); }
 document.addEventListener('mouseover', (e) => {
   if (isTouchDevice()) return;
+  if (e.target.closest('#wordPreview')) { clearTimeout(_hideTimer); return; }
   const el = e.target.closest('.clickable-word, .related-word-btn, .history-chip');
-  if (!el) { hidePreview(); return; }
+  if (!el) { scheduleHidePreview(); return; }
   const word = el.textContent.trim();
   if (!word || word.length < 3) return;
   const isGrammar = el.classList.contains('history-chip') && currentMode === 'grammar';
@@ -2757,6 +2761,7 @@ document.addEventListener('mouseover', (e) => {
 
 document.addEventListener('mousemove', (e) => {
   if (isTouchDevice()) return;
+  if (e.target.closest('#wordPreview')) return; // над самой подсказкой её не двигаем
   const popup = $('wordPreview');
   if (popup.classList.contains('visible')) {
     positionPreview(popup, e.clientX, e.clientY);
@@ -2766,8 +2771,44 @@ document.addEventListener('mousemove', (e) => {
 document.addEventListener('mouseout', (e) => {
   if (isTouchDevice()) return;
   const el = e.target.closest('.clickable-word, .related-word-btn, .history-chip');
-  if (el) hidePreview();
+  if (el) scheduleHidePreview();
 });
+$('wordPreview').addEventListener('mouseleave', hidePreview);
+
+// ── «В колоду» из подсказки и шторки ──────────────────────────────────────────
+// Берём полную статью из кэша, если она есть; иначе лёгкие данные подсказки, а пример, значение
+// и транскрипцию колода доберёт сама при добавлении. Колода выбирается каждый раз явно.
+async function addWordToDeck(word, light) {
+  if (!word || !window.Cards) return;
+  if (window.Auth && !Auth.require('Войдите, чтобы добавлять слова в колоды')) return;
+  hidePreview(); hideBottomSheet();
+  const lemma = (light && light.word) || word;
+  const full = await sbGet('dictionary', lemma.toLowerCase());
+  Cards.addEntries([full || Object.assign({ word: lemma }, light || {})]);
+}
+function addPreviewToDeck() {
+  const word = $('wordPreview').dataset.word || '';
+  addWordToDeck(word, (_previewCache['d:' + word.toLowerCase()] || {}).data);
+}
+const _sheetAddBtn = $('sheetAddBtn');
+if (_sheetAddBtn) _sheetAddBtn.addEventListener('click', () => addWordToDeck(_sheetWord, (_previewCache['d:' + _sheetWord.toLowerCase()] || {}).data));
+
+// ── Сегодняшние карточки: кнопка на главной и бейдж на вкладке Le Carte ──────
+async function refreshHomeDue() {
+  const box = $('homeDue'), badge = $('navCardsBadge');
+  const hide = () => { if (box) box.style.display = 'none'; if (badge) badge.style.display = 'none'; };
+  if (!(window.Auth && Auth.user() && window.Cards && Cards.dueSummary)) { hide(); return; }
+  const s = await Cards.dueSummary().catch(() => null);
+  if (!s) { hide(); return; }
+  const repeat = s.learn + s.due, total = repeat + s.newToday;
+  if (badge) { badge.textContent = total; badge.style.display = total ? '' : 'none'; }
+  if (!box) return;
+  if (!total) { hide(); if (badge) badge.style.display = 'none'; return; }
+  const parts = [repeat ? `${repeat} к повторению` : '', s.newToday ? `${s.newToday} новых` : ''].filter(Boolean).join(' · ');
+  box.innerHTML = `<button class="cards-btn primary" onclick="Cards.studyAll()">Учить сегодняшнее · ${total}</button><div class="home-due-sub">${parts}</div>`;
+  box.style.display = '';
+}
+window.addEventListener('load', () => refreshHomeDue());
 
 // ── Bottom sheet (mobile) ─────────────────────────────────────────────────────
 let _sheetWord = '';
@@ -2787,6 +2828,7 @@ function showBottomSheet(word, isGrammar) {
   sheet.className = 'bottom-sheet' + (isGrammar ? ' grammar-sheet' : '');
   content.innerHTML = `<div class="sheet-wp-loading">Загрузка…</div>`;
   openBtn.style.display = 'block';
+  const addBtn = $('sheetAddBtn'); if (addBtn) addBtn.style.display = isGrammar ? 'none' : 'block';
 
   // Show
   requestAnimationFrame(() => {

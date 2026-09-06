@@ -247,6 +247,7 @@ grant execute on function import_shared_deck(text) to authenticated;`;
   async function signOut(silent) {
     if (session && !silent) authFetch('POST', 'logout', {}, session.access_token).catch(() => {});
     session = null; clearTimeout(refreshTimer); save(); apply();
+    if (window.refreshHomeDue) refreshHomeDue();
     showToast('Вы вышли из аккаунта');
     if (typeof _currentState !== 'undefined' && ['favorites', 'cards', 'graph'].includes(_currentState)) switchMode('dict');
   }
@@ -258,6 +259,7 @@ grant execute on function import_shared_deck(text) to authenticated;`;
     showToast('✓ Вы вошли как ' + session.user.email);
     if (window.Cards && Cards.reload) await Cards.reload().catch(() => {});
     if (window.Cards && Cards.processPendingShare) Cards.processPendingShare(); // ссылка на колоду, открытая до входа
+    if (window.refreshHomeDue) refreshHomeDue(); // счётчик «учить сегодняшнее» на главной
   }
   async function claimOrphans() {
     try { await fetch(`${SB_URL}/rest/v1/rpc/claim_orphans`, { method: 'POST', headers: { ...SB_H, 'Content-Type': 'application/json' }, body: '{}' }); }
