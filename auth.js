@@ -7,6 +7,10 @@
   const SESSION_KEY = 'dizionario_session';
   const AUTH = `${SB_URL}/auth/v1`;
   let session = null, refreshTimer = 0, setupMissing = false;
+  // SQL для настройки базы видит только владелец проекта. Это лишь скрытие кнопки:
+  // сам текст скрипта лежит в этом файле и ничего секретного не содержит.
+  const ADMIN_EMAILS = ['danichek.hv@gmail.com'];
+  const isAdmin = () => !!(session && session.user && ADMIN_EMAILS.includes(String(session.user.email || '').toLowerCase()));
 
   window.DIZ_SETUP_SQL = `-- Dizionario · таблицы, профили и права доступа. Скрипт можно запускать повторно.
 -- Supabase → SQL Editor → New query → вставить → Run.
@@ -308,13 +312,13 @@ grant execute on function import_shared_deck(text) to authenticated;`;
   function renderUi() {
     const box = document.getElementById('authBox'); if (!box) return;
     const esc = s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const sqlNote = setupMissing ? `<div class="cards-note">В Supabase ещё нет таблиц для аккаунтов. Выполните SQL один раз. <button class="cards-btn" onclick="Auth.showSql()">Показать SQL</button></div>` : '';
+    const sqlNote = setupMissing ? `<div class="cards-note">В Supabase ещё нет таблиц для аккаунтов.${isAdmin() ? ' Выполните SQL один раз. <button class="cards-btn" onclick="Auth.showSql()">Показать SQL</button>' : ' Обратитесь к владельцу сайта.'}</div>` : '';
     if (session) {
       box.innerHTML = `${sqlNote}<div class="auth-user">Вы вошли как <b>${esc(session.user.email)}</b></div>
         <div class="auth-actions">
           <button class="cards-btn" onclick="Auth.signOut()">Выйти</button>
           <button class="auth-link" onclick="Auth.changePasswordUi()">Сменить пароль</button>
-          <button class="auth-link" onclick="Auth.showSql()">SQL для базы</button>
+          ${isAdmin() ? '<button class="auth-link" onclick="Auth.showSql()">SQL для базы</button>' : ''}
         </div>`;
     } else {
       box.innerHTML = `${sqlNote}
@@ -325,7 +329,6 @@ grant execute on function import_shared_deck(text) to authenticated;`;
           <button class="cards-btn primary" onclick="Auth.signInUi()">Войти</button>
           <button class="cards-btn" onclick="Auth.signUpUi()">Создать аккаунт</button>
           <button class="auth-link" onclick="Auth.resetUi()">Забыли пароль?</button>
-          <button class="auth-link" onclick="Auth.showSql()">SQL для базы</button>
         </div>
         <div class="apikey-hint-small">Без входа словарь работает, но избранное, колоды и карта ваших слов доступны только после входа. Ключи ниже сохраняются в профиле и подхватываются на других устройствах.</div>`;
     }
@@ -353,6 +356,7 @@ grant execute on function import_shared_deck(text) to authenticated;`;
     try { await changePassword(p); showToast('✓ Пароль изменён'); } catch (e) { showToast('⚠ ' + e.message); }
   }
   function showSql() {
+    if (!isAdmin()) { showToast('SQL для базы доступен только владельцу сайта'); return; }
     let m = document.getElementById('sqlModal');
     if (!m) { m = document.createElement('div'); m.id = 'sqlModal'; m.className = 'cards-modal'; m.style.zIndex = '10001'; /* поверх экрана настроек (у него z-index 9999) */ m.addEventListener('click', e => { if (e.target === m) m.style.display = 'none'; }); document.body.appendChild(m); }
     m.innerHTML = `<div class="cards-modal-box wide"><div class="cards-title small">SQL для Supabase</div>
