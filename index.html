@@ -4149,6 +4149,26 @@ async function fetchFreeDictionary(word) {
   } catch(e) { console.warn('FreeDictionary error:', e); return null; }
 }
 
+// ── Многословные выражения (fare bella figura, in bocca al lupo) ─────────────
+// Кавычки из запроса убираем, апострофы оставляем (l'amico). Транскрипцию выражения не просим у модели:
+// в многословных выражениях она путает ударения. Собираем её из транскрипций отдельных слов
+// (Викисловарь, затем общий кэш); если хоть одного слова нет — оставляем пустой.
+const cleanQuery = w => String(w || '').replace(/["“”„«»‹›]/g, '').replace(/\s+/g, ' ').trim();
+const isPhrase = w => /\s/.test(cleanQuery(w));
+async function wordIpa(w) {
+  const fd = await fetchFreeDictionary(w).catch(() => null);
+  const p = fd && fd.entries.flatMap(en => en.pronunciations || []).find(p => p.type === 'ipa' && p.text);
+  if (p) return p.text;
+  const c = await sbGet('dictionary', w).catch(() => null);
+  return c && c.phonetic && !isPhrase(c.word || w) ? c.phonetic : '';
+}
+async function phrasePhonetic(phrase) {
+  const parts = cleanQuery(phrase).toLowerCase().split(' ').filter(Boolean);
+  const ipa = await Promise.all(parts.map(wordIpa));
+  if (ipa.some(x => !x)) return '';
+  return '/' + ipa.map(x => x.trim().replace(/^[\/\[]|[\/\]]$/g, '')).join(' ') + '/';
+}
+
 const FD_POS = {
   noun: 'sostantivo', 'proper noun': 'nome proprio', verb: 'verbo', adjective: 'aggettivo', adverb: 'avverbio',
   preposition: 'preposizione', conjunction: 'congiunzione', pronoun: 'pronome', article: 'articolo',
@@ -4586,7 +4606,8 @@ async function lookupWordHybrid(query, base) {
 
 // ── Поиск итальянского слова ──────────────────────────────────────────────────
 async function lookupWord(word, _depth = 0, opts = {}) {
-  if (!word.trim()) return;
+  word = cleanQuery(word);
+  if (!word) return;
   showState('loading');
   const prompt = `You are an expert Italian linguist. Given the Italian word "${word}", provide a complete dictionary entry in JSON format.
 Return ONLY valid JSON, no markdown, no explanation. Schema:
@@ -4636,6 +4657,10 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
     return;
   }
 
+  // Выражение из нескольких слов: у Викисловаря статьи нет, а общий промпт со спряжениями и родом
+  // тут только вредит — отдельная короткая ветка
+  if (isPhrase(word)) return lookupPhrase(word);
+
   // 2. Викисловарь: транскрипция, формы, спряжения, глоссы — быстро и без LLM
   const fd = await fetchFreeDictionary(word);
   const mapped = fd ? mapFreeDictionary(fd) : null;
@@ -4672,6 +4697,50 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
     console.error("lookupWord error:", err);
     const msg = err.message || '';
     handleApiError(msg);
+  }
+}
+
+// ── Устойчивое выражение ──────────────────────────────────────────────────────
+// Модель просим только о смысле: перевод, значение, пример, регистр. Без транскрипции, рода,
+// множественного числа и таблиц спряжения — их у выражения нет, а модель их всё равно выдумывает.
+async function lookupPhrase(phrase) {
+  const ipaJob = phrasePhonetic(phrase);
+  const prompt = `You are an expert Italian linguist. The user entered the Italian multi-word expression "${phrase}" (an idiom, collocation or set phrase).
+Return ONLY valid JSON, no markdown:
+{
+  "word": "the expression in its canonical citation form (verb in the infinitive, no quotes), or null if it is not a real Italian expression",
+  "partOfSpeech": "locuzione verbale / locuzione avverbiale / locuzione nominale / locuzione aggettivale / locuzione prepositiva / modo di dire / proverbio",
+  "category": "${CATEGORY_PROMPT}",
+  "literal": "word-for-word Russian gloss, only if it differs from the actual meaning, otherwise empty",
+  "russian": { "main": "idiomatic Russian equivalent (not word-for-word)", "alternatives": "2-3 alternatives semicolon-separated or empty" },
+  "english": { "main": "idiomatic English equivalent", "alternatives": "2-3 alternatives semicolon-separated or empty" },
+  "meanings": [ { "definition": "What the expression means, in Italian (1 sentence)", "example": "Natural Italian sentence using the whole expression" } ],
+  "register": "neutro / colloquiale / formale / volgare / letterario / regionale",
+  "relatedWords": ["3-5 related Italian words or expressions"]
+}
+meanings: 1-3 items, most frequent first. Do NOT include phonetic transcription, gender, plural or conjugation tables.`;
+  try {
+    const raw = await llmJson(prompt, 'dict');
+    if (!raw || !raw.word) { $('errorText').textContent = `"${phrase}" — espressione non trovata`; showState('error'); return; }
+    const entry = {
+      word: cleanQuery(raw.word) || phrase, partOfSpeech: raw.partOfSpeech || 'locuzione', category: raw.category || 'altro',
+      gender: null, phonetic: await ipaJob, singular: null, plural: null, conjugations: null,
+      russian: raw.russian || { main: '', alternatives: '' }, english: raw.english || { main: '', alternatives: '' },
+      meanings: Array.isArray(raw.meanings) ? raw.meanings.filter(m => m && m.definition) : [],
+      isNoun: false, isVerb: false, isPhrase: true,
+      literal: raw.literal || '', register: raw.register || '',
+      relatedWords: Array.isArray(raw.relatedWords) ? raw.relatedWords.filter(w => typeof w === 'string') : [],
+      llm: _lastDictLlm
+    };
+    const key = entry.word.toLowerCase(), queryKey = phrase.toLowerCase();
+    await sbSave('dictionary', 'word', key, entry);
+    if (queryKey !== key) await sbSave('dictionary', 'word', queryKey, entry);
+    renderEntry(entry);
+    showState('result');
+    addToHistory(entry.word, 'dict');
+  } catch (err) {
+    console.error('lookupPhrase error:', err);
+    handleApiError(err.message || '');
   }
 }
 
@@ -5046,7 +5115,10 @@ function renderEntry(e) {
   add.onclick = () => window.Auth && Auth.addTagUi(e.word, e.category);
   anchor.after(add);
   // Для глаголов вместо рода показываем вспомогательный глагол
-  $('wordGender').textContent = e.gender || (e.isVerb && e.auxiliary ? `ausiliare ${e.auxiliary}` : '');
+  // У выражения вместо рода — буквальный перевод и регистр
+  $('wordGender').textContent = e.isPhrase
+    ? [e.literal ? `букв. «${e.literal}»` : '', e.register && e.register !== 'neutro' ? e.register : ''].filter(Boolean).join(' · ')
+    : (e.gender || (e.isVerb && e.auxiliary ? `ausiliare ${e.auxiliary}` : ''));
   const alsoEl = $('wordAlso');
   if (e.alsoForms && e.alsoForms.length) {
     alsoEl.innerHTML = 'также форма слова: ' + e.alsoForms.map(l => {

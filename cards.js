@@ -588,7 +588,8 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       const delim = line.includes('\t') ? '\t' : (line.includes(';') ? ';' : (line.split(',').length > 1 ? ',' : null));
       const parts = delim ? line.split(delim).map(p => p.trim().replace(/^"|"$/g, '')) : [line];
       if (!parts[0] || /^(word|parola|слово)$/i.test(parts[0])) return; // заголовок CSV
-      items.push({ word: parts[0], translation: parts[1] || '', example: parts[2] || '', meaning: parts[3] || '', tags: parts[4] ? parts[4].split(/[,\s]+/).filter(Boolean) : [] });
+      const word = cleanQuery(parts[0]); if (!word) return; // кавычки внутри (fare "bella figura") убираем
+      items.push({ word, translation: parts[1] || '', example: parts[2] || '', meaning: parts[3] || '', tags: parts[4] ? parts[4].split(/[,\s]+/).filter(Boolean) : [] });
     });
     return items;
   }
@@ -596,8 +597,13 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   async function lookupOne(it) {
     const lw = it.word.toLowerCase();
     const d = { ...it, phonetic: '', pos: '', glosses: [], include: true, warn: '' };
+    const phrase = isPhrase(lw);
+    // Выражение из нескольких слов словари не знают: берём кэш статьи, транскрипцию собираем из слов,
+    // остальное (перевод, пример, значение) допишет модель — но уже без транскрипции
     const [cached, fd, ru] = await Promise.all([
-      sbGet('dictionary', lw).catch(() => null), fetchFreeDictionary(lw), fetchRuWiktionary(lw).catch(() => null)
+      sbGet('dictionary', lw).catch(() => null),
+      phrase ? null : fetchFreeDictionary(lw),
+      phrase ? null : fetchRuWiktionary(lw).catch(() => null)
     ]);
     if (cached) {
       d.word = cached.word || d.word; d.pos = cached.partOfSpeech || '';
@@ -606,6 +612,12 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       const m0 = (cached.meanings || [])[0] || {};
       d.example = d.example || m0.example || cached.example || '';
       d.meaning = d.meaning || m0.definition || cached.definition || '';
+    }
+    if (phrase) {
+      d.isPhrase = true; d.pos = d.pos || 'locuzione';
+      if (!d.phonetic) d.phonetic = await phrasePhonetic(lw).catch(() => '');
+      if (!cached) d.warn = 'выражение: перевод и пример допишет модель';
+      return d;
     }
     if (fd) {
       const m = mapFreeDictionary(fd, { light: true });
@@ -619,23 +631,26 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   }
 
   async function completeWithLlm(items) {
-    const need = items.filter(i => !i.translation || !i.phonetic || !i.example || !i.meaning);
+    // У выражений транскрипцию не просим: модель в них путает ударения, лучше пусто, чем неверно
+    const fieldsOf = x => x.isPhrase ? ['translation', 'example', 'meaning'] : ['translation', 'phonetic', 'example', 'meaning'];
+    const need = items.filter(i => fieldsOf(i).some(f => !i[f]));
     if (!need.length) return null;
     const BATCH = 15; let used = null;
     for (let i = 0; i < need.length; i += BATCH) {
       const chunk = need.slice(i, i + BATCH);
       S.build.status = `Модель дописывает недостающее: ${Math.min(i + BATCH, need.length)} из ${need.length}…`; render();
-      const list = chunk.map(x => ({ word: x.word, partOfSpeech: x.pos || undefined, englishGlosses: x.glosses.length ? x.glosses : undefined,
-        missing: ['translation', 'phonetic', 'example', 'meaning'].filter(f => !x[f]) }));
-      const prompt = `You are an expert Italian lexicographer. For each Italian word below, provide ONLY the fields listed in "missing".
+      const list = chunk.map(x => ({ word: x.word, isPhrase: x.isPhrase || undefined, partOfSpeech: x.pos || undefined, englishGlosses: x.glosses.length ? x.glosses : undefined,
+        missing: fieldsOf(x).filter(f => !x[f]) }));
+      const prompt = `You are an expert Italian lexicographer. For each Italian item below, provide ONLY the fields listed in "missing".
 Fields: "translation" = primary Russian translation (1-3 words, alternatives after ";" allowed), "phonetic" = IPA with ˈ before the stressed syllable, "example" = one natural Italian sentence using the word, "meaning" = short definition in Italian (1 sentence).
+Items with "isPhrase": true are multi-word expressions (idioms, collocations, set phrases): "translation" = the idiomatic Russian equivalent, not word-for-word; "meaning" = what the whole expression means; "example" = a natural sentence using the whole expression. Never add a phonetic for them.
 Return ONLY a JSON array of objects {"word": "...", ...fields}, in the same order, no markdown.
 ${JSON.stringify(list)}`;
       try {
         const res = await llmJson(prompt, 'dict');
         const arr = Array.isArray(res) ? res : (res && Array.isArray(res.items) ? res.items : []);
         arr.forEach(r => { const t = chunk.find(x => x.word.toLowerCase() === String(r.word || '').toLowerCase()) || chunk[arr.indexOf(r)]; if (!t) return;
-          ['translation', 'phonetic', 'example', 'meaning'].forEach(f => { if (!t[f] && r[f]) t[f] = String(r[f]); }); });
+          fieldsOf(t).forEach(f => { if (!t[f] && r[f]) t[f] = String(r[f]); }); });
         used = _lastDictLlm;
       } catch (e) { showToast('⚠ Модель не ответила: ' + e.message); }
     }
