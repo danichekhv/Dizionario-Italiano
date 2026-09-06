@@ -411,7 +411,8 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   // ── Cloze: пример с пропуском и проверка введённого ответа ───────────────────
   // Слово в примере стоит в какой-то форме (cercare → cercando), поэтому ищем по основе:
   // отбрасываем окончание леммы и берём токены, начинающиеся с неё.
-  const stripAccents = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+  // Ударения снимаем только с латиницы: в кириллице «й» раскладывается на «и» + значок, а это разные буквы
+  const stripAccents = s => String(s || '').replace(/[A-Za-zÀ-ÿ]+/g, w => w.normalize('NFD').replace(/[̀-ͯ]/g, ''));
   const normAns = s => stripAccents(String(s || '').toLowerCase().replace(/ё/g, 'е')).replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
   const IT_ARTICLE = /^(il|lo|la|l|i|gli|le|un|uno|una|del|della|di|a|da|in|con|su|per)\s+/;
   function itStem(word) {
@@ -484,14 +485,52 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     // точное совпадение с любым вариантом — без учёта регистра, знаков препинания, ударений и артикля
     let best = variants.find(v => { const nv = normAns(v); return nv === t || nv === tBare || nv.replace(IT_ARTICLE, '') === tBare; });
     if (best) return { ok: true, near: false, best, ...charDiff(typed.trim(), best) };
+    // Несколько вариантов подряд («смешной забавный», «смешной, забавный»): разбираем ответ на куски,
+    // каждый из которых — один из вариантов перевода (вариант может быть из нескольких слов)
+    const multi = segmentByVariants(t, typed, variants);
+    if (multi) return multi;
     // иначе ближайший вариант по длине общей подпоследовательности; одна опечатка в длинном слове — «почти»
     let bestScore = -1;
     variants.forEach(v => { const d = charDiff(t, normAns(v)); const score = d.correctOut.filter(x => x.cls === 'ok').length / Math.max(t.length, normAns(v).length); if (score > bestScore) { bestScore = score; best = v; } });
     if (!best) return null;
     const d = charDiff(typed.trim(), best);
-    const errors = d.typedOut.filter(x => x.cls !== 'ok').length + d.correctOut.filter(x => x.cls === 'miss').length;
-    const near = normAns(best).length >= 5 && errors <= 2;
+    // Замена буквы даёт «лишняя + пропущенная», то есть 2; «почти» — одна замена или пара пропусков в слове от 4 букв
+    const errors = d.typedOut.filter(x => x.cls !== 'ok').length;
+    const near = normAns(best).length >= 4 && errors <= 2;
     return { ok: false, near, best, ...d };
+  }
+  // Разбор ответа по словам: dp[i] — лучший разбор первых i слов, где кусок либо совпадает с вариантом
+  // (штраф 0), либо одно лишнее слово (штраф 1). Все слова узнаны — верно; узнан хоть один вариант — «почти».
+  function segmentByVariants(t, typedRaw, variants) {
+    const words = t.split(' ');
+    const vars = variants.map(v => ({ v, w: normAns(v).split(' ') })).filter(x => x.w[0]);
+    const dp = [{ cost: 0, parts: [], matched: 0 }];
+    for (let i = 0; i < words.length; i++) {
+      if (!dp[i]) continue;
+      vars.forEach(({ v, w }) => {
+        if (w.every((x, k) => words[i + k] === x)) {
+          const cand = { cost: dp[i].cost, parts: [...dp[i].parts, { n: w.length, ok: true, v }], matched: dp[i].matched + 1 };
+          if (!dp[i + w.length] || cand.cost < dp[i + w.length].cost) dp[i + w.length] = cand;
+        }
+      });
+      const skip = { cost: dp[i].cost + 1, parts: [...dp[i].parts, { n: 1, ok: false }], matched: dp[i].matched };
+      if (!dp[i + 1] || skip.cost < dp[i + 1].cost) dp[i + 1] = skip;
+    }
+    const res = dp[words.length];
+    if (!res || res.matched === 0 || res.matched < 2 && res.cost > 0) return null; // один узнанный кусок среди мусора — это не «почти»
+    // Показ: слова ответа в исходном написании, узнанные зелёным, лишние красным
+    let shown = typedRaw.trim().split(/\s+/).map(w => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '')).filter(Boolean);
+    if (shown.length !== words.length) shown = words;
+    const typedOut = []; let i = 0;
+    res.parts.forEach((p, idx) => {
+      if (idx) typedOut.push({ ch: ' ', cls: 'ok' });
+      typedOut.push(...[...shown.slice(i, i + p.n).join(' ')].map(ch => ({ ch, cls: p.ok ? 'ok' : 'bad' })));
+      i += p.n;
+    });
+    const ok = res.cost === 0;
+    const best = res.parts.filter(p => p.ok).map(p => p.v).join('; ');
+    const correctOut = [...variants.join('; ')].map(ch => ({ ch, cls: 'ok' }));
+    return { ok, near: !ok, best, typedOut, correctOut };
   }
   const diffHtml = arr => arr.map(x => `<span class="typed-${x.cls}">${esc(x.ch)}</span>`).join('');
 
