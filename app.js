@@ -670,16 +670,26 @@ async function phrasePhonetic(phrase) {
 // Поэтому всё, что модель предложила как связанное, сверяем с Викисловарём до сохранения,
 // а у уже сохранённых статей подчищаем список при показе.
 const _wordExists = {};
+let _wordCheckFailed = 0; // сколько слов не удалось проверить из-за сбоя сервиса (для отчёта чистки)
 async function wordExists(w) {
   const k = cleanQuery(w).toLowerCase();
   if (!k) return false;
   if (_wordExists[k] === undefined) {
-    try {
-      const res = await fetch(FD_URL + encodeURIComponent(k));
-      if (!res.ok && res.status !== 404) return true; // сбой сервиса — не выбрасываем и не запоминаем
-      const data = res.ok ? await res.json() : {};
-      _wordExists[k] = (data.entries || []).some(en => !en.language || en.language.code === 'it');
-    } catch (e) { return true; }
+    // Сбой сервиса (не 404) — пробуем ещё раз через секунду; если снова сбой, слово считаем существующим,
+    // но ответ не запоминаем: ошибочно выбросить настоящее слово хуже, чем пропустить выдуманное
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(FD_URL + encodeURIComponent(k));
+        if (res.ok || res.status === 404) {
+          const data = res.ok ? await res.json() : {};
+          _wordExists[k] = (data.entries || []).some(en => !en.language || en.language.code === 'it');
+          return _wordExists[k];
+        }
+      } catch (e) {}
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    _wordCheckFailed++;
+    return true;
   }
   return _wordExists[k];
 }
@@ -704,6 +714,7 @@ async function pruneRelated(entry) {
 async function cleanupRelatedCache() {
   if (!(window.Auth && Auth.user())) { showToast('Нужно войти в аккаунт'); return; }
   showToast('Проверяю кэш…');
+  _wordCheckFailed = 0;
   const res = await fetch(`${SB_URL}/rest/v1/dictionary?select=word,data&limit=2000`, { headers: SB_H });
   if (!res.ok) { showToast('Не удалось прочитать кэш: HTTP ' + res.status); return; }
   const rows = await res.json();
@@ -741,7 +752,7 @@ async function cleanupRelatedCache() {
   } catch (e) { console.warn('notes cleanup:', e); }
   _mapInfos = null;
   console.log('cleanupRelatedCache: убраны связи', [...removed], '· помечены выдуманными', fake, '· ошибок сохранения', failed);
-  showToast(`Проверено статей: ${rows.length}. Исправлено: ${fixed}, связей убрано: ${removed.size}, скрыто статей: ${fake.length}, слов в колодах: ${notesFixed}${failed ? `, не сохранилось: ${failed}` : ''}`);
+  showToast(`Проверено статей: ${rows.length}. Исправлено: ${fixed}, связей убрано: ${removed.size}, скрыто статей: ${fake.length}, слов в колодах: ${notesFixed}${failed ? `, не сохранилось: ${failed}` : ''}${_wordCheckFailed ? `, словарь не ответил по ${_wordCheckFailed} словам — повторите позже` : ''}`);
 }
 
 const FD_POS = {
