@@ -194,7 +194,8 @@
       G.nodes.forEach(n => { if (!visible(n)) return; const hot = hlSet.has(n) || G.matches.has(n) || n.id === G.center; if (!showAll && !hot && !(G.scale >= 0.35 && (n.depth || 0) <= 1)) return; ctx.globalAlpha = dim && !hot ? 0.3 : 1; const y = n.y + radius(n) + 3 / G.scale; ctx.lineWidth = 3 / G.scale; ctx.strokeStyle = 'rgba(245,240,232,0.9)'; ctx.strokeText(n.label, n.x, y); ctx.fillStyle = hot ? '#c4522a' : '#1a1208'; if (hot) ctx.font = `bold ${fs}px "Crimson Pro", Georgia, serif`; ctx.fillText(n.label, n.x, y); if (hot) ctx.font = `${fs}px "Crimson Pro", Georgia, serif`; });
       ctx.globalAlpha = 1;
     }
-    const radius = n => (n.id === G.center ? 13 : (n.known ? 6 + Math.min(8, n.deg * 1.1) : 4.5));
+    // Все узлы одинаково маленькие, выделяется только текущее слово в центре
+    const radius = n => (n.id === G.center ? 13 : 5);
 
     // Легенда — переключатели видимости
     function buildLegend() {
