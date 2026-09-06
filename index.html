@@ -590,8 +590,11 @@
   .cards-setup p { line-height: 1.5; margin-bottom: 12px; }
   .cards-sql { background: #1e1a14; color: #e8ddc8; font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 14px; border-radius: 6px; overflow: auto; max-height: 320px; white-space: pre; }
   @media (max-width: 640px) {
-    .deck-row { flex-wrap: wrap; padding-left: calc(10px + var(--depth) * 14px); }
+    .deck-row { flex-wrap: wrap; padding: 8px 10px 8px calc(10px + var(--depth) * 14px); gap: 6px; }
+    .deck-counts { min-width: 0; font-size: 12px; gap: 6px; }
+    .deck-name { font-size: 17px; }
     .deck-menu { width: 100%; justify-content: flex-end; }
+    .cards-head-counts { font-size: 13px; gap: 8px; }
     .cards-panel { padding: 16px 14px; }
     .study-card { padding: 28px 16px; }
     .study-buttons { gap: 6px; }

@@ -148,7 +148,10 @@ create index if not exists notes_deck_idx on notes(deck_id);`;
     const learn = cards.filter(c => (c.state === 'learning' || c.state === 'relearning') && c.dueMs <= now).sort((a, b) => a.dueMs - b.dueMs);
     const review = cards.filter(c => c.state === 'review' && c.dueMs <= now).sort((a, b) => a.dueMs - b.dueMs);
     const fresh = cards.filter(c => c.state === 'new').sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)).slice(0, newPerDay());
-    S.queue = [...learn, ...review, ...fresh];
+    // Парные карточки одного слова разводим: сначала все итальянские, потом русские,
+    // чтобы ответ на первую не подсказывал вторую через минуту
+    const freshOrdered = [...fresh.filter(c => c.direction === 'it'), ...fresh.filter(c => c.direction !== 'it')];
+    S.queue = [...learn, ...review, ...freshOrdered];
   }
   function nextCard() {
     const now = Date.now();
