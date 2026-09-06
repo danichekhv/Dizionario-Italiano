@@ -209,7 +209,7 @@
     canvas.addEventListener('pointermove', e => {
       if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pinch && pointers.size >= 2) { const [a, b] = [...pointers.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y); const s = Math.min(4, Math.max(0.1, pinch.s0 * d / pinch.d0)); const r = canvas.getBoundingClientRect(); const px = pinch.cx - r.left, py = pinch.cy - r.top; const mx = (a.x + b.x) / 2 - r.left, my = (a.y + b.y) / 2 - r.top; G.tx = mx - (px - pinch.tx0) * s / pinch.s0; G.ty = my - (py - pinch.ty0) * s / pinch.s0; G.scale = s; draw(); return; }
-      if (drag) { const p = toWorld(e.clientX, e.clientY); drag.node.fx = p.x; drag.node.fy = p.y; if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 5) drag.moved = true; G.alpha = Math.max(G.alpha, 0.25); loop(); return; }
+      if (drag) { const p = toWorld(e.clientX, e.clientY); drag.node.fx = drag.node.x = p.x; drag.node.fy = drag.node.y = p.y; if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 5) drag.moved = true; G.alpha = Math.max(G.alpha, 0.25); loop(); draw(); return; }
       if (pan) { G.tx = pan.tx0 + e.clientX - pan.x0; G.ty = pan.ty0 + e.clientY - pan.y0; if (Math.hypot(e.clientX - pan.x0, e.clientY - pan.y0) > 4) pan.moved = true; draw(); return; }
       if (e.pointerType === 'mouse') setHover(hit(e.clientX, e.clientY), e);
     });
