@@ -1025,11 +1025,12 @@
   /* ── Hero action buttons group ──────────────────────────── */
   .hero-actions {
     position: absolute;
-    top: 20px; right: 20px;
+    top: 36px; right: 20px; height: 23px; /* по линии бейджа части речи: 36px — отступ .word-hero, 23px — высота бейджа */
     display: flex;
     align-items: center;
     gap: 4px;
     z-index: 2;
+  .grammar-hero .hero-actions { top: 32px; } /* у грамматики отступ шапки 32px, бейдж той же высоты */
   }
 
   .hero-action-btn {
@@ -2651,7 +2652,7 @@
   .cat-altro      { background: rgba(127,140,141,0.15);color: #566573; border: 1px solid rgba(127,140,141,0.4); }
 
   @media (max-width: 640px) {
-    .hero-actions { top: 14px; right: 14px; gap: 2px; }
+    .hero-actions { top: 36px; right: 14px; gap: 2px; }
     .hero-action-btn { width: 28px; height: 28px; font-size: 16px; }
   }
 
