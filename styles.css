@@ -349,6 +349,11 @@
     border: 1px solid rgba(var(--terracotta-rgb),0.2);
   }
 
+  /* Строка бейджей: часть речи, теги, «+». Справа оставлено место под иконки действий, чтобы
+     длинный ряд переносился, а не налезал на них */
+  .word-badges { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; padding-right: 128px; }
+  .word-badges .word-type-badge, .word-badges .word-category-badge, .word-badges .word-tag-add { margin: 0; }
+
   .word-main {
     display: flex;
     align-items: flex-end;
@@ -1383,7 +1388,12 @@
     .conjugation-header, .conjugation-body { padding-left: 16px; padding-right: 16px; }
     .word-title { font-size: var(--fs-title); }
     .word-phonetic { font-size: var(--fs-body); }
-    .word-main { gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+    .word-badges { padding-right: 96px; }
+    /* Длинный заголовок (выражение): динамик идёт сразу за последним словом, транскрипция строкой ниже */
+    .word-main { display: block; }
+    .word-title { display: inline; }
+    .speak-btn { display: inline-flex; vertical-align: middle; margin: 0 0 0 8px; }
+    .word-phonetic { display: block; margin-top: 8px; white-space: normal; }
     .speak-btn .icon { width: 20px; height: 20px; }
     .speak-btn { margin-bottom: 1px; }
     .lang-row { grid-template-columns: 48px 1fr; gap: 8px; }
