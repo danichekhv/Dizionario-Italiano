@@ -85,6 +85,15 @@ create table if not exists profiles (
 );
 
 -- 3. Права доступа
+-- сначала убираем ВСЕ прежние политики на этих таблицах (например, «разрешить всем», созданные
+-- вместе с таблицами до появления аккаунтов), иначе они перекрывают новые правила
+do $$ declare r record; begin
+  for r in select schemaname, tablename, policyname from pg_policies
+           where schemaname = 'public'
+             and tablename in ('dictionary','russian_search','grammar','favorites_dict','favorites_grammar','decks','notes','cards','reviews','word_views','profiles') loop
+    execute format('drop policy if exists %I on %I.%I', r.policyname, r.schemaname, r.tablename);
+  end loop;
+end $$;
 alter table dictionary enable row level security;
 alter table russian_search enable row level security;
 alter table grammar enable row level security;
