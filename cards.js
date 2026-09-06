@@ -241,15 +241,15 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
           <button class="deck-toggle ${kids.length ? '' : 'hidden'} ${collapsed ? 'closed' : ''}" onclick="Cards.toggleDeck('${d.id}')" title="Свернуть/развернуть"></button>
           <button class="deck-name" onclick="Cards.study('${d.id}')" title="Учить">${esc(d.name)}</button>
           <div class="deck-counts"><span class="c-new" data-l="новых">${c.new}</span><span class="c-learn" data-l="учить">${c.learn}</span><span class="c-due" data-l="повторить">${c.due}</span></div>
-          <button class="deck-play" onclick="Cards.study('${d.id}')" title="Учить">▶</button>
+          <button class="deck-play" onclick="Cards.study('${d.id}')" title="Учить">${svgIcon('play')}</button>
           <div class="deck-menu">
-            <button onclick="Cards.openAdd('${d.id}')" title="Добавить слова">＋</button>
-            <button onclick="Cards.browse('${d.id}')" title="Карточки">☰</button>
-            <button onclick="Cards.stats('${d.id}')" title="Статистика колоды">∿</button>
-            <button onclick="Cards.shareDeck('${d.id}')" title="Поделиться колодой по ссылке">🔗</button>
-            <button onclick="Cards.newDeck('${d.id}')" title="Подколода">⤵</button>
-            <button onclick="Cards.renameDeck('${d.id}')" title="Переименовать">✎</button>
-            <button onclick="Cards.deleteDeck('${d.id}')" title="Удалить">✕</button>
+            <button onclick="Cards.openAdd('${d.id}')" title="Добавить слова">${svgIcon('plus')}</button>
+            <button onclick="Cards.browse('${d.id}')" title="Карточки">${svgIcon('list')}</button>
+            <button onclick="Cards.stats('${d.id}')" title="Статистика колоды">${svgIcon('chart')}</button>
+            <button onclick="Cards.shareDeck('${d.id}')" title="Поделиться колодой по ссылке">${svgIcon('link')}</button>
+            <button onclick="Cards.newDeck('${d.id}')" title="Подколода">${svgIcon('subdeck')}</button>
+            <button onclick="Cards.renameDeck('${d.id}')" title="Переименовать">${svgIcon('edit')}</button>
+            <button onclick="Cards.deleteDeck('${d.id}')" title="Удалить">${svgIcon('trash')}</button>
           </div>
         </div>`);
       if (!collapsed) walk(d.id, depth + 1);
@@ -271,7 +271,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       </div>
       <div class="deck-list">${rows.join('') || '<div class="cards-empty">Колод пока нет</div>'}</div>
       <div class="cards-actions">
-        <button class="cards-btn primary" onclick="Cards.newDeck(null)">＋ Новая колода</button>
+        <button class="cards-btn primary" onclick="Cards.newDeck(null)">${svgIcon('plus')} Новая колода</button>
         <label class="cards-inline">новых в день <input type="number" min="0" max="500" value="${newPerDay()}" onchange="Cards.setNewPerDay(this.value)"></label>
       </div>
       <div class="cards-legend"><span class="c-new">синие</span> новые · <span class="c-learn">красные</span> заучиваемые · <span class="c-due">зелёные</span> к повторению. Нажмите на название колоды, чтобы учить.</div>`;
@@ -415,7 +415,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         <button class="cards-back" onclick="goBack()" title="К колодам">←</button>
         <div class="cards-head-counts"><span class="c-new">${c.new}</span><span class="c-learn">${c.learn}</span><span class="c-due">${c.due}</span></div>
         <div class="cards-head-deck">${esc(deck ? deck.name : '')}${S.tagFilter ? ` · #${esc(S.tagFilter)}` : ''}</div>
-        <button class="cards-undo ${S.undo ? '' : 'disabled'}" onclick="Cards.undo()" title="Отменить ответ">↶</button>
+        <button class="cards-undo ${S.undo ? '' : 'disabled'}" onclick="Cards.undo()" title="Отменить ответ">${svgIcon('undo')}</button>
       </div>`;
     if (!S.current) {
       el.innerHTML = head + `<div class="study-body"><div class="cards-done"><div class="cards-done-mark">✓</div><div>На сегодня в этой колоде всё.</div><button class="cards-btn" onclick="goBack()">К колодам</button></div></div>`;
@@ -429,7 +429,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         ${n.example ? `<div class="study-box"><div class="study-box-label">Esempio</div><div class="study-box-text italic">«${esc(n.example)}»</div></div>` : ''}
         ${n.meaning ? `<div class="study-box"><div class="study-box-label">Significato</div><div class="study-box-text">${esc(n.meaning)}</div></div>` : ''}
         ${(n.tags || []).length ? `<div class="study-tags">${n.tags.map(t => `<span class="tag-chip">#${esc(t)}</span>`).join('')}</div>` : ''}
-        <button class="study-article" onclick="Cards.openArticle('${esc(n.word || '').replace(/'/g, '&#39;')}')">открыть статью ↗</button>` : '';
+        <button class="study-article" onclick="Cards.openArticle('${esc(n.word || '').replace(/'/g, '&#39;')}')">открыть статью ${svgIcon('external')}</button>` : '';
     const buttons = S.revealed ? `
       <div class="study-buttons">
         <button class="sb again" onclick="Cards.answer(1)"><small>${previewLabel(S.current, 1)}</small>Снова</button>
@@ -499,7 +499,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         <div class="browse-row">
           <input type="checkbox" ${S.browseSelected.has(n.id) ? 'checked' : ''} onchange="Cards.selectNote('${n.id}', this.checked)">
           <button class="browse-word" onclick="Cards.editNote('${n.id}')">${esc(n.word)}</button>
-          <button class="browse-open" onclick="Cards.openArticle('${esc(n.word).replace(/'/g, '&#39;')}')" title="Открыть статью в словаре">↗</button>
+          <button class="browse-open" onclick="Cards.openArticle('${esc(n.word).replace(/'/g, '&#39;')}')" title="Открыть статью в словаре">${svgIcon('external')}</button>
           <div class="browse-ru">${esc(n.translation)}</div>
           <div class="browse-tags">${(n.tags || []).map(t => `<span class="tag-chip" onclick="Cards.setTagFilter('${esc(t)}')">#${esc(t)}</span>`).join('')}</div>
           <div class="browse-state" title="состояние карточек: н новая, з заучивается, п повторение">${st}</div>
@@ -775,7 +775,7 @@ ${JSON.stringify(list)}`;
         <input class="cards-input" id="deckPickTags" placeholder="теги через запятую (необязательно)" autocomplete="off">
         <div class="deck-pick-list">${rows.join('') || '<div class="cards-empty">Колод пока нет</div>'}</div>
         <div class="cards-actions">
-          <button class="cards-btn" onclick="Cards.pickNewDeck()">＋ Новая колода</button>
+          <button class="cards-btn" onclick="Cards.pickNewDeck()">${svgIcon('plus')} Новая колода</button>
           <button class="cards-btn" onclick="Cards.closePicker()">Отмена</button>
         </div>
       </div>`;

@@ -332,7 +332,7 @@ grant execute on function import_shared_deck(text) to authenticated;`;
         </div>
         <div class="apikey-hint-small">Без входа словарь работает, но избранное, колоды и карта ваших слов доступны только после входа. Ключи ниже сохраняются в профиле и подхватываются на других устройствах.</div>`;
     }
-    const hb = document.querySelector('#headerSettingsBtn span');
+    const hb = document.querySelector('#headerSettingsBtn span:not([data-icon])');
     if (hb) hb.textContent = session ? (session.user.email || '').split('@')[0] : 'API key';
   }
   function fieldError(msg) { const el = document.getElementById('authError'); if (el) { el.textContent = msg; el.classList.toggle('visible', !!msg); } }

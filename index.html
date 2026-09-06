@@ -84,6 +84,16 @@
   button:disabled, input:disabled, select:disabled, textarea:disabled { opacity: .45; cursor: not-allowed; }
   button:disabled { pointer-events: none; }
 
+  /* ── Иконки: один набор (Feather), линия 2px, размер от шрифта контейнера ──
+     Эмодзи в интерфейсе нет: они по-разному рисуются на Windows, Android и iOS. */
+  .icon { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -.125em; flex-shrink: 0; display: inline-block; }
+  .starred .icon-star, .header-fav-star .icon-star { fill: currentColor; }
+  .hero-action-btn .icon { width: 16px; height: 16px; }
+  .hero-action-btn.spinning .icon { animation: spin 0.6s linear infinite; }
+  .header-settings-btn .icon { width: 14px; height: 14px; }
+  .fav-float-btn .icon, .settings-float-btn .icon { width: 22px; height: 22px; display: block; }
+  .deck-play .icon { width: 14px; height: 14px; }
+
   body {
     background: var(--cream);
     color: var(--ink);
@@ -2654,7 +2664,6 @@
 
   /* ── Refresh button ──────────────────────────────────────── */
   /* refresh-btn now uses .hero-action-btn.refresh */
-  .refresh-btn.spinning svg { animation: spin 0.6s linear infinite; }
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
   @media (max-width: 640px) {
@@ -3258,7 +3267,7 @@
         autocomplete="off" spellcheck="false"
         onkeydown="if(event.key==='Enter') saveApiKey()"
       />
-      <button class="apikey-eye" id="apikeyEye" onclick="toggleApiKeyVisibility()" title="Показать/скрыть">👁</button>
+      <button class="apikey-eye" id="apikeyEye" onclick="toggleApiKeyVisibility()" title="Показать/скрыть" data-icon="eye"></button>
     </div>
     <div class="apikey-error" id="apikeyError">Введите корректный ключ (начинается с AIza…)</div>
 
@@ -3276,7 +3285,7 @@
         autocomplete="off" spellcheck="false"
         onkeydown="if(event.key==='Enter') saveApiKey()"
       />
-      <button class="apikey-eye" onclick="toggleKeyVisibility('fastKeyInput')" title="Показать/скрыть">👁</button>
+      <button class="apikey-eye" onclick="toggleKeyVisibility('fastKeyInput')" title="Показать/скрыть" data-icon="eye"></button>
     </div>
     <div class="apikey-input-wrap">
       <input class="apikey-input apikey-model" id="fastModelInput" type="text" list="fastModels"
@@ -3290,7 +3299,7 @@
 
     <button class="apikey-btn" onclick="saveApiKey()">Сохранить</button>
     <button class="apikey-back-btn" id="apikeyBackBtn" onclick="hideApiKeyScreen()">← Назад</button>
-    <button class="apikey-back-btn" id="installBtn" style="display:none" onclick="installApp()">📲 Установить как приложение</button>
+    <button class="apikey-back-btn" id="installBtn" style="display:none" onclick="installApp()"><span data-icon="download"></span> Установить как приложение</button>
     <p class="apikey-hint">
       Ключи: Gemini на <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>,
       Groq на <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a>,
@@ -3304,11 +3313,11 @@
 <div class="container">
   <header>
     <button class="header-settings-btn" id="headerSettingsBtn" onclick="showApiKeyScreen()" title="Настройки API">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span data-icon="settings"></span>
       <span>API key</span>
     </button>
     <button class="header-fav-btn" id="headerFavBtn" onclick="openFavorites()" title="Избранное">
-      <span class="header-fav-star">★</span>
+      <span class="header-fav-star" data-icon="star"></span>
       <span id="headerFavLabel">Preferiti</span>
     </button>
     <div class="header-ornament" id="headerOrnament">Vocabolario completo</div>
@@ -3319,15 +3328,15 @@
 
   <nav class="app-nav">
     <button class="app-nav-btn active" id="navDict" onclick="switchMode('dict')">
-      <span class="nav-icon">📖</span>
+      <span class="nav-icon" data-icon="book"></span>
       <span><span class="nav-article">Il </span><span class="nav-label-it">Dizionario</span></span>
     </button>
     <button class="app-nav-btn" id="navGram" onclick="switchMode('grammar')">
-      <span class="nav-icon">📐</span>
+      <span class="nav-icon" data-icon="type"></span>
       <span><span class="nav-article">La </span><span class="nav-label-it">Grammatica</span></span>
     </button>
     <button class="app-nav-btn" id="navCards" onclick="switchMode('cards')">
-      <span class="nav-icon">🃏</span>
+      <span class="nav-icon" data-icon="layers"></span>
       <span><span class="nav-article">Le </span><span class="nav-label-it">Carte</span></span>
     </button>
   </nav>
@@ -3355,10 +3364,7 @@
         autocorrect="off"
         spellcheck="false"
       />
-      <button class="search-btn" id="searchBtn" title="Cerca">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
+      <button class="search-btn" id="searchBtn" title="Cerca"><span data-icon="search"></span>
       </button>
     </div>
   </div>
@@ -3376,7 +3382,7 @@
   <div class="state-msg active" id="initialMsg">
     <div id="initialMsgText">Inserisci una parola italiana per iniziare</div>
     <div style="font-size:13px;margin-top:8px;color:var(--stone)" id="initialMsgSub">Введите итальянское слово для поиска</div>
-    <button class="wordmap-btn" onclick="openWordMap()" title="Все открытые слова и связи между ними">🕸 Карта слов</button>
+    <button class="wordmap-btn" onclick="openWordMap()" title="Все открытые слова и связи между ними"><span data-icon="graph"></span> Карта слов</button>
   </div>
 
   <!-- Карта всех открытых слов -->
@@ -3406,7 +3412,7 @@
     </div>
     <div class="fav-search-wrap">
       <input type="text" class="fav-search" id="favSearch" placeholder="Поиск по избранному…" oninput="filterFavList()" autocomplete="off" spellcheck="false">
-      <span class="fav-search-icon">🔍</span>
+      <span class="fav-search-icon" data-icon="search"></span>
     </div>
     <div class="fav-toolbar" id="favToolbar" style="display:none"></div>
     <div class="fav-list" id="favList"></div>
@@ -3418,7 +3424,7 @@
   </div>
 
   <div class="error-msg" id="errorMsg">
-    <div class="error-icon">🔎</div>
+    <div class="error-icon" data-icon="search"></div>
     <div class="error-text" id="errorText">Parola non trovata</div>
   </div>
 
@@ -3427,19 +3433,16 @@
 
     <div class="word-hero" style="position:relative">
       <div class="hero-actions">
-<button class="hero-action-btn refresh" id="dictRefreshBtn" title="Обновить статью" onclick="refreshEntry('dict')">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+<button class="hero-action-btn refresh" id="dictRefreshBtn" title="Обновить статью" onclick="refreshEntry('dict')"><span data-icon="refresh"></span>
         </button>
-        <button class="hero-action-btn deck" id="dictDeckBtn" title="Добавить в колоду карточек" onclick="addEntryToDeck()">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="13" height="13" rx="1.5"/><path d="M8 4h13v13"/></svg>
+        <button class="hero-action-btn deck" id="dictDeckBtn" title="Добавить в колоду карточек" onclick="addEntryToDeck()"><span data-icon="deck"></span>
         </button>
-        <button class="hero-action-btn star" id="dictStarBtn" title="Добавить в избранное" onclick="toggleFav('dict')">☆</button>
+        <button class="hero-action-btn star" id="dictStarBtn" title="Добавить в избранное" onclick="toggleFav('dict')" data-icon="star"></button>
       </div>
       <div class="word-type-badge" id="wordType">—</div>
       <div class="word-main">
         <div class="word-title" id="wordTitle">—</div>
-        <button class="speak-btn" id="dictSpeakBtn" title="Произнести" onclick="speakWord()">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        <button class="speak-btn" id="dictSpeakBtn" title="Произнести" onclick="speakWord()"><span data-icon="volume"></span>
         </button>
         <div class="word-phonetic" id="wordPhonetic">—</div>
       </div>
@@ -3536,10 +3539,7 @@
 
 <!-- Floating favorites button (mobile) -->
 <button class="fav-float-btn" id="favFloatBtn" onclick="favFloatClick()" title="Избранное">
-  <span id="favFloatIcon">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block">
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-    </svg>
+  <span id="favFloatIcon"><span data-icon="star"></span>
   </span>
   <span id="favFloatBack" style="display:none">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block">
@@ -3550,14 +3550,43 @@
 
 <!-- Floating settings button (mobile) -->
 <button class="settings-float-btn" id="settingsFloatBtn" onclick="showApiKeyScreen()" title="API key">
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="3"/>
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-  </svg>
+  <span data-icon="settings"></span>
 </button>
 
 
 <script>
+// ── Иконки: один набор (Feather), одна толщина линии. В разметке — <span data-icon="…">,
+// в шаблонах — ${svgIcon('…')}. Звезда заливается классом .starred у родителя.
+const ICONS = {
+  star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  eye: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  book: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+  type: '<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>',
+  layers: '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+  graph: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>',
+  search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  play: '<polygon points="5 3 19 12 5 21 5 3"/>',
+  list: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+  chart: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  subdeck: '<polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>',
+  edit: '<path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>',
+  trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  undo: '<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>',
+  external: '<line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/>',
+  fit: '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>',
+  key: '<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>',
+  'arrow-down': '<line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>',
+  refresh: '<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>',
+  deck: '<rect x="3" y="8" width="13" height="13" rx="1.5"/><path d="M8 4h13v13"/>',
+  volume: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'
+};
+function svgIcon(name) { return `<svg class="icon icon-${name}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`; }
+document.querySelectorAll('[data-icon]').forEach(el => { el.innerHTML = svgIcon(el.dataset.icon); });
 // ── Конфигурация ─────────────────────────────────────────────────────────────
 const GEMINI_MODEL_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent`;
 
@@ -4789,11 +4818,11 @@ meanings: 1-3 items, most frequent first. Do NOT include phonetic transcription,
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 function describeApiError(msg) {
-  if (/NO_GEMINI_KEY/.test(msg)) return `🔑 Этого слова ещё нет в общей базе, для генерации статьи нужен ключ Gemini — <u style="cursor:pointer" onclick="showApiKeyScreen()">указать ключ</u> (бесплатно, минута)`;
+  if (/NO_GEMINI_KEY/.test(msg)) return `${svgIcon('key')} Этого слова ещё нет в общей базе, для генерации статьи нужен ключ Gemini — <u style="cursor:pointer" onclick="showApiKeyScreen()">указать ключ</u> (бесплатно, минута)`;
   const isQuota = /quota|RESOURCE_EXHAUSTED|429|rate limit/i.test(msg);
   const isBadKey = /API[ _]key|API_KEY|PERMISSION_DENIED|leaked|403|401|Unauthorized|invalid_api_key/i.test(msg);
   const who = (msg.match(/^(Groq|Cerebras|Mistral)/i) || [])[1] || 'Gemini';
-  if (isBadKey) return `🔑 Проблема с ключом ${who} — <u style="cursor:pointer" onclick="showApiKeyScreen()">сменить ключ</u>`;
+  if (isBadKey) return `${svgIcon('key')} Проблема с ключом ${who} — <u style="cursor:pointer" onclick="showApiKeyScreen()">сменить ключ</u>`;
   if (isQuota)  return `⏳ Лимит ${who} исчерпан — попробуйте позже или <u style="cursor:pointer" onclick="showApiKeyScreen()">смените ключ</u>`;
   return 'Errore: ' + escapeHtml(msg);
 }
@@ -4920,10 +4949,8 @@ function renderGrammar(g) {
   hero.className = 'grammar-hero';
   hero.innerHTML = `
     <div class="hero-actions">
-      <button class="hero-action-btn refresh" id="gramRefreshBtn" title="Обновить статью" onclick="refreshEntry('grammar')">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-      </button>
-      <button class="hero-action-btn star" id="gramStarBtn" title="Добавить в избранное" onclick="toggleFav('grammar')">☆</button>
+      <button class="hero-action-btn refresh" id="gramRefreshBtn" title="Обновить статью" onclick="refreshEntry('grammar')">${svgIcon('refresh')}</button>
+      <button class="hero-action-btn star" id="gramStarBtn" title="Добавить в избранное" onclick="toggleFav('grammar')">${svgIcon('star')}</button>
     </div>
     <div class="grammar-topic-badge">${g.category || 'Grammatica'}</div>
     <div class="grammar-title">${formatGrammarTitle(g.title || '')}</div>
@@ -5008,7 +5035,7 @@ function renderGrammar(g) {
         // Add arrow connector and append to pair group
         const arrow = document.createElement('div');
         arrow.className = 'grammar-example-arrow';
-        arrow.textContent = '↓';
+        arrow.innerHTML = svgIcon('arrow-down');
         currentPair.appendChild(arrow);
         currentPair.appendChild(el);
       } else {
@@ -5423,13 +5450,13 @@ async function toggleFav(mode) {
     const isStarred = btn.classList.contains('starred');
     if (isStarred) {
       await fetch(`${SB_URL}/rest/v1/favorites_dict?word=eq.${encodeURIComponent(currentDictWord)}`, { method: 'DELETE', headers: SB_H });
-      btn.innerHTML = '☆'; btn.classList.remove('starred');
+      btn.classList.remove('starred');
     } else {
       await fetch(`${SB_URL}/rest/v1/favorites_dict?on_conflict=user_id,word`, {
         method: 'POST', headers: { ...SB_H, 'Prefer': 'resolution=merge-duplicates' },
         body: JSON.stringify({ word: currentDictWord, data: currentDictEntry })
       });
-      btn.innerHTML = '★'; btn.classList.add('starred');
+      btn.classList.add('starred');
     }
     updateFavCount();
   } else {
@@ -5438,13 +5465,13 @@ async function toggleFav(mode) {
     const isStarred = btn.classList.contains('starred');
     if (isStarred) {
       await fetch(`${SB_URL}/rest/v1/favorites_grammar?topic=eq.${encodeURIComponent(currentGramTopic)}`, { method: 'DELETE', headers: SB_H });
-      btn.innerHTML = '☆'; btn.classList.remove('starred');
+      btn.classList.remove('starred');
     } else {
       await fetch(`${SB_URL}/rest/v1/favorites_grammar?on_conflict=user_id,topic`, {
         method: 'POST', headers: { ...SB_H, 'Prefer': 'resolution=merge-duplicates' },
         body: JSON.stringify({ topic: currentGramTopic, data: currentGramEntry })
       });
-      btn.innerHTML = '★'; btn.classList.add('starred');
+      btn.classList.add('starred');
     }
     updateFavCount();
   }
@@ -5460,7 +5487,6 @@ async function checkIfStarred(mode, key) {
     const btn = document.getElementById(btnId);
     const starred = Array.isArray(rows) && rows.length > 0;
     if (btn) {
-      btn.innerHTML = starred ? '★' : '☆';
       btn.classList.toggle('starred', starred);
     }
   } catch(e) { console.warn('checkIfStarred error:', e); }
@@ -5494,7 +5520,7 @@ async function renderFavList(tab) {
     cachedFavRows = Array.isArray(rows) ? rows : [];
     list.innerHTML = '';
     if (cachedFavRows.length === 0) {
-      list.innerHTML = '<div class="fav-empty">Пока ничего не сохранено — нажмите ★ на любой статье</div>';
+      list.innerHTML = '<div class="fav-empty">Пока ничего не сохранено — нажмите звёздочку на любой статье</div>';
       _favVisibleKeys = []; updateFavToolbar();
       return;
     }
@@ -5542,7 +5568,7 @@ function updateFavToolbar() {
   tb.style.display = 'flex';
   tb.innerHTML = `
     <button class="cards-btn" onclick="favSelectAll()">${all ? 'Снять выделение' : 'Выбрать все'}</button>
-    <button class="cards-btn primary" ${n ? '' : 'disabled'} onclick="favAddSelectedToDeck()">＋ В колоду${n ? ` (${n})` : ''}</button>`;
+    <button class="cards-btn primary" ${n ? '' : 'disabled'} onclick="favAddSelectedToDeck()">${svgIcon('plus')} В колоду${n ? ` (${n})` : ''}</button>`;
 }
 function favAddSelectedToDeck() {
   const entries = cachedFavRows.filter(r => favSelected.has(r.word)).map(r => r.data);
@@ -5692,8 +5718,8 @@ function renderFavRows(rows, tab) {
             <div class="fav-card-meta">${d.partOfSpeech || ''}${d.gender ? ' · ' + d.gender : ''} · ${d.russian?.main || ''}</div>
           </div>
           <div class="fav-card-right">
-            <button class="fav-todeck" title="В колоду карточек" onclick="favAddOneToDeck(event,'${safeKey}')">＋ в колоду</button>
-            <button class="fav-remove" title="Удалить" onclick="removeFav(event,'${tab}','${safeKey}')">✕</button>
+            <button class="fav-todeck" title="В колоду карточек" onclick="favAddOneToDeck(event,'${safeKey}')">${svgIcon('plus')} в колоду</button>
+            <button class="fav-remove" title="Удалить" onclick="removeFav(event,'${tab}','${safeKey}')">${svgIcon('x')}</button>
             <span class="fav-card-arrow">→</span>
           </div>`;
         card.onclick = (e) => {
@@ -5717,7 +5743,7 @@ function renderFavRows(rows, tab) {
             <div class="fav-card-meta">${d.titleRu || ''} · ${d.category || ''}</div>
           </div>
           <div class="fav-card-right">
-            <button class="fav-remove" title="Удалить" onclick="removeFav(event,'${tab}','${key.replace(/'/g,"\\'")}')">✕</button>
+            <button class="fav-remove" title="Удалить" onclick="removeFav(event,'${tab}','${key.replace(/'/g,"\\'")}')">${svgIcon('x')}</button>
             <span class="fav-card-arrow">→</span>
           </div>`;
         card.onclick = (e) => {

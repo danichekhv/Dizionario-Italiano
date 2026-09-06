@@ -135,7 +135,7 @@
         <select class="wg-mode" title="Чем раскрашивать узлы"><option value="cat">colore: tema</option><option value="pos">colore: parte del discorso</option></select>
         ${opts.depthControl ? `<label class="wg-inline">кольца <select class="wg-depth">${[1, 2, 3, 4, 5].map(n => `<option value="${n}" ${n === (opts.depth || 2) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>` : ''}
         ${opts.neighborsToggle ? `<label class="wg-inline"><input type="checkbox" class="wg-neigh" ${opts.neighbors ? 'checked' : ''}> ещё не открытые соседи</label>` : ''}
-        <button class="wg-btn wg-fit" title="Вписать всё">⤢</button>
+        <button class="wg-btn wg-fit" title="Вписать всё">${svgIcon('fit')}</button>
         ${opts.extraButtons || ''}
       </div>
       <div class="wg-legend"></div>
