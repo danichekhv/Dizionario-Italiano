@@ -2448,6 +2448,8 @@
   }
 
   .header-settings-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
+  /* полупрозрачная надпись над заголовком рисуется поверх кнопок и перехватывала курсор — кнопки поднимаем выше */
+  .header-settings-btn, .header-fav-btn { z-index: 3; }
   body.mode-grammar .header-settings-btn { border-color: rgba(107,154,240,0.25); color: #6b7fa8; }
   body.mode-grammar .header-settings-btn:hover { border-color: #6b9af0; color: #6b9af0; }
 
