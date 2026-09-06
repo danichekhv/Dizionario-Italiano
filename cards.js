@@ -583,7 +583,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const input = !S.revealed ? `
         <div class="study-input-wrap">
           <input class="study-input" id="studyInput" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"
-            placeholder="${isIt ? 'перевод' : 'слово по-итальянски'}" onkeydown="if(event.key==='Enter'){event.preventDefault();Cards.submitTyped(this.value)}">
+            placeholder="${isIt ? 'перевод' : 'слово по-итальянски'}" onkeydown="if(event.key==='Enter'||(event.key===' '&&!this.value.trim())){event.preventDefault();Cards.submitTyped(this.value)}else if(event.key==='Escape'){this.blur()}">
         </div>` : '';
     const back = S.revealed ? `
         <div class="study-rule"></div>
