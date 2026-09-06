@@ -241,6 +241,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
             <button onclick="Cards.openAdd('${d.id}')" title="Добавить слова">＋</button>
             <button onclick="Cards.browse('${d.id}')" title="Карточки">☰</button>
             <button onclick="Cards.stats('${d.id}')" title="Статистика колоды">∿</button>
+            <button onclick="Cards.shareDeck('${d.id}')" title="Поделиться колодой по ссылке">🔗</button>
             <button onclick="Cards.newDeck('${d.id}')" title="Подколода">⤵</button>
             <button onclick="Cards.renameDeck('${d.id}')" title="Переименовать">✎</button>
             <button onclick="Cards.deleteDeck('${d.id}')" title="Удалить">✕</button>
@@ -783,6 +784,62 @@ ${JSON.stringify(list)}`;
     catch (e) { showToast('⚠ ' + e.message); }
   }
 
+  // ── Обмен колодами по ссылке ─────────────────────────────────────────────────
+  const PENDING_SHARE_KEY = 'dizionario_pending_share';
+  const sqlHint = e => (isMissingTable(e) || /does not exist|not find the function|schema cache/i.test(e.message || '')) ? ' — выполните SQL из настроек, он добавляет функции обмена' : '';
+  async function shareDeck(id) {
+    if (window.Auth && !Auth.require('Войдите, чтобы делиться колодами')) return;
+    try {
+      const rows = await sb(`deck_shares?select=token&deck_id=eq.${id}`);
+      let token = rows && rows[0] && rows[0].token;
+      if (!token) {
+        const abc = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        token = Array.from(crypto.getRandomValues(new Uint8Array(10))).map(b => abc[b % abc.length]).join('');
+        await sb('deck_shares', { method: 'POST', body: { token, deck_id: id } });
+      }
+      showShareModal(id, `${location.origin}${location.pathname}?share=${token}`);
+    } catch (e) { showToast('⚠ ' + e.message + sqlHint(e)); }
+  }
+  function showShareModal(id, url) {
+    let m = document.getElementById('shareModal');
+    if (!m) { m = document.createElement('div'); m.id = 'shareModal'; m.className = 'cards-modal'; m.addEventListener('click', e => { if (e.target === m) m.style.display = 'none'; }); document.body.appendChild(m); }
+    const d = deckById(id);
+    m.innerHTML = `<div class="cards-modal-box">
+      <div class="cards-title small">Поделиться колодой «${esc(d ? d.name : '')}»</div>
+      <p class="cards-p">Тот, кто откроет ссылку и войдёт в свой аккаунт, получит копию колоды со всеми подколодами и словами. Дальше ваши колоды живут отдельно: изменения не синхронизируются.</p>
+      <input class="cards-input" id="shareUrl" value="${esc(url)}" readonly onclick="this.select()">
+      <div class="cards-actions">
+        <button class="cards-btn primary" onclick="Cards.copyShare()">Скопировать ссылку</button>
+        <button class="cards-btn danger" onclick="Cards.revokeShare('${id}')">Отозвать ссылку</button>
+        <button class="cards-btn" onclick="document.getElementById('shareModal').style.display='none'">Закрыть</button>
+      </div></div>`;
+    m.style.display = 'flex';
+  }
+  function copyShare() {
+    const url = ($('shareUrl') || {}).value || '';
+    (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => showToast('✓ Ссылка скопирована'), () => { const i = $('shareUrl'); if (i) { i.select(); showToast('Выделено — скопируйте вручную'); } });
+  }
+  async function revokeShare(id) {
+    if (!confirm('Отозвать ссылку? Те, кто уже скопировал колоду, её сохранят, но новые переходы работать не будут.')) return;
+    try { await sb(`deck_shares?deck_id=eq.${id}`, { method: 'DELETE' }); showToast('Ссылка отозвана'); const m = document.getElementById('shareModal'); if (m) m.style.display = 'none'; }
+    catch (e) { showToast('⚠ ' + e.message); }
+  }
+  async function processPendingShare() {
+    let token = null; try { token = localStorage.getItem(PENDING_SHARE_KEY); } catch (e) {}
+    if (!token || !(window.Auth && Auth.user())) return;
+    const clear = () => { try { localStorage.removeItem(PENDING_SHARE_KEY); } catch (e) {} };
+    try {
+      const info = await sb('rpc/shared_deck_info', { method: 'POST', body: { p_token: token } });
+      if (!info) { showToast('⚠ Ссылка на колоду недействительна или отозвана'); clear(); return; }
+      if (!confirm(`Добавить колоду «${info.name}» (${info.words} слов) в ваш профиль?`)) { clear(); return; }
+      await sb('rpc/import_shared_deck', { method: 'POST', body: { p_token: token } });
+      clear();
+      showToast(`✓ Колода «${info.name}» добавлена`);
+      await loadAll();
+      switchMode('cards');
+    } catch (e) { showToast('⚠ ' + e.message + sqlHint(e)); if (sqlHint(e)) clear(); }
+  }
+
   // ── Клавиатура в режиме учёбы ────────────────────────────────────────────────
   document.addEventListener('keydown', e => {
     if (_currentState !== 'cards' || S.view !== 'study' || !S.current) return;
@@ -818,6 +875,7 @@ ${JSON.stringify(list)}`;
     resetBuild() { S.build = null; render(); },
     browse(id) { pushView('browse'); S.deckId = id; S.view = 'browse'; S.tagFilter = ''; S.browseSelected.clear(); render(); },
     stats(id) { pushView('stats'); S.statsDeckId = id || null; S.view = 'stats'; render(); },
+    shareDeck, copyShare, revokeShare, processPendingShare,
     // Переход из колоды к словарной статье; «Назад» вернёт тот же экран колод (см. snapshot/restore)
     openArticle(word) {
       if (!word) return;

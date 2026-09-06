@@ -134,7 +134,56 @@ create or replace function claim_orphans() returns void language sql security de
   update cards set user_id = auth.uid() where user_id is null;
   update reviews set user_id = auth.uid() where user_id is null;
 $$;
-grant execute on function claim_orphans() to authenticated;`;
+grant execute on function claim_orphans() to authenticated;
+
+-- 5. Обмен колодами по ссылке: владелец создаёт токен, получатель копирует колоду к себе
+create table if not exists deck_shares (
+  token text primary key,
+  user_id uuid not null default auth.uid(),
+  deck_id uuid not null references decks(id) on delete cascade,
+  created_at timestamptz default now()
+);
+alter table deck_shares enable row level security;
+drop policy if exists dz_own on deck_shares; create policy dz_own on deck_shares for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- что за колода по ссылке (название и число слов), без доступа к чужим данным напрямую
+create or replace function shared_deck_info(p_token text) returns json language plpgsql security definer set search_path = public as $$
+declare v_deck uuid; v_name text; v_words int;
+begin
+  select deck_id into v_deck from deck_shares where token = p_token;
+  if v_deck is null then return null; end if;
+  select name into v_name from decks where id = v_deck;
+  with recursive t as (select id from decks where id = v_deck union all select d.id from decks d join t on d.parent_id = t.id)
+  select count(*) into v_words from notes where deck_id in (select id from t);
+  return json_build_object('name', v_name, 'words', v_words);
+end $$;
+
+-- копия колоды (с подколодами и словами) в профиль вошедшего; карточки создаются заново, как новые
+create or replace function import_shared_deck(p_token text) returns uuid language plpgsql security definer set search_path = public as $$
+declare v_src uuid; v_me uuid := auth.uid(); v_new uuid; v_root uuid; r record;
+begin
+  if v_me is null then raise exception 'Нужно войти в аккаунт'; end if;
+  select deck_id into v_src from deck_shares where token = p_token;
+  if v_src is null then raise exception 'Ссылка на колоду недействительна'; end if;
+  create temp table if not exists deck_map (old_id uuid, new_id uuid) on commit drop;
+  delete from deck_map;
+  for r in (with recursive t as (select id, name, parent_id, 0 as lvl from decks where id = v_src
+                                 union all select d.id, d.name, d.parent_id, t.lvl + 1 from decks d join t on d.parent_id = t.id)
+            select * from t order by lvl) loop
+    insert into decks (name, parent_id, user_id)
+      values (r.name, (select new_id from deck_map where old_id = r.parent_id), v_me) returning id into v_new;
+    insert into deck_map values (r.id, v_new);
+    if r.id = v_src then v_root := v_new; end if;
+  end loop;
+  for r in select n.*, m.new_id as new_deck from notes n join deck_map m on m.old_id = n.deck_id loop
+    insert into notes (deck_id, word, translation, phonetic, example, meaning, pos, tags, user_id)
+      values (r.new_deck, r.word, r.translation, r.phonetic, r.example, r.meaning, r.pos, r.tags, v_me) returning id into v_new;
+    insert into cards (note_id, direction, user_id) values (v_new, 'it', v_me), (v_new, 'ru', v_me);
+  end loop;
+  return v_root;
+end $$;
+grant execute on function shared_deck_info(text) to anon, authenticated;
+grant execute on function import_shared_deck(text) to authenticated;`;
 
   // ── Сессия ───────────────────────────────────────────────────────────────────
   function load() { try { session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { session = null; } }
@@ -199,7 +248,8 @@ grant execute on function claim_orphans() to authenticated;`;
     await claimOrphans();
     await pullProfile();
     showToast('✓ Вы вошли как ' + session.user.email);
-    if (window.Cards && Cards.reload) Cards.reload().catch(() => {});
+    if (window.Cards && Cards.reload) await Cards.reload().catch(() => {});
+    if (window.Cards && Cards.processPendingShare) Cards.processPendingShare(); // ссылка на колоду, открытая до входа
   }
   async function claimOrphans() {
     try { await fetch(`${SB_URL}/rest/v1/rpc/claim_orphans`, { method: 'POST', headers: { ...SB_H, 'Content-Type': 'application/json' }, body: '{}' }); }
@@ -418,7 +468,16 @@ grant execute on function claim_orphans() to authenticated;`;
   load();
   if (session && session.expires_at < Date.now()) { apply(); refresh(); } else { apply(); scheduleRefresh(); }
   handleHash();
-  if (session) pullProfile();
+  if (session) pullProfile().then(() => { if (window.Cards && Cards.processPendingShare) Cards.processPendingShare(); });
+  // Ссылка на чужую колоду (?share=токен): запоминаем и обрабатываем после входа
+  try {
+    const shareToken = new URLSearchParams(location.search).get('share');
+    if (shareToken) {
+      localStorage.setItem('dizionario_pending_share', shareToken);
+      history.replaceState(null, '', location.pathname);
+      if (!session) setTimeout(() => require('Войдите или создайте аккаунт, чтобы добавить колоду по ссылке'), 300);
+    }
+  } catch (e) {}
 
   window.Auth = { user: () => session && session.user, require, signIn, signUp, signOut, resetPassword, changePassword, pushProfile, pullProfile, logView, myWords, renderUi, signInUi, signUpUi, resetUi, changePasswordUi, showSql, copySql,
     tagsFor, applyTagsToNodes, renameTagUi, addTagUi, loadTags };
