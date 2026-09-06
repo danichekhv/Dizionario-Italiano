@@ -257,6 +257,7 @@ grant execute on function claim_orphans() to authenticated;`;
           <button class="cards-btn primary" onclick="Auth.signInUi()">Войти</button>
           <button class="cards-btn" onclick="Auth.signUpUi()">Создать аккаунт</button>
           <button class="auth-link" onclick="Auth.resetUi()">Забыли пароль?</button>
+          <button class="auth-link" onclick="Auth.showSql()">SQL для базы</button>
         </div>
         <div class="apikey-hint-small">Без входа словарь работает, но избранное, колоды и карта ваших слов доступны только после входа. Ключи ниже сохраняются в профиле и подхватываются на других устройствах.</div>`;
     }
