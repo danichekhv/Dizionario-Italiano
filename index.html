@@ -662,7 +662,8 @@
   .wordmap-btn { margin-top: 22px; padding: 9px 18px; border: 1.5px solid var(--border); border-radius: 20px; background: white; cursor: pointer; font-family: 'Crimson Pro', serif; font-size: 15px; color: var(--ink); font-style: normal; transition: all .2s; }
   .wordmap-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
   body.mode-grammar .wordmap-btn { display: none; }
-  .fav-view-toggle { margin-left: auto; }
+  .fav-view-toggle { margin-left: 0; } /* три элемента заголовка расставляет сам flex, без принудительного прижатия */
+  .fav-header .fav-tabs { margin-left: auto; }
   body.mode-grammar .fav-view-toggle { display: none !important; }
   @media (max-width: 640px) { .wg-hint { display: none; } .wg-bar { padding: 8px; gap: 6px; } .wg-legend { padding: 6px 8px; } }
 
@@ -1351,6 +1352,7 @@
     .fav-card-word { font-size: 15px; }
     .fav-card-meta { font-size: 12px; }
     .fav-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .fav-header .fav-tabs { margin-left: 0; }
     .fav-title { font-size: 16px; }
     .fav-tabs { width: 100%; }
     .fav-tab { flex: 1; text-align: center; }
@@ -2261,6 +2263,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
     margin-bottom: 24px;
   }
 
