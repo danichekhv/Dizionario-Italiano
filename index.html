@@ -417,6 +417,9 @@
     color: var(--sage);
     font-weight: 400;
   }
+  /* «AUSILIARE avere»: подпись как у прочих ярлыков статьи, глагол — акцентом */
+  .word-aux-label { font-family: var(--font-mono); font-style: normal; font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); margin-right: 8px; vertical-align: 2px; }
+  .word-aux { color: var(--terracotta); font-weight: 600; }
 
   /* Подсказка «также форма слова: portare» */
   .word-also {
@@ -5171,9 +5174,12 @@ function renderEntry(e) {
   anchor.after(add);
   // Для глаголов вместо рода показываем вспомогательный глагол
   // У выражения вместо рода — буквальный перевод и регистр
-  $('wordGender').textContent = e.isPhrase
-    ? [e.literal ? `букв. «${e.literal}»` : '', e.register && e.register !== 'neutro' ? e.register : ''].filter(Boolean).join(' · ')
-    : (e.gender || (e.isVerb && e.auxiliary ? `ausiliare ${e.auxiliary}` : ''));
+  const genderEl = $('wordGender');
+  if (e.isPhrase) genderEl.textContent = [e.literal ? `букв. «${e.literal}»` : '', e.register && e.register !== 'neutro' ? e.register : ''].filter(Boolean).join(' · ');
+  else if (e.gender) genderEl.textContent = e.gender;
+  // Вспомогательный глагол: подпись капителью, сам глагол — акцентом, чтобы строка не читалась как часть слова
+  else if (e.isVerb && e.auxiliary) genderEl.innerHTML = `<span class="word-aux-label">ausiliare</span><span class="word-aux">${escapeHtml(e.auxiliary)}</span>`;
+  else genderEl.textContent = '';
   const alsoEl = $('wordAlso');
   if (e.alsoForms && e.alsoForms.length) {
     alsoEl.innerHTML = 'также форма слова: ' + e.alsoForms.map(l => {
