@@ -218,7 +218,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       <div class="cards-head">${S.missingTables ? '' : '<button class="cards-back" onclick="goBack()">←</button>'}<div class="cards-title">Le Carte${S.missingTables ? '' : ' · SQL'}</div></div>
       <div class="cards-setup">
         <p>Для карточек нужны три таблицы в Supabase. Скопируйте SQL, вставьте в SQL Editor вашего проекта и нажмите Run, затем вернитесь сюда.</p>
-        <pre class="cards-sql" id="cardsSql">${esc(SETUP_SQL)}</pre>
+        <pre class="cards-sql" id="cardsSql">${esc(window.DIZ_SETUP_SQL || SETUP_SQL)}</pre>
         <div class="cards-actions">
           <button class="cards-btn primary" onclick="Cards.copySql()">Скопировать SQL</button>
           <button class="cards-btn" onclick="Cards.reload()">Проверить снова</button>
@@ -727,6 +727,7 @@ ${JSON.stringify(list)}`;
   }
   let _pendingNotes = null;
   async function addEntries(entries) {
+    if (window.Auth && !Auth.require('Войдите, чтобы добавлять слова в колоды')) return;
     const notes = (entries || []).map(entryToNote).filter(n => n.word);
     if (!notes.length) { showToast('Нечего добавлять'); return; }
     if (!S.loaded) await loadAll();
@@ -792,9 +793,18 @@ ${JSON.stringify(list)}`;
 
   // ── Публичный интерфейс ──────────────────────────────────────────────────────
   window.Cards = {
-    async open() { S.view = 'decks'; S.build = null; S.browseSelected.clear(); closeOverlay(); render(); if (!S.loaded) { await loadAll(); render(); } },
-    async reload() { S.loaded = false; render(); await loadAll(); render(); },
-    copySql() { const t = SETUP_SQL; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => showToast('✓ SQL скопирован'), () => { const el = $('cardsSql'); const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); showToast('Выделено — скопируйте вручную'); }); },
+    async open() {
+      S.view = 'decks'; S.build = null; S.browseSelected.clear(); closeOverlay();
+      if (window.Auth && !Auth.user()) {
+        // Колоды личные: без входа показываем приглашение вместо списка
+        const el = root(); if (el) el.innerHTML = `<div class="cards-head"><div class="cards-title">Le Carte</div></div>
+          <div class="cards-empty">Колоды и карточки хранятся в вашем аккаунте.<br><br><button class="cards-btn primary" onclick="Auth.require('Войдите, чтобы открыть колоды')">Войти или создать аккаунт</button></div>`;
+        return;
+      }
+      render(); if (!S.loaded) { await loadAll(); render(); }
+    },
+    async reload() { S.loaded = false; if (_currentState === 'cards') render(); await loadAll(); if (_currentState === 'cards') render(); },
+    copySql() { const t = window.DIZ_SETUP_SQL || SETUP_SQL; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => showToast('✓ SQL скопирован'), () => { const el = $('cardsSql'); const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); showToast('Выделено — скопируйте вручную'); }); },
     toggleDeck(id) { S.collapsed[id] = !S.collapsed[id]; render(); },
     newDeck, renameDeck, deleteDeck,
     setNewPerDay(v) { try { localStorage.setItem(NEW_PER_DAY_KEY, String(Math.max(0, parseInt(v) || 0))); } catch (e) {} render(); },

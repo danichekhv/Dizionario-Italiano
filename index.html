@@ -685,6 +685,18 @@
     .wordmap-btn { margin-top: 14px; }
   }
 
+  /* Аккаунт на экране настроек */
+  .auth-box { margin-bottom: 8px; }
+  .auth-input { margin-bottom: 10px; font-family: 'Crimson Pro', serif; font-size: 15px; letter-spacing: 0; padding: 12px 16px; }
+  .auth-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0 10px; }
+  .auth-actions .cards-btn { flex: 1 1 auto; text-align: center; }
+  .auth-link { background: none; border: none; cursor: pointer; font-family: 'Crimson Pro', serif; font-style: italic; font-size: 14px; color: var(--muted); padding: 4px 6px; }
+  .auth-link:hover { color: var(--terracotta); }
+  .auth-user { font-size: 16px; color: var(--ink-light); text-align: left; margin-bottom: 8px; }
+  .auth-user b { color: var(--terracotta); font-weight: 600; }
+  .apikey-box .cards-note { text-align: left; }
+  .cards-modal-box.wide { max-width: 760px; }
+
   .cards-setup { background: white; border: 1.5px solid var(--border); border-radius: 6px; padding: 22px 26px; }
   .cards-setup p { line-height: 1.5; margin-bottom: 12px; }
   .cards-sql { background: #1e1a14; color: #e8ddc8; font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 14px; border-radius: 6px; overflow: auto; max-height: 320px; white-space: pre; }
@@ -3166,7 +3178,9 @@
     <div class="apikey-title">Diziona<em>rio</em></div>
     <p class="apikey-subtitle">Italiano · Russo · Inglese</p>
     <div class="apikey-rule"><div class="apikey-rule-diamond"></div></div>
-    <div class="apikey-label">Gemini API Key</div>
+    <div class="apikey-label">Аккаунт</div>
+    <div class="auth-box" id="authBox"></div>
+    <div class="apikey-label apikey-label-opt">Gemini API Key</div>
     <div class="apikey-input-wrap">
       <input class="apikey-input" id="apikeyInput" type="password"
         placeholder="AIzaSy…"
@@ -3496,6 +3510,7 @@ function showApiKeyScreen() {
   $('fastProviderSelect').value = getFastProvider();
   $('fastKeyInput').value = getFastKey();
   onFastProviderChange();
+  if (window.Auth) Auth.renderUi();
   // Назад можно только если ключ уже сохранён — при первом запуске возвращаться некуда
   $('apikeyBackBtn').classList.toggle('visible', !!existing);
   $('apikeyError').classList.remove('visible');
@@ -3552,6 +3567,7 @@ function saveApiKey() {
   if (fk) localStorage.setItem('dizionario_fast_key', fk); else localStorage.removeItem('dizionario_fast_key');
   const model = $('fastModelInput').value.trim();
   if (model) localStorage.setItem('dizionario_fast_model_' + providerId, model); else localStorage.removeItem('dizionario_fast_model_' + providerId);
+  if (window.Auth && Auth.user()) Auth.pushProfile(); // ключи уезжают в профиль и подхватятся на других устройствах
   hideApiKeyScreen();
 }
 
@@ -3575,12 +3591,7 @@ async function sbGet(table, key) {
   try {
     const col = (table === 'grammar' || table === 'favorites_grammar') ? 'topic' : 'word';
     const url = `${SB_URL}/rest/v1/${table}?${col}=eq.${encodeURIComponent(key)}&select=data`;
-    const getHeaders = {
-      "apikey": SB_KEY,
-      "Authorization": `Bearer ${SB_KEY}`,
-      "Accept": "application/json",
-      "Content-Type": "application/json"
-    };
+    const getHeaders = { ...SB_H, "Accept": "application/json" }; // с токеном пользователя, если он вошёл
     const res = await fetch(url, { method: "GET", headers: getHeaders });
     const text = await res.text();
     console.log(`sbGet(${table}, "${key}") status=${res.status}:`, text.slice(0, 200));
@@ -4543,7 +4554,7 @@ async function lookupWordHybrid(query, base) {
 }
 
 // ── Поиск итальянского слова ──────────────────────────────────────────────────
-async function lookupWord(word, _depth = 0) {
+async function lookupWord(word, _depth = 0, opts = {}) {
   if (!word.trim()) return;
   showState('loading');
   const prompt = `You are an expert Italian linguist. Given the Italian word "${word}", provide a complete dictionary entry in JSON format.
@@ -4587,7 +4598,7 @@ Return ONLY valid JSON, no markdown, no explanation. Schema:
 }
 If isVerb false → conjugations null. If isNoun false → singular/plural null. If not a real Italian word → word null. relatedWords: 3-5 semantically related Italian words (synonyms, antonyms, thematic). meanings: 1-4 items ordered from most frequent to least frequent usage. Always include at least 1 meaning.`;
   // 1. Кэш Supabase — мгновенно
-  const cachedWord = await sbGet('dictionary', word.toLowerCase());
+  const cachedWord = opts.force ? null : await sbGet('dictionary', word.toLowerCase());
   if (cachedWord) {
     try { renderEntry(cachedWord); showState('result'); showCacheBadge(); addToHistory(cachedWord.word || word, 'dict'); }
     catch(e) { console.error("renderEntry from cache failed:", e); }
@@ -4684,7 +4695,7 @@ const GRAMMAR_SUGGESTIONS = [
   'discorso indiretto', 'gerundio', 'participio', 'verbi riflessivi'
 ];
 
-async function lookupGrammar(topic) {
+async function lookupGrammar(topic, opts = {}) {
   if (!topic.trim()) return;
   showState('loading');
   const prompt = `Ты эксперт по итальянской грамматике. Пользователь ищет правило по теме: "${topic}".
@@ -4723,7 +4734,7 @@ async function lookupGrammar(topic) {
 - errors: 2-4 типичные ошибки русскоязычных
 - Если тема не относится к итальянской грамматике — верни { "error": "not_grammar" }`;
 
-  const cachedGram = await sbGetTopic('grammar', topic.toLowerCase());
+  const cachedGram = opts.force ? null : await sbGetTopic('grammar', topic.toLowerCase());
   if (cachedGram) { renderGrammar(cachedGram); showState('grammar'); showCacheBadge(); addToHistory(cachedGram.title || topic, 'grammar'); return; }
 
   try {
@@ -4973,6 +4984,7 @@ function renderEntry(e) {
   currentDictEntry = e;
   currentDictWord = (e.word || '').toLowerCase();
   checkIfStarred('dict', (e.word || '').toLowerCase());
+  if (!e._pending && window.Auth) Auth.logView((e.word || '').toLowerCase()); // для личной карты слов
     $('wordTitle').textContent = e.word;
   $('wordPhonetic').innerHTML = highlightStress(e.phonetic);
   $('wordType').textContent = e.partOfSpeech || '—';
@@ -5195,15 +5207,14 @@ async function refreshEntry(mode) {
     if (mode === 'dict') {
       const word = currentDictWord || (currentDictEntry && currentDictEntry.word ? currentDictEntry.word.toLowerCase() : '');
       if (!word) return;
-      await fetch(`${SB_URL}/rest/v1/dictionary?word=eq.${encodeURIComponent(word)}`, { method: 'DELETE', headers: SB_H });
-      await lookupWord(word);
+      // Удаление в базе никому не разрешено (общий кэш), поэтому просто генерируем заново и перезаписываем
+      await lookupWord(word, 0, { force: true });
       // Если слово есть в избранном — обновляем и там
       await updateFavIfStarred('dict', word);
     } else if (mode === 'grammar') {
       const topic = currentGramTopic || '';
       if (!topic) return;
-      await fetch(`${SB_URL}/rest/v1/grammar?topic=eq.${encodeURIComponent(topic)}`, { method: 'DELETE', headers: SB_H });
-      await lookupGrammar(topic);
+      await lookupGrammar(topic, { force: true });
       // Если тема есть в избранном — обновляем и там
       await updateFavIfStarred('grammar', topic);
     }
@@ -5223,7 +5234,7 @@ async function updateFavIfStarred(mode, key) {
     // Обновляем с новыми данными
     const newData = mode === 'dict' ? currentDictEntry : currentGramEntry;
     if (!newData) return;
-    await fetch(`${SB_URL}/rest/v1/${table}`, {
+    await fetch(`${SB_URL}/rest/v1/${table}?on_conflict=user_id,${col}`, {
       method: 'POST',
       headers: { ...SB_H, 'Prefer': 'resolution=merge-duplicates' },
       body: JSON.stringify({ [col]: key, data: newData })
@@ -5252,6 +5263,7 @@ async function getFavorites(type) {
 }
 
 async function toggleFav(mode) {
+  if (window.Auth && !Auth.require('Войдите, чтобы сохранять избранное')) return;
   if (mode === 'dict') {
     if (!currentDictEntry) return;
     if (currentDictEntry._pending) { showToast('⏳ дождитесь загрузки статьи'); return; }
@@ -5261,7 +5273,7 @@ async function toggleFav(mode) {
       await fetch(`${SB_URL}/rest/v1/favorites_dict?word=eq.${encodeURIComponent(currentDictWord)}`, { method: 'DELETE', headers: SB_H });
       btn.innerHTML = '☆'; btn.classList.remove('starred');
     } else {
-      await fetch(`${SB_URL}/rest/v1/favorites_dict`, {
+      await fetch(`${SB_URL}/rest/v1/favorites_dict?on_conflict=user_id,word`, {
         method: 'POST', headers: { ...SB_H, 'Prefer': 'resolution=merge-duplicates' },
         body: JSON.stringify({ word: currentDictWord, data: currentDictEntry })
       });
@@ -5276,7 +5288,7 @@ async function toggleFav(mode) {
       await fetch(`${SB_URL}/rest/v1/favorites_grammar?topic=eq.${encodeURIComponent(currentGramTopic)}`, { method: 'DELETE', headers: SB_H });
       btn.innerHTML = '☆'; btn.classList.remove('starred');
     } else {
-      await fetch(`${SB_URL}/rest/v1/favorites_grammar`, {
+      await fetch(`${SB_URL}/rest/v1/favorites_grammar?on_conflict=user_id,topic`, {
         method: 'POST', headers: { ...SB_H, 'Prefer': 'resolution=merge-duplicates' },
         body: JSON.stringify({ topic: currentGramTopic, data: currentGramEntry })
       });
@@ -5451,21 +5463,33 @@ function openWordMap() {
   showState('graph');
   if (_mapGraph) { _mapGraph.destroy(); _mapGraph = null; }
   const box = $('graphScreen');
-  box.innerHTML = '<div class="graph-screen-head"><div class="cards-title">Карта слов</div><div class="cards-head-deck">все открытые слова и связи между ними</div></div><div id="mapGraphBox"></div>';
+  const loggedIn = !!(window.Auth && Auth.user());
+  box.innerHTML = `<div class="graph-screen-head"><div class="cards-title">Карта слов</div><div class="cards-head-deck">${loggedIn ? 'слова, которые вы открывали' : 'все открытые слова и связи между ними'}</div></div><div id="mapGraphBox"></div>`;
   _mapGraph = WordGraph.create($('mapGraphBox'), {
     height: window.innerWidth < 640 ? '65vh' : '70vh', neighborsToggle: true, neighbors: false,
-    onNeighbors: v => loadWordMap(v),
+    onNeighbors: v => { _mapNeighbors = v; loadWordMap(); },
+    extraButtons: loggedIn ? '<label class="wg-inline"><input type="checkbox" class="wg-all"> tutte le parole della base</label>' : '',
     hint: 'Каждая точка это открытое слово, линии это связи из статей. Слова одной темы сбиваются в кучки. Тяните, крутите колесо, кликайте.',
     ...graphHandlers()
   });
-  loadWordMap(false);
+  const all = $('mapGraphBox').querySelector('.wg-all');
+  if (all) all.addEventListener('change', () => { _mapShowAll = all.checked; loadWordMap(); });
+  _mapNeighbors = false; _mapShowAll = false;
+  loadWordMap();
 }
-async function loadWordMap(withNeighbors) {
+let _mapNeighbors = false, _mapShowAll = false;
+async function loadWordMap() {
   const g = _mapGraph; if (!g) return;
   try {
     if (!_mapInfos) _mapInfos = await WordGraph.loadAllWords();
-    const data = WordGraph.buildGraph(_mapInfos, { neighbors: withNeighbors });
-    if (g === _mapGraph) g.setData(data.nodes, data.edges);
+    let infos = _mapInfos;
+    // Вошедший пользователь видит свои слова; общая база — по галочке
+    if (window.Auth && Auth.user() && !_mapShowAll) {
+      const mine = await Auth.myWords();
+      if (mine) { infos = new Map(); _mapInfos.forEach((info, id) => { if (mine.has(id)) infos.set(id, info); }); }
+    }
+    const data = WordGraph.buildGraph(infos, { neighbors: _mapNeighbors });
+    if (g === _mapGraph) { g.setData(data.nodes, data.edges); if (!data.nodes.length) g.setLoading('Пока пусто: откройте несколько слов, и они появятся здесь'); }
   } catch(err) { if (g === _mapGraph) g.setLoading('Не удалось загрузить: ' + err.message); }
 }
 
@@ -6235,5 +6259,7 @@ async function installApp() {
 <script src="cards.js"></script>
 <!-- Граф слов: связанные слова, карта всех слов, граф избранного -->
 <script src="graph.js"></script>
+<!-- Аккаунты: вход, профиль с ключами, права доступа к личным данным -->
+<script src="auth.js"></script>
 </body>
 </html>
