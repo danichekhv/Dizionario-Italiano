@@ -676,6 +676,14 @@
     #initialMsg { padding: 20px 20px 28px; }
     .wordmap-btn { margin-top: 16px; }
   }
+  /* На телефоне то же самое: подсказка и «Карта слов» должны быть видны без прокрутки */
+  @media (max-width: 640px) {
+    header { margin-bottom: 26px; }
+    .app-nav { margin-bottom: 22px; }
+    .search-area { margin-bottom: 20px; }
+    #initialMsg { padding: 22px 16px 24px; }
+    .wordmap-btn { margin-top: 14px; }
+  }
 
   .cards-setup { background: white; border: 1.5px solid var(--border); border-radius: 6px; padding: 22px 26px; }
   .cards-setup p { line-height: 1.5; margin-bottom: 12px; }

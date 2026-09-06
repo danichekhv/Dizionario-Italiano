@@ -266,7 +266,6 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       <div class="deck-list">${rows.join('') || '<div class="cards-empty">Колод пока нет</div>'}</div>
       <div class="cards-actions">
         <button class="cards-btn primary" onclick="Cards.newDeck(null)">＋ Новая колода</button>
-        <button class="cards-btn" onclick="Cards.seedExamples()">Создать примерные колоды</button>
         <label class="cards-inline">новых в день <input type="number" min="0" max="500" value="${newPerDay()}" onchange="Cards.setNewPerDay(this.value)"></label>
       </div>
       <div class="cards-legend"><span class="c-new">синие</span> новые · <span class="c-learn">красные</span> заучиваемые · <span class="c-due">зелёные</span> к повторению. Нажмите на название колоды, чтобы учить.</div>`;
@@ -781,47 +780,6 @@ ${JSON.stringify(list)}`;
     catch (e) { showToast('⚠ ' + e.message); }
   }
 
-  // ── Примерные колоды ─────────────────────────────────────────────────────────
-  const EXAMPLES = {
-    Cucina: [
-      ['frigorifero', 'холодильник', '/friɡoˈrifero/', 'Metti il latte nel frigorifero.', 'Apparecchio usato per conservare i cibi al fresco.'],
-      ['caffettiera', 'кофейник', '/kaffetˈtjɛra/', 'La caffettiera è sul fuoco, il caffè sarà pronto tra poco.', 'Recipiente per preparare il caffè.'],
-      ['forchetta', 'вилка', '/forˈketta/', 'Mangia la pasta con la forchetta.', 'Posata con i denti usata per prendere il cibo.'],
-      ['coltello', 'нож', '/kolˈtɛllo/', 'Attento, il coltello è molto affilato.', 'Strumento con una lama per tagliare.'],
-      ['cucchiaio', 'ложка', '/kukˈkjajo/', 'Prendi un cucchiaio per la minestra.', 'Posata concava usata per i cibi liquidi.'],
-      ['pentola', 'кастрюля', '/ˈpentola/', 'L\'acqua nella pentola sta bollendo.', 'Recipiente alto per cuocere i cibi.'],
-      ['padella', 'сковорода', '/paˈdɛlla/', 'Ho fritto le uova in padella.', 'Recipiente basso e largo con manico per friggere.'],
-      ['tovagliolo', 'салфетка', '/tovaʎˈʎɔlo/', 'Pulisciti la bocca con il tovagliolo.', 'Pezzo di stoffa o carta usato a tavola.'],
-      ['bicchiere', 'стакан', '/bikˈkjɛre/', 'Mi dai un bicchiere d\'acqua, per favore?', 'Recipiente per bere.'],
-      ['piatto', 'тарелка', '/ˈpjatto/', 'I piatti sono nel lavandino.', 'Recipiente piano su cui si serve il cibo.']
-    ],
-    Casa: [
-      ['finestra', 'окно', '/fiˈnɛstra/', 'Apri la finestra, fa caldo.', 'Apertura nel muro che lascia entrare luce e aria.'],
-      ['porta', 'дверь', '/ˈpɔrta/', 'Chiudi la porta quando esci.', 'Apertura che permette di entrare e uscire da una stanza.'],
-      ['tetto', 'крыша', '/ˈtetto/', 'Il gatto è salito sul tetto.', 'Parte superiore che copre un edificio.'],
-      ['scala', 'лестница', '/ˈskala/', 'La camera è in cima alla scala.', 'Serie di gradini per salire o scendere.'],
-      ['cucina', 'кухня', '/kuˈtʃina/', 'Facciamo colazione in cucina.', 'Stanza dove si preparano i cibi.'],
-      ['camera', 'комната; спальня', '/ˈkamera/', 'La mia camera è piccola ma luminosa.', 'Stanza di una casa, in particolare quella per dormire.'],
-      ['bagno', 'ванная', '/ˈbaɲɲo/', 'Il bagno è in fondo al corridoio.', 'Stanza con i servizi igienici.'],
-      ['divano', 'диван', '/diˈvano/', 'Ci sediamo sul divano a guardare un film.', 'Sedile imbottito per più persone.'],
-      ['armadio', 'шкаф', '/arˈmadjo/', 'I cappotti sono nell\'armadio.', 'Mobile alto con ante per riporre vestiti.'],
-      ['tappeto', 'ковёр', '/tapˈpeto/', 'Il cane dorme sul tappeto.', 'Tessuto spesso che copre il pavimento.']
-    ]
-  };
-  async function seedExamples() {
-    if (S.decks.some(d => d.name === 'Примеры')) { showToast('Колода «Примеры» уже есть'); return; }
-    try {
-      const [parent] = await sb('decks', { method: 'POST', body: { name: 'Примеры', parent_id: null } }); S.decks.push(parent);
-      for (const [name, words] of Object.entries(EXAMPLES)) {
-        const [deck] = await sb('decks', { method: 'POST', body: { name, parent_id: parent.id } }); S.decks.push(deck);
-        const notes = await sb('notes', { method: 'POST', body: words.map(w => ({ deck_id: deck.id, word: w[0], translation: w[1], phonetic: w[2], example: w[3], meaning: w[4], pos: 'sostantivo', tags: [name.toLowerCase(), 'esempio'] })) });
-        const cards = await sb('cards', { method: 'POST', body: notes.flatMap(n => [{ note_id: n.id, direction: 'it' }, { note_id: n.id, direction: 'ru' }]) });
-        S.notes.push(...notes); S.cards.push(...cards.map(c => ({ ...c, dueMs: Date.parse(c.due) || 0 })));
-      }
-      showToast('✓ Созданы колоды Примеры › Cucina, Casa'); render();
-    } catch (e) { showToast('⚠ ' + e.message); }
-  }
-
   // ── Клавиатура в режиме учёбы ────────────────────────────────────────────────
   document.addEventListener('keydown', e => {
     if (_currentState !== 'cards' || S.view !== 'study' || !S.current) return;
@@ -838,7 +796,7 @@ ${JSON.stringify(list)}`;
     async reload() { S.loaded = false; render(); await loadAll(); render(); },
     copySql() { const t = SETUP_SQL; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => showToast('✓ SQL скопирован'), () => { const el = $('cardsSql'); const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); showToast('Выделено — скопируйте вручную'); }); },
     toggleDeck(id) { S.collapsed[id] = !S.collapsed[id]; render(); },
-    newDeck, renameDeck, deleteDeck, seedExamples,
+    newDeck, renameDeck, deleteDeck,
     setNewPerDay(v) { try { localStorage.setItem(NEW_PER_DAY_KEY, String(Math.max(0, parseInt(v) || 0))); } catch (e) {} render(); },
     study(id) { study(id, S.view === 'browse' ? S.tagFilter : ''); },
     reveal, answer, undo,
