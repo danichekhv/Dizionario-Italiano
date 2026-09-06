@@ -2,12 +2,12 @@
 // Оболочка приложения: сеть в приоритете, при отсутствии сети — копия из кэша.
 // Шрифты: кэш в приоритете. Словарные данные (Supabase, Викисловарь): сеть в приоритете,
 // а последний удачный ответ сохраняется, чтобы уже просмотренные слова открывались офлайн.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL_CACHE = 'shell-' + VERSION;
 const FONT_CACHE = 'fonts-' + VERSION;
 const DATA_CACHE = 'data-' + VERSION;
 const DATA_MAX_ENTRIES = 500;
-const SHELL = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
+const SHELL = ['/', '/index.html', '/cards.js', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 const DATA_HOSTS = ['freedictionaryapi.com', 'ru.wiktionary.org', 'qmsgumhvbsefpbbkvxgs.supabase.co'];
 
 self.addEventListener('install', event => {

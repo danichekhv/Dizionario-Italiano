@@ -486,6 +486,120 @@
   .entry-source a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--border); }
   .entry-source a:hover { color: var(--terracotta); border-bottom-color: var(--terracotta); }
 
+  /* ── Le Carte: колоды, учёба, обзор ─────────────────────────── */
+  .cards-screen { display: none; animation: fadeUp 0.4s ease both; }
+  .cards-screen.active { display: block; }
+  .cards-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
+  .cards-title { font-family: 'Playfair Display', serif; font-size: 28px; font-style: italic; }
+  .cards-title.small { font-size: 20px; }
+  .cards-head-deck { color: var(--muted); font-style: italic; font-size: 15px; margin-left: auto; }
+  .cards-head-counts { display: flex; gap: 10px; font-family: 'JetBrains Mono', monospace; font-size: 14px; }
+  .c-new { color: #3b64b4; } .c-learn { color: var(--terracotta); } .c-due { color: var(--sage); }
+  .cards-back, .cards-undo { background: none; border: 1.5px solid var(--border); border-radius: 50%; width: 36px; height: 36px; cursor: pointer; font-size: 18px; color: var(--muted); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .cards-back:hover, .cards-undo:hover { border-color: var(--terracotta); color: var(--terracotta); }
+  .cards-undo.disabled { opacity: .35; pointer-events: none; }
+  .cards-head.study .cards-undo { margin-left: auto; }
+  .cards-head.study .cards-head-deck { margin-left: 0; }
+
+  .deck-list { background: white; border: 1.5px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .deck-row { display: flex; align-items: center; gap: 8px; padding: 10px 14px 10px calc(14px + var(--depth) * 22px); border-bottom: 1px solid var(--border); }
+  .deck-row:last-child { border-bottom: none; }
+  .deck-toggle { width: 18px; height: 18px; border: none; background: none; cursor: pointer; position: relative; flex-shrink: 0; }
+  .deck-toggle::after { content: ''; position: absolute; left: 5px; top: 3px; width: 6px; height: 6px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg); transition: transform .2s; }
+  .deck-toggle.closed::after { transform: rotate(-45deg); }
+  .deck-toggle.hidden { visibility: hidden; }
+  .deck-name { flex: 1; text-align: left; background: none; border: none; cursor: pointer; font-family: 'Playfair Display', serif; font-size: 18px; color: var(--ink); padding: 4px 0; }
+  .deck-name:hover { color: var(--terracotta); }
+  .deck-counts { display: flex; gap: 10px; font-family: 'JetBrains Mono', monospace; font-size: 13px; min-width: 90px; justify-content: flex-end; }
+  .deck-menu { display: flex; gap: 2px; }
+  .deck-menu button { background: none; border: 1px solid transparent; border-radius: 4px; width: 28px; height: 28px; cursor: pointer; color: var(--muted); font-size: 14px; }
+  .deck-menu button:hover { border-color: var(--border); color: var(--terracotta); background: var(--parchment); }
+  .cards-actions { display: flex; gap: 10px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+  .cards-btn { padding: 9px 16px; border: 1.5px solid var(--border); border-radius: 4px; background: white; color: var(--ink); font-family: 'Crimson Pro', serif; font-size: 15px; cursor: pointer; transition: all .2s; }
+  .cards-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
+  .cards-btn.primary { background: var(--terracotta); border-color: var(--terracotta); color: white; }
+  .cards-btn.primary:hover { background: #a8411e; color: white; }
+  .cards-btn.danger:hover { border-color: #b03030; color: #b03030; }
+  .cards-btn:disabled { opacity: .4; pointer-events: none; }
+  .cards-inline { font-size: 14px; color: var(--muted); font-style: italic; display: flex; align-items: center; gap: 6px; }
+  .cards-inline input { width: 60px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 4px; font-family: 'JetBrains Mono', monospace; background: var(--parchment); }
+  .cards-legend, .cards-p, .cards-empty { font-size: 14px; color: var(--muted); font-style: italic; margin-top: 12px; line-height: 1.5; }
+  .cards-empty { padding: 30px; text-align: center; }
+  .cards-p code { font-family: 'JetBrains Mono', monospace; font-style: normal; font-size: 12px; background: var(--parchment); padding: 1px 5px; border-radius: 3px; }
+  .cards-panel { background: white; border: 1.5px solid var(--border); border-radius: 6px; padding: 22px 26px; }
+  .cards-textarea { width: 100%; min-height: 180px; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 4px; background: var(--parchment); font-family: 'JetBrains Mono', monospace; font-size: 13px; resize: vertical; margin: 12px 0; }
+  .cards-input, .cards-select { width: 100%; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: 4px; background: var(--parchment); font-family: 'Crimson Pro', serif; font-size: 15px; }
+  .cards-select { width: auto; }
+  .cards-progress { height: 6px; background: var(--parchment); border-radius: 3px; overflow: hidden; margin: 16px 0 8px; }
+  .cards-progress-bar { height: 100%; background: var(--terracotta); transition: width .3s; }
+  .build-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; max-height: 60vh; overflow: auto; }
+  .build-row { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--cream); }
+  .build-row.off { opacity: .45; }
+  .build-row input { margin-top: 5px; }
+  .build-word { font-family: 'Playfair Display', serif; font-size: 17px; }
+  .build-ipa { font-family: 'Gentium Plus', 'Charis SIL', serif; color: var(--stone); font-size: 14px; margin: 0 6px; }
+  .build-ru { color: var(--sage); font-style: italic; font-size: 15px; font-family: 'Crimson Pro', serif; }
+  .build-ex, .build-mean { font-size: 14px; color: var(--ink-light); margin-top: 2px; }
+  .build-ex { font-style: italic; }
+  .build-warn { font-size: 13px; color: var(--terracotta); font-style: italic; margin-top: 2px; }
+
+  .study-card { background: white; border: 1.5px solid var(--border); border-radius: 8px; padding: 36px 32px; text-align: center; min-height: 260px; box-shadow: 0 4px 24px rgba(26,18,8,.06); position: relative; overflow: hidden; }
+  .study-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--terracotta), var(--gold), var(--terracotta)); }
+  .study-card.ru::before { background: linear-gradient(90deg, #3b64b4, #6b9af0, #3b64b4); }
+  .study-dir { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .25em; text-transform: uppercase; color: var(--muted); margin-bottom: 18px; }
+  .study-front { font-family: 'Playfair Display', serif; font-size: clamp(32px, 6vw, 46px); font-weight: 700; color: var(--ink); line-height: 1.1; }
+  .study-rule { height: 1px; background: var(--border); margin: 26px auto; width: 70%; }
+  .study-answer { font-family: 'Playfair Display', serif; font-size: clamp(26px, 5vw, 36px); color: var(--terracotta); font-weight: 700; }
+  .study-card.ru .study-answer { color: #3b64b4; }
+  .study-ipa { font-family: 'Gentium Plus', 'Charis SIL', 'Doulos SIL', serif; font-size: 20px; color: var(--stone); margin-top: 8px; }
+  .study-box { background: var(--parchment); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; margin: 16px auto 0; max-width: 520px; }
+  .study-box-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: .25em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .study-box-text { font-size: 18px; line-height: 1.5; color: var(--ink); }
+  .study-box-text.italic { font-style: italic; }
+  .study-tags { margin-top: 14px; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  .tag-chip { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--sage); background: rgba(74,94,58,.08); border: 1px solid rgba(74,94,58,.25); border-radius: 12px; padding: 2px 9px; cursor: pointer; }
+  .study-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 18px; }
+  .study-buttons .sb { padding: 10px 6px; border-radius: 8px; border: 1.5px solid; cursor: pointer; font-family: 'Crimson Pro', serif; font-size: 17px; display: flex; flex-direction: column; align-items: center; gap: 2px; transition: transform .1s; }
+  .study-buttons .sb:active { transform: scale(.97); }
+  .study-buttons .sb small { font-family: 'JetBrains Mono', monospace; font-size: 11px; opacity: .8; }
+  .sb.again { background: #f6d9d5; border-color: #d8998f; color: #8a2f1e; }
+  .sb.hard  { background: #f8e6c3; border-color: #dcb96f; color: #7a5410; }
+  .sb.good  { background: #dcebd3; border-color: #9cc48a; color: #2f5b22; }
+  .sb.easy  { background: #d5e3f5; border-color: #93b3e0; color: #1f4a8a; }
+  .sb.show  { grid-column: 1 / -1; background: var(--terracotta); border-color: var(--terracotta); color: white; font-size: 18px; padding: 14px; }
+  .study-hint { text-align: center; font-size: 12px; color: var(--stone); font-style: italic; margin-top: 12px; }
+  .cards-done { text-align: center; padding: 60px 20px; color: var(--muted); font-style: italic; font-size: 18px; }
+  .cards-done-mark { width: 56px; height: 56px; border-radius: 50%; background: var(--sage); color: white; font-size: 26px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+  .cards-done .cards-btn { margin-top: 20px; }
+
+  .browse-list { display: flex; flex-direction: column; margin-top: 14px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+  .browse-row { display: grid; grid-template-columns: 20px 1.2fr 1.2fr 1fr 40px; gap: 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--cream); }
+  .browse-row:last-child { border-bottom: none; }
+  .browse-word { background: none; border: none; text-align: left; cursor: pointer; font-family: 'Playfair Display', serif; font-size: 16px; color: var(--ink); padding: 0; }
+  .browse-word:hover { color: var(--terracotta); }
+  .browse-ru { color: var(--sage); font-style: italic; font-size: 15px; }
+  .browse-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+  .browse-state { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); text-align: right; }
+  .cards-modal { position: fixed; inset: 0; background: rgba(26,18,8,.45); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
+  .cards-modal-box { background: var(--cream); border-radius: 8px; padding: 24px; width: 100%; max-width: 520px; max-height: 90vh; overflow: auto; }
+  .cards-field { display: block; margin-top: 10px; }
+  .cards-field span { display: block; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .cards-field input, .cards-field textarea { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 4px; background: white; font-family: 'Crimson Pro', serif; font-size: 15px; }
+  .cards-field textarea { min-height: 60px; resize: vertical; }
+  .cards-setup { background: white; border: 1.5px solid var(--border); border-radius: 6px; padding: 22px 26px; }
+  .cards-setup p { line-height: 1.5; margin-bottom: 12px; }
+  .cards-sql { background: #1e1a14; color: #e8ddc8; font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 14px; border-radius: 6px; overflow: auto; max-height: 320px; white-space: pre; }
+  @media (max-width: 640px) {
+    .deck-row { flex-wrap: wrap; padding-left: calc(10px + var(--depth) * 14px); }
+    .deck-menu { width: 100%; justify-content: flex-end; }
+    .cards-panel { padding: 16px 14px; }
+    .study-card { padding: 28px 16px; }
+    .study-buttons { gap: 6px; }
+    .study-buttons .sb { font-size: 15px; padding: 8px 4px; }
+    .browse-row { grid-template-columns: 20px 1fr 1fr; }
+    .browse-tags, .browse-state { grid-column: 2 / -1; text-align: left; }
+  }
+
   /* Нумерованные значения */
   .meanings-list {
     display: flex;
@@ -2984,6 +3098,10 @@
       <span class="nav-icon">📐</span>
       <span>La <span class="nav-label-it">Grammatica</span></span>
     </button>
+    <button class="app-nav-btn" id="navCards" onclick="switchMode('cards')">
+      <span class="nav-icon">🃏</span>
+      <span>Le <span class="nav-label-it">Carte</span></span>
+    </button>
   </nav>
 
   <div class="search-area">
@@ -3037,6 +3155,9 @@
 
   <!-- Grammar result -->
   <div class="grammar-card" id="grammarCard"></div>
+
+  <!-- Cards (Le Carte): колоды и повторение -->
+  <div class="cards-screen" id="cardsScreen"></div>
 
   <!-- Favorites screen -->
   <div class="fav-screen" id="favScreen">
@@ -3371,11 +3492,19 @@ function applyModeUI(mode) {
   const isGram = mode === 'grammar';
   const isFav  = mode === 'favorites';
   document.body.classList.toggle('mode-grammar', isGram);
+  document.body.classList.toggle('mode-cards', mode === 'cards');
   $('navDict').classList.toggle('active', mode === 'dict');
   $('navGram').classList.toggle('active', isGram);
+  $('navCards').classList.toggle('active', mode === 'cards');
   $('headerFavBtn').classList.toggle('active', isFav);
   updateFavFloat(mode);
-  if (isFav) {
+  if (mode === 'cards') {
+    $('headerOrnament').textContent = 'Интервальные повторения';
+    $('headerTitle').innerHTML = 'Le <em>Carte</em>';
+    $('headerSubtitle').textContent = 'Колоды · Карточки · Повторение';
+    document.querySelector('.lang-toggle').style.display = 'none';
+    document.querySelector('.search-area').style.display = 'none';
+  } else if (isFav) {
     $('headerOrnament').textContent = 'Сохранённые статьи';
     $('headerTitle').innerHTML = 'Pre<em>feriti</em>';
     $('headerSubtitle').textContent = 'Словарь · Грамматика';
@@ -3410,6 +3539,11 @@ function switchMode(mode, skipHistoryClear = false) {
     showState('favorites');
     renderFavList(currentFavTab);
     updateFavCount();
+    return;
+  }
+  if (mode === 'cards' && !skipHistoryClear) {
+    showState('cards');
+    if (window.Cards) Cards.open();
     return;
   }
   if (!skipHistoryClear) {
@@ -3548,7 +3682,7 @@ function showState(state) {
   }
 
   _currentState = state;
-  ['initialMsg','loadingMsg','errorMsg','resultCard','ruResults','grammarCard','favScreen']
+  ['initialMsg','loadingMsg','errorMsg','resultCard','ruResults','grammarCard','favScreen','cardsScreen']
     .forEach(id => $(id).classList.remove('active'));
   if (state === 'initial')        { $('initialMsg').classList.add('active'); renderHistory(); hideInlineHistory(); }
   else if (state === 'loading')   { $('loadingMsg').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
@@ -3557,6 +3691,7 @@ function showState(state) {
   else if (state === 'rulist')    { $('ruResults').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
   else if (state === 'grammar')   { $('grammarCard').classList.add('active'); $('historySection').style.display='none'; renderInlineHistory('grammar'); }
   else if (state === 'favorites') { $('favScreen').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
+  else if (state === 'cards')     { $('cardsScreen').classList.add('active'); $('historySection').style.display='none'; hideInlineHistory(); }
 
   updateBackBtn();
 }
@@ -5746,5 +5881,7 @@ async function installApp() {
 }
 
 </script>
+<!-- Колоды и карточки (Le Carte) — отдельный модуль, использует функции словаря выше -->
+<script src="cards.js"></script>
 </body>
 </html>
