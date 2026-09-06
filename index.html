@@ -5276,6 +5276,8 @@ function renderFavRows(rows, tab) {
   const keyCol = tab === 'words' ? 'word' : 'topic';
   list.innerHTML = '';
   _favVisibleKeys = tab === 'words' ? rows.map(r => r.word) : [];
+  // Выделение не должно ссылаться на слова, которых в списке уже нет
+  [...favSelected].forEach(k => { if (!cachedFavRows.some(r => r.word === k)) favSelected.delete(k); });
   rows.forEach(row => {
       const key = row[keyCol];
       const d = row.data;
