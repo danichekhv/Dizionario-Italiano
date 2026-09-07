@@ -1914,7 +1914,7 @@ function renderEntry(e) {
             ${h.phonetic ? `<span class="homograph-ipa">${highlightStress(escapeHtml(h.phonetic))}</span>` : ''}
           </div>
           ${h.russian ? `<div class="homograph-ru">${escapeHtml(h.russian)}</div>` : ''}
-          ${ms.map(m => `<div class="definition-text">${makeClickable(m.definition || '')}</div>${m.example ? `<div class="example-text">« ${makeClickable(m.example)} »</div>` : ''}`).join('')}
+          ${ms.map(m => `<div class="definition-text">${makeClickable(m.definition || '')}</div>${m.example ? `<div class="example-text">${makeClickable(m.example)}</div>` : ''}`).join('')}
         </div>`;
       }).join('');
       hs.style.display = '';
@@ -1952,7 +1952,7 @@ function renderEntry(e) {
       const m = e.meanings[0];
       mc.innerHTML = `
         <div class="definition-text">${makeClickable(m.definition || '—')}</div>
-        ${m.example ? `<div class="example-text">« ${makeClickable(m.example)} »</div>` : ''}`;
+        ${m.example ? `<div class="example-text">${makeClickable(m.example)}</div>` : ''}`;
     } else {
       // Несколько значений — с нумерацией
       mc.innerHTML = `<div class="meanings-list">${e.meanings.map((m, i) => `
@@ -1960,7 +1960,7 @@ function renderEntry(e) {
           <div class="meaning-num">${i + 1}</div>
           <div class="meaning-body">
             <div class="meaning-definition">${makeClickable(m.definition || '')}</div>
-            ${m.example ? `<div class="meaning-example">« ${makeClickable(m.example)} »</div>` : ''}
+            ${m.example ? `<div class="meaning-example">${makeClickable(m.example)}</div>` : ''}
           </div>
         </div>`).join('')}
       </div>`;
@@ -1971,7 +1971,7 @@ function renderEntry(e) {
     // Старый формат из кэша — definition + example
     mc.innerHTML = `
       <div class="definition-text">${makeClickable(e.definition || '—')}</div>
-      ${e.example ? `<div class="example-text">« ${makeClickable(e.example)} »</div>` : ''}`;
+      ${e.example ? `<div class="example-text">${makeClickable(e.example)}</div>` : ''}`;
   }
 
   // Related words
@@ -2348,10 +2348,10 @@ function openWordMap() {
   const loggedIn = !!(window.Auth && Auth.user());
   box.innerHTML = `<div class="graph-screen-head"><div class="cards-title">Карта слов</div><div class="cards-head-deck">${loggedIn ? 'слова, которые вы открывали' : 'все открытые слова и связи между ними'}</div></div><div id="mapGraphBox"></div>`;
   _mapGraph = WordGraph.create($('mapGraphBox'), {
-    height: window.innerWidth < 640 ? '65vh' : '70vh', neighborsToggle: true, neighbors: false,
-    onNeighbors: v => { _mapNeighbors = v; loadWordMap(); },
+    height: window.innerWidth < 640 ? '65vh' : '70vh', neighborsToggle: true, neighbors: false, wordLinksToggle: true, wordLinks: false,
+    onNeighbors: v => { _mapNeighbors = v; loadWordMap(); }, onWordLinks: v => { _mapLinks = v; loadWordMap(); },
     extraButtons: loggedIn ? '<label class="wg-inline"><input type="checkbox" class="wg-all"> tutte le parole della base</label>' : '',
-    hint: 'Каждая точка это открытое слово, линии это связи из статей. Слова одной темы сбиваются в кучки. Тяните, крутите колесо, кликайте.',
+    hint: 'Крупные узлы — темы и ваши теги, вокруг них ваши слова. Клик по теме подсвечивает её слова, клик по слову открывает статью. «Связи слов» добавляет связи между словами из статей.',
     ...graphHandlers()
   });
   const all = $('mapGraphBox').querySelector('.wg-all');
@@ -2359,7 +2359,7 @@ function openWordMap() {
   _mapNeighbors = false; _mapShowAll = false;
   loadWordMap();
 }
-let _mapNeighbors = false, _mapShowAll = false;
+let _mapNeighbors = false, _mapShowAll = false, _mapLinks = false;
 async function loadWordMap() {
   const g = _mapGraph; if (!g) return;
   try {
@@ -2370,7 +2370,7 @@ async function loadWordMap() {
       const mine = await Auth.myWords();
       if (mine) { infos = new Map(); _mapInfos.forEach((info, id) => { if (mine.has(id)) infos.set(id, info); }); }
     }
-    const data = WordGraph.buildGraph(infos, { neighbors: _mapNeighbors });
+    const data = WordGraph.buildGraph(infos, { neighbors: _mapNeighbors && _mapLinks, wordLinks: _mapLinks, tagsOf: tagsOfInfo });
     if (window.Auth) Auth.applyTagsToNodes(data.nodes);
     if (g === _mapGraph) { g.setData(data.nodes, data.edges); if (!data.nodes.length) g.setLoading('Пока пусто: откройте несколько слов, и они появятся здесь'); }
   } catch(err) { if (g === _mapGraph) g.setLoading('Не удалось загрузить: ' + err.message); }
@@ -2383,16 +2383,22 @@ function setFavView(v) {
   document.querySelectorAll('#favViewToggle .view-toggle-btn').forEach(b => b.classList.toggle('active', b.dataset.v === v));
   filterFavList();
 }
+// Теги слова для узлов-тем на графах: личные теги, а без них — тема статьи
+function tagsOfInfo(info) {
+  const own = window.Auth && Auth.ownTags ? Auth.ownTags(info.id) : null;
+  if (own && own.length) return own;
+  return info.cat && info.cat !== '?' ? [info.cat] : [];
+}
 function renderFavGraph(rows) {
   const list = $('favList');
   if (_favGraph) { _favGraph.destroy(); _favGraph = null; }
   list.innerHTML = '<div id="favGraphBox"></div>';
-  let neighbors = false;
-  const build = () => { const data = WordGraph.buildFromEntries(rows.map(r => r.data), { neighbors }); if (window.Auth) Auth.applyTagsToNodes(data.nodes); _favGraph.setData(data.nodes, data.edges); };
+  let neighbors = false, links = false;
+  const build = () => { const data = WordGraph.buildFromEntries(rows.map(r => r.data), { neighbors: neighbors && links, wordLinks: links, tagsOf: tagsOfInfo }); if (window.Auth) Auth.applyTagsToNodes(data.nodes); _favGraph.setData(data.nodes, data.edges); };
   _favGraph = WordGraph.create($('favGraphBox'), {
-    height: window.innerWidth < 640 ? '60vh' : '65vh', neighborsToggle: true, neighbors,
-    onNeighbors: v => { neighbors = v; build(); },
-    hint: 'Связи между избранными словами. Включите соседей, чтобы увидеть, к чему они ведут.',
+    height: window.innerWidth < 640 ? '60vh' : '65vh', neighborsToggle: true, neighbors, wordLinksToggle: true, wordLinks: links,
+    onNeighbors: v => { neighbors = v; build(); }, onWordLinks: v => { links = v; build(); },
+    hint: 'Избранные слова вокруг своих тем. Клик по теме подсвечивает её слова. «Связи слов» включает связи между словами, соседи — ещё не открытые.',
     ...graphHandlers()
   });
   build();

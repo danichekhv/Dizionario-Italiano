@@ -572,7 +572,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const tokens = clozeTokens(n.example, n.word);
     // Лицевая сторона: пример с пропуском (RU→IT) или с выделенным словом (IT→RU); слова примера кликабельны
     const sentence = tokens ? `<div class="study-box study-sentence"><div class="study-box-label">Esempio</div><div class="study-box-text italic">${sentenceHtml(tokens, S.revealed || isIt ? 'mark' : 'gap')}</div></div>`
-      : (S.revealed && n.example ? `<div class="study-box"><div class="study-box-label">Esempio</div><div class="study-box-text italic">«${makeClickable(n.example)}»</div></div>` : '');
+      : (S.revealed && n.example ? `<div class="study-box"><div class="study-box-label">Esempio</div><div class="study-box-text italic">${makeClickable(n.example)}</div></div>` : '');
     const chk = S.check;
     const typedBlock = S.revealed && chk ? `
         <div class="study-typed ${chk.ok ? 'ok' : chk.near ? 'near' : 'bad'}">
@@ -638,7 +638,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
           <input type="checkbox" ${it.include ? 'checked' : ''} onchange="Cards.toggleItem(${i}, this.checked)">
           <div class="build-main">
             <div class="build-word">${esc(it.word)} <span class="build-ipa">${esc(it.phonetic)}</span> <span class="build-ru">${esc(it.translation) || '<em>нет перевода</em>'}</span></div>
-            ${it.example ? `<div class="build-ex">«${esc(it.example)}»</div>` : ''}
+            ${it.example ? `<div class="build-ex">${esc(it.example)}</div>` : ''}
             ${it.meaning ? `<div class="build-mean">${esc(it.meaning)}</div>` : ''}
             ${it.warn ? `<div class="build-warn">${esc(it.warn)}</div>` : ''}
           </div>

@@ -434,6 +434,7 @@ grant execute on function import_shared_deck(text) to authenticated;`;
     const k = window.WordGraph ? WordGraph.catKey(category) : (category || '').toLowerCase();
     return k && k !== '?' ? [k] : [];
   }
+  const ownTags = w => wordTags.get((w || '').toLowerCase()) || null; // личные теги слова для узлов-тем графа
   function applyTagsToNodes(nodes) {
     (nodes || []).forEach(n => { const t = wordTags.get(n.id); if (t && t.length) n.cat = t[0]; });
   }
@@ -501,5 +502,5 @@ grant execute on function import_shared_deck(text) to authenticated;`;
   } catch (e) {}
 
   window.Auth = { user: () => session && session.user, isAdmin, require, signIn, signUp, signOut, resetPassword, changePassword, pushProfile, pullProfile, logView, myWords, renderUi, signInUi, signUpUi, resetUi, changePasswordUi, showSql, copySql,
-    tagsFor, applyTagsToNodes, renameTagUi, addTagUi, loadTags };
+    tagsFor, ownTags, applyTagsToNodes, renameTagUi, addTagUi, loadTags };
 })();

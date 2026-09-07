@@ -83,10 +83,18 @@
       else if (depth < nodes.get(id).depth) nodes.get(id).depth = depth;
     };
     infos.forEach((info, id) => add(id, info, opts.depthOf ? (opts.depthOf.get(id) ?? 0) : 0));
-    infos.forEach((info, id) => info.rel.forEach(t => {
+    // Связи слово↔слово (relatedWords от модели) можно выключить: на карте с темами они только путают
+    if (opts.wordLinks !== false) infos.forEach((info, id) => info.rel.forEach(t => {
       if (t === id) return;
       if (infos.has(t)) edges.add(edgeKey(id, t));
       else if (opts.neighbors) { add(t, null, nodes.get(id).depth + 1); edges.add(edgeKey(id, t)); }
+    }));
+    // Узлы-темы, как родительские заметки: слово связано с каждым своим тегом (личным, а без него — с темой
+    // статьи). Тема крупнее слова и собирает вокруг себя облако; слово с двумя тегами висит между ними
+    if (opts.tagsOf) infos.forEach((info, id) => (opts.tagsOf(info) || []).forEach(t => {
+      const hid = '#' + t;
+      if (!nodes.has(hid)) nodes.set(hid, { id: hid, label: t, cat: t, pos: '?', ru: '', depth: 0, known: true, hub: true, count: 0 });
+      nodes.get(hid).count++; edges.add(edgeKey(id, hid));
     }));
     return { nodes: [...nodes.values()], edges: [...edges].map(k => k.split('|')) };
   }
@@ -135,6 +143,7 @@
         <input class="wg-search" placeholder="найти слово…" autocomplete="off" spellcheck="false">
         <select class="wg-mode" title="Чем раскрашивать узлы"><option value="cat">colore: tema</option><option value="pos">colore: parte del discorso</option></select>
         ${opts.depthControl ? `<label class="wg-inline">кольца <select class="wg-depth">${[1, 2, 3, 4, 5].map(n => `<option value="${n}" ${n === (opts.depth || 2) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>` : ''}
+        ${opts.wordLinksToggle ? `<label class="wg-inline"><input type="checkbox" class="wg-links" ${opts.wordLinks ? 'checked' : ''}> связи слов</label>` : ''}
         ${opts.neighborsToggle ? `<label class="wg-inline"><input type="checkbox" class="wg-neigh" ${opts.neighbors ? 'checked' : ''}> ещё не открытые соседи</label>` : ''}
         <button class="wg-btn wg-fit" title="Вписать всё">${svgIcon('fit')}</button>
         ${opts.extraButtons || ''}
@@ -190,8 +199,8 @@
       const a = G.alpha; const N = G.nodes;
       for (let i = 0; i < N.length; i++) { const n = N[i]; if (!visible(n)) continue; for (let j = i + 1; j < N.length; j++) { const m = N[j]; if (!visible(m)) continue;
         let dx = n.x - m.x, dy = n.y - m.y; let d2 = dx * dx + dy * dy; if (d2 > 160000) continue; if (d2 < 1) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1; }
-        const f = 2600 * a / d2; const fx = dx * f / Math.sqrt(d2), fy = dy * f / Math.sqrt(d2); n.vx += fx; n.vy += fy; m.vx -= fx; m.vy -= fy; } }
-      G.edges.forEach(([n, m]) => { if (!visible(n) || !visible(m)) return; const dx = m.x - n.x, dy = m.y - n.y, d = Math.max(1, Math.sqrt(dx * dx + dy * dy)); const rest = 70 + 18 * Math.max(n.depth || 0, m.depth || 0); const f = (d - rest) * 0.045 * a; n.vx += dx / d * f; n.vy += dy / d * f; m.vx -= dx / d * f; m.vy -= dy / d * f; });
+        const f = 2600 * a / d2 * (n.hub && m.hub ? 10 : 1); const fx = dx * f / Math.sqrt(d2), fy = dy * f / Math.sqrt(d2); /* темы расталкиваются сильнее, чтобы облака не слипались */ n.vx += fx; n.vy += fy; m.vx -= fx; m.vy -= fy; } }
+      G.edges.forEach(([n, m]) => { if (!visible(n) || !visible(m)) return; const dx = m.x - n.x, dy = m.y - n.y, d = Math.max(1, Math.sqrt(dx * dx + dy * dy)); const rest = (n.hub || m.hub) ? 60 : 70 + 18 * Math.max(n.depth || 0, m.depth || 0); const f = (d - rest) * 0.045 * a; n.vx += dx / d * f; n.vy += dy / d * f; m.vx -= dx / d * f; m.vy -= dy / d * f; });
       N.forEach(n => { n.vx -= n.x * 0.012 * a; n.vy -= n.y * 0.012 * a; if (n.fx != null) { n.x = n.fx; n.y = n.fy; n.vx = n.vy = 0; return; } if (G.center === n.id && !G.centerMoved) { n.x = n.y = 0; n.vx = n.vy = 0; return; } n.vx *= 0.55; n.vy *= 0.55; n.x += n.vx; n.y += n.vy; });
       G.alpha += (0 - G.alpha) * 0.022;
     }
@@ -211,15 +220,21 @@
       // подписи — постоянного размера на экране
       const showAll = G.scale >= 0.55; const fs = 12.5 / G.scale;
       ctx.font = `${fs}px "Crimson Pro", Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-      G.nodes.forEach(n => { if (!visible(n)) return; const hot = hlSet.has(n) || G.matches.has(n) || n.id === G.center; if (!showAll && !hot && !(G.scale >= 0.35 && (n.depth || 0) <= 1)) return; ctx.globalAlpha = dim && !hot ? 0.3 : 1; const y = n.y + radius(n) + 3 / G.scale; ctx.lineWidth = 3 / G.scale; ctx.strokeStyle = 'rgba(245,240,232,0.9)'; ctx.strokeText(n.label, n.x, y); ctx.fillStyle = hot ? '#c4522a' : '#1a1208'; if (hot) ctx.font = `bold ${fs}px "Crimson Pro", Georgia, serif`; ctx.fillText(n.label, n.x, y); if (hot) ctx.font = `${fs}px "Crimson Pro", Georgia, serif`; });
+      G.nodes.forEach(n => { if (!visible(n)) return; const hot = hlSet.has(n) || G.matches.has(n) || n.id === G.center; if (!showAll && !hot && !n.hub && !(G.scale >= 0.35 && (n.depth || 0) <= 1)) return; ctx.globalAlpha = dim && !hot && !n.hub ? 0.3 : 1; const y = n.y + radius(n) + 3 / G.scale; ctx.lineWidth = 3 / G.scale; ctx.strokeStyle = 'rgba(245,240,232,0.9)'; if (hot || n.hub) ctx.font = `bold ${n.hub ? fs * 1.15 : fs}px "Crimson Pro", Georgia, serif`; ctx.strokeText(n.label, n.x, y); ctx.fillStyle = hot ? '#c4522a' : '#1a1208'; ctx.fillText(n.label, n.x, y); if (hot || n.hub) ctx.font = `${fs}px "Crimson Pro", Georgia, serif`; });
       ctx.globalAlpha = 1;
     }
-    // Все узлы одинаково маленькие, выделяется только текущее слово в центре
-    const radius = n => (n.id === G.center ? 13 : 5);
+    // Слова одинаково маленькие, выделяется текущее слово в центре; тема растёт с числом слов
+    const radius = n => n.hub ? Math.min(30, 9 + 2.4 * Math.sqrt(n.count || 1)) : (n.id === G.center ? 13 : 5);
+    // Клик по теме подсвечивает её слова, второй клик снимает подсветку
+    function focusHub(n) {
+      if (G.focusHub === n) { G.focusHub = null; G.matches = new Set(); }
+      else { G.focusHub = n; G.matches = new Set([n]); G.edges.forEach(([a, b]) => { if (a === n) G.matches.add(b); if (b === n) G.matches.add(a); }); }
+      draw();
+    }
 
     // Легенда — переключатели видимости
     function buildLegend() {
-      const counts = {}; G.nodes.forEach(n => { const k = keyOf(n); counts[k] = (counts[k] || 0) + 1; });
+      const counts = {}; G.nodes.forEach(n => { if (n.hub) return; const k = keyOf(n); counts[k] = (counts[k] || 0) + 1; });
       const colors = G.mode === 'cat' ? CAT_COLORS : POS_COLORS, labels = G.mode === 'cat' ? CAT_LABELS : POS_LABELS;
       const keys = Object.keys(colors).filter(k => counts[k]);
       // Подписи по-итальянски (это и есть тег слова), русский перевод во всплывающей подсказке
@@ -236,8 +251,8 @@
     function setHover(n, e) {
       if (G.hover === n) return; G.hover = n; draw();
       clearTimeout(hoverTimer);
-      if (n && opts.onHover) hoverTimer = setTimeout(() => opts.onHover(n.label, e.clientX, e.clientY), 150);
-      else if (!n && opts.onHoverEnd) opts.onHoverEnd();
+      if (n && !n.hub && opts.onHover) hoverTimer = setTimeout(() => opts.onHover(n.label, e.clientX, e.clientY), 150);
+      else if ((!n || n.hub) && opts.onHoverEnd) opts.onHoverEnd(); // у темы подсказки нет
       canvas.style.cursor = n ? 'pointer' : (pan ? 'grabbing' : 'grab');
     }
 
@@ -262,7 +277,7 @@
       if (drag) {
         const n = drag.node;
         if (drag.moved) { if (n.id === G.center) G.centerMoved = true; /* перетащенный узел остаётся там, где его оставили */ }
-        else { n.fx = n.fy = drag.wasPinned ? n.fx : null; if (drag.type === 'touch' || drag.type === 'pen') { if (opts.onTap) opts.onTap(n.label); } else if (opts.onOpen) opts.onOpen(n.label); }
+        else { n.fx = n.fy = drag.wasPinned ? n.fx : null; if (n.hub) focusHub(n); else if (drag.type === 'touch' || drag.type === 'pen') { if (opts.onTap) opts.onTap(n.label); } else if (opts.onOpen) opts.onOpen(n.label); }
         drag = null; G.alpha = Math.max(G.alpha, 0.15); loop();
       }
       if (pan) { pan = null; canvas.style.cursor = 'grab'; }
@@ -277,6 +292,7 @@
     const searchEl = container.querySelector('.wg-search');
     searchEl.addEventListener('input', () => { G.query = norm(searchEl.value); G.matches = new Set(G.query ? G.nodes.filter(n => n.id.includes(G.query) || norm(n.ru).includes(G.query)) : []); draw(); });
     searchEl.addEventListener('keydown', e => { if (e.key === 'Enter' && G.matches.size) { const n = [...G.matches][0]; G.tx = G.w / 2 - n.x * G.scale; G.ty = G.h / 2 - n.y * G.scale; draw(); } });
+    const linksEl = container.querySelector('.wg-links'); if (linksEl) linksEl.addEventListener('change', e => opts.onWordLinks && opts.onWordLinks(e.target.checked));
     container.querySelector('.wg-mode').addEventListener('change', e => { G.mode = e.target.value; G.hidden.clear(); buildLegend(); draw(); });
     container.querySelector('.wg-fit').addEventListener('click', fit);
     const depthSel = container.querySelector('.wg-depth'); if (depthSel) depthSel.addEventListener('change', () => opts.onDepth && opts.onDepth(parseInt(depthSel.value)));
