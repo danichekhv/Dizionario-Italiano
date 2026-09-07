@@ -2280,7 +2280,7 @@ const graphHandlers = () => ({
   onOpen: w => { $('searchInput').value = w; lookupWord(w); },
   onTap: w => showBottomSheet(w, false),
   onHover: (w, x, y) => showPreview(null, w, false, x, y),
-  onHoverEnd: () => hidePreview()
+  onHoverEnd: () => scheduleHidePreview() // с задержкой: курсору нужно время дойти до подсказки через холст
 });
 let _relatedGraph = null, _relatedGraphKey = '';
 const getRelatedView = () => { try { return localStorage.getItem('dizionario_related_view') || 'graph'; } catch(e) { return 'graph'; } };
@@ -2915,7 +2915,7 @@ function showPreview(el, word, isGrammar, x, y) {
   popup.innerHTML = `<div class="wp-loading">…</div>`;
   popup.dataset.word = word;
   // Граф передаёт не элемент, а координаты курсора: якорем служит точка под ним
-  positionPreview(popup, el ? el.getBoundingClientRect() : { left: x, right: x, top: y - 12, bottom: y + 12 });
+  positionPreview(popup, el ? el.getBoundingClientRect() : { left: x - 8, right: x, top: y - 8, bottom: y + 4 });
   popup.classList.add('visible');
   const stillMine = () => popup.classList.contains('visible') && popup.dataset.word === word;
 
