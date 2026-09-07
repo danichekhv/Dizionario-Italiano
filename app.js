@@ -697,6 +697,7 @@ function approxIpa(word) {
     if (ch === 'z' && nx === 'z') { out.push(i === 0 ? 'ddz' : 'tts'); i += 2; continue; }
     if (ch === 'z') { out.push(i === 0 ? 'dz' : 'ts'); i++; continue; }
     if (ch === 'x') { out.push('ks'); i++; continue; }
+    if (ch === 's' && 'bdglmnrv'.includes(nx)) { out.push('z'); i++; continue; } // s перед звонкой согласной: sbaglio, -ismo
     if (ch === 's' && isV(w[i - 1] || '') && isV(nx)) { out.push('z'); i++; continue; }
     if ((ch === 'i' || ch === 'u') && isV(nx) && !isV(w[i - 1] || '')) { out.push(ch === 'i' ? 'j' : 'w'); i++; continue; }
     out.push(ch); i++;
@@ -716,7 +717,7 @@ function approxIpa(word) {
         cut--;
         if (/[ʃʒsz]/.test(ipa[cut]) && cut > 0 && /[td]/.test(ipa[cut - 1])) cut--;
         if (/[rlwj]/.test(ipa[cut]) && cut > 0 && !isVow(ipa[cut - 1]) && ipa[cut - 1] !== ipa[cut]) cut--;
-        if (ipa[cut] !== 's' && cut > 0 && ipa[cut - 1] === 's') cut--; // s + согласная начинает слог: ˈskwola, ˈspesso
+        if (!/[sz]/.test(ipa[cut]) && cut > 0 && /[sz]/.test(ipa[cut - 1])) cut--; // s/z + согласная начинает слог: ˈskwola, ˈzbaʎo
       }
       ipa = ipa.slice(0, cut) + 'ˈ' + ipa.slice(cut);
     }
