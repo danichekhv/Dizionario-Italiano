@@ -1102,8 +1102,22 @@ function mapFreeDictionary(fd, opts = {}) {
   }
 
   const ipa = (primary.pronunciations || []).find(p => p.type === 'ipa' && p.text);
+  // Омографы: другие леммы того же написания (ancora — наречие и существительное). Показываются
+  // отдельным разделом статьи; словоформы других слов сюда не попадают, они в alsoForms
+  const homographs = entries.filter(en => en !== primary && (en.senses || []).some(s => !fdIsFormOf(s))).map(en => {
+    const ss = (en.senses || []).filter(s => !fdIsFormOf(s)).slice(0, 3);
+    const tg = new Set(ss.flatMap(s => s.tags || []));
+    const pr = (en.pronunciations || []).find(p => p.type === 'ipa' && p.text);
+    return {
+      partOfSpeech: FD_POS[en.partOfSpeech] || en.partOfSpeech || '',
+      gender: en.partOfSpeech === 'noun' ? (tg.has('feminine') && tg.has('masculine') ? 'm./f.' : tg.has('feminine') ? 'f.' : tg.has('masculine') ? 'm.' : null) : null,
+      phonetic: pr ? pr.text : '',
+      glosses: ss.map(s => fdCleanGloss(s.definition)).filter(Boolean),
+      example: ss.map(s => (s.examples && s.examples[0]) || '').find(Boolean) || ''
+    };
+  });
   return {
-    word, partOfSpeech: FD_POS[posEn] || posEn, gender, isNoun, isVerb,
+    word, partOfSpeech: FD_POS[posEn] || posEn, gender, isNoun, isVerb, homographs,
     phonetic: ipa ? ipa.text : '',
     singular, plural, conjugations, auxiliary,
     english: { main: englishMain, alternatives: englishAlts },
@@ -1210,21 +1224,28 @@ function fdCompletionPrompt(base, opts = {}) {
   const senseLines = base.senses.map((s, i) =>
     `${i + 1}. ${s.label ? '(' + s.label + ') ' : ''}${s.gloss}${s.example ? ` — e.g. "${s.example}"` : ''}`).join('\n');
   const needRelated = (base.relatedWords || []).length < 3;
+  const homos = base.homographs || [];
+  const homoLines = homos.map((h, i) => `${i + 1}. ${h.partOfSpeech}${h.gender ? ` (${h.gender})` : ''}${h.phonetic ? ` ${h.phonetic}` : ''}: ${h.glosses.join('; ')}`).join('\n');
   const meaningsRule = base.senses.length
     ? `exactly ${base.senses.length} item(s), one per known sense above, in the same order. Reuse the given example if it is a natural full sentence, otherwise write your own.`
     : `1-3 items ordered from most to least frequent usage.`;
   return `You are an expert Italian linguist. Complete the dictionary entry for the Italian ${base.partOfSpeech} "${base.word}"${base.gender ? ` (${base.gender})` : ''}.
 Known senses from Wiktionary (English glosses, most common first):
-${senseLines || '(none)'}
+${senseLines || '(none)'}${homos.length ? `
+
+The same spelling is also a different word (homographs):
+${homoLines}` : ''}
 
 Return ONLY valid JSON, no markdown:
 {${opts.skipRussian ? '' : `
   "russian": { "main": "primary Russian translation", "alternatives": "2-3 alternatives semicolon-separated or empty" },`}
   "category": "${CATEGORY_PROMPT}",
   "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian" } ]${needRelated ? `,
-  "relatedWords": ["3-5 semantically related Italian words (synonyms, antonyms, thematic)"]` : ''}
+  "relatedWords": ["3-5 semantically related Italian words (synonyms, antonyms, thematic)"]` : ''}${homos.length ? `,
+  "homographs": [ { "russian": "primary Russian translation; alternatives after ;", "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian" } ] } ]` : ''}
 }
-meanings: ${meaningsRule}`;
+meanings: ${meaningsRule}${homos.length ? `
+homographs: one object per homograph listed above, in the same order, 1-2 meanings each.` : ''}`;
 }
 
 function fdMergeCompletion(base, extra, fastRu) {
@@ -1235,9 +1256,14 @@ function fdMergeCompletion(base, extra, fastRu) {
   (Array.isArray(extra.relatedWords) ? extra.relatedWords : []).forEach(w => {
     if (typeof w === 'string' && w && !related.includes(w) && related.length < 6) related.push(w);
   });
+  const homographs = (base.homographs || []).map((h, i) => {
+    const x = (Array.isArray(extra.homographs) ? extra.homographs[i] : null) || {};
+    return { ...h, russian: typeof x.russian === 'string' ? x.russian : '', meanings: Array.isArray(x.meanings) ? x.meanings.filter(m => m && m.definition).map(m => ({ definition: m.definition, example: m.example || '' })) : [] };
+  });
   const { senses, _pending, ...rest } = base;
   return {
     ...rest,
+    homographs,
     russian: fastRu && fastRu.main
       ? fastRu
       : { main: extra.russian?.main || '', alternatives: extra.russian?.alternatives || '' },
@@ -1858,6 +1884,27 @@ function renderEntry(e) {
     srcEl.style.display = 'block';
   } else {
     srcEl.style.display = 'none';
+  }
+
+  // Омографы: другие слова того же написания — своя часть речи, род, транскрипция, перевод и определения
+  const hs = $('homographsSection'), hc = $('homographsContainer');
+  if (hs && hc) {
+    const list = e.homographs || [];
+    if (list.length) {
+      hc.innerHTML = list.map(h => {
+        const ms = h.meanings && h.meanings.length ? h.meanings : (h.glosses || []).map((g, i) => ({ definition: g, example: i === 0 ? h.example : '' }));
+        return `<div class="homograph">
+          <div class="homograph-head">
+            <span class="word-type-badge">${escapeHtml(h.partOfSpeech || '')}</span>
+            ${h.gender ? `<span class="homograph-gender">${escapeHtml(h.gender)}</span>` : ''}
+            ${h.phonetic ? `<span class="homograph-ipa">${highlightStress(escapeHtml(h.phonetic))}</span>` : ''}
+          </div>
+          ${h.russian ? `<div class="homograph-ru">${escapeHtml(h.russian)}</div>` : ''}
+          ${ms.map(m => `<div class="definition-text">${makeClickable(m.definition || '')}</div>${m.example ? `<div class="example-text">« ${makeClickable(m.example)} »</div>` : ''}`).join('')}
+        </div>`;
+      }).join('');
+      hs.style.display = '';
+    } else hs.style.display = 'none';
   }
 
   const pluralRow = $('pluralRow');
@@ -2732,6 +2779,9 @@ function previewHeaderHtml(d, p) {
   // Слово со своей статьёй, которое заодно является формой других слов (specifica → specifico, specificare)
   const alsoHtml = d.alsoForms && d.alsoForms.length
     ? `<div class="${p}-formof">также: ${d.alsoForms.map(l => `${l.lemma}${l.pos ? ` (${l.pos})` : ''}`).join(', ')}</div>` : '';
+  // Омографы в подсказке одной строкой: «также sostantivo: anchor»
+  const homoHtml = d.homographs && d.homographs.length
+    ? `<div class="${p}-formof">также ${d.homographs.map(h => `${h.partOfSpeech}${h.russian ? ': ' + h.russian.split(';')[0] : h.glosses && h.glosses[0] ? ': ' + h.glosses[0] : ''}`).join('; ')}</div>` : '';
   return `<div class="${p}-word">${head}</div>
     ${formOfHtml}
     ${d.phonetic ? `<div class="${p}-phonetic">${highlightStressPreview(d.phonetic)}</div>` : ''}
@@ -2739,7 +2789,7 @@ function previewHeaderHtml(d, p) {
       ${d.partOfSpeech ? `<span class="${p}-badge">${d.partOfSpeech}</span>` : ''}
       ${d.category ? `<span class="${p}-badge">${d.category}</span>` : ''}
     </div>
-    ${alsoHtml}`;
+    ${alsoHtml}${homoHtml}`;
 }
 function previewRussianHtml(d) {
   if (d.russian && d.russian.main) return `${d.russian.main}${d.russian.alternatives ? `<br><em>${d.russian.alternatives}</em>` : ''}`;

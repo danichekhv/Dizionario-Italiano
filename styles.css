@@ -3325,3 +3325,14 @@ body.mode-grammar .search-recent { background: var(--night-surface); border-colo
 /* На телефоне видно четыре строки подсказок, остальные шесть — прокруткой внутри списка: окно должно
    целиком помещаться над клавиатурой, иначе его низ уходит под неё и прокрутка «упирается» */
 @media (max-width: 640px) { .search-recent { max-height: 196px; } .suggest-item { padding: 10px 8px; } }
+
+/* ── Омографы в статье: ancora — наречие «ещё» и существительное «якорь» ── */
+.homograph { padding: 16px 0; border-top: 1px solid var(--border); }
+.homograph:first-child { border-top: none; padding-top: 0; }
+.homograph-head { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; }
+.homograph-head .word-type-badge { margin: 0; }
+.homograph-gender { font-style: italic; color: var(--sage); font-size: var(--fs-body); }
+.homograph-ipa { font-family: var(--font-ipa); color: var(--stone); font-size: var(--fs-body); }
+.homograph-ru { font-family: var(--font-cyr); font-size: var(--fs-lead); color: var(--terracotta); margin-bottom: 8px; }
+.homograph .definition-text { font-size: var(--fs-body); line-height: var(--lh-ui); }
+.homograph .example-text { font-size: var(--fs-body); margin-top: 8px; }
