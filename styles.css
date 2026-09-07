@@ -855,10 +855,13 @@
   .cards-sql { background: #1e1a14; color: #e8ddc8; font-family: var(--font-mono); font-size: var(--fs-small); padding: 16px; border-radius: var(--radius); overflow: auto; max-height: 320px; white-space: pre; }
   @media (max-width: 640px) {
     .cards-head-counts { font-size: var(--fs-small); gap: 8px; }
-    .cards-actions .cards-btn { flex: 1 1 auto; text-align: center; }
-    /* «новых в день» уходит на свою строку: рядом с кнопкой ему тесно и поле сжимается.
-       Поле держим сразу за подписью, а не в другом конце строки. */
-    .cards-actions .cards-inline { flex: 1 0 100%; justify-content: flex-start; }
+    /* Действия колоды — сетка в две колонки, а не перенос по ширине надписей:
+       иначе каждая строка получает свою ширину и колонки не сходятся */
+    .cards-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .cards-actions .cards-btn { flex: none; width: 100%; text-align: center; }
+    /* «новых в день» и одинокая кнопка занимают строку целиком */
+    .cards-actions .cards-inline { grid-column: 1 / -1; justify-content: flex-start; }
+    .cards-actions > :only-child { grid-column: 1 / -1; }
     .cards-panel { padding: 16px 16px; }
     .study-card { padding: 28px 16px; }
     .study-buttons { gap: 8px; }
