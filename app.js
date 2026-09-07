@@ -1218,11 +1218,13 @@ function parseRuWiktionaryMeanings(text) {
     if (s && !/^\?+$/.test(s) && !/отсутствует/i.test(s)) items.push(s);
   });
   if (!items.length) return null;
-  const parts = items[0].split(/[;,]/).map(x => x.trim()).filter(Boolean);
+  // Делим по «;» и «,» только вне скобок: «старший (по службе, возрасту)» — один вариант, а не два обрывка
+  const splitTop = s => { const out = []; let depth = 0, cur = ''; for (const ch of s) { if (ch === '(') depth++; else if (ch === ')') depth = Math.max(0, depth - 1); if ((ch === ';' || ch === ',') && depth === 0) { out.push(cur); cur = ''; } else cur += ch; } out.push(cur); return out.map(x => x.trim()).filter(Boolean); };
+  const parts = splitTop(items[0]);
   const main = parts[0];
   if (!main || main.length > 60) return null;
   const alts = [];
-  parts.slice(1).concat(items.slice(1).map(x => x.split(/[;,]/)[0].trim()))
+  parts.slice(1).concat(items.slice(1).map(x => splitTop(x)[0] || ''))
     .forEach(a => { if (a && a !== main && a.length <= 60 && !alts.includes(a) && alts.length < 4) alts.push(a); });
   return { main, alternatives: alts.join('; ') };
 }
