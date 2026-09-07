@@ -1510,23 +1510,87 @@ async function lookupRussian(word) {
 Find all meaningful Italian translations. Return ONLY a JSON array, no markdown. Each item:
 {"italian":"canonical form","partOfSpeech":"sostantivo/verbo/etc","gender":"m./f./null","shortDefinition":"краткое значение по-русски (4-8 слов)","register":"neutro/formale/colloquiale/letterario"}
 Return 1-8 items. If no translation exists, return [].`;
-  const cachedRu = await sbGet('russian_search', word.toLowerCase());
+  const q = word.trim().toLowerCase();
+  const cachedRu = await sbGet('russian_search', q);
   if (cachedRu) {
     if (cachedRu.length === 1) { await lookupWord(cachedRu[0].italian); return; }
     renderRuResults(word, cachedRu); showState('rulist'); showCacheBadge(); return;
   }
 
-  try {
-    const results = await callGemini(prompt);
-    if (!Array.isArray(results) || results.length === 0) { $('errorText').textContent = `"${word}" — перевод не найден`; showState('error'); return; }
-    await sbSave('russian_search', 'word', word.toLowerCase(), results);
-    if (results.length === 1) { await lookupWord(results[0].italian); return; }
-    renderRuResults(word, results);
-    showState('rulist');
-  } catch(err) {
-    console.error("lookupRussian error:", err);
-    handleApiError(err.message || '');
+  // Слои, от бесплатного к дорогому: переводы уже открытых статей и колод → русский Викисловарь →
+  // модель, только если набралось меньше трёх вариантов. Слова модели проверяются по Викисловарю.
+  const items = [];
+  const has = w => items.some(i => i.italian.toLowerCase() === String(w || '').toLowerCase());
+  try { (await searchOwnTranslations(q)).forEach(i => { if (!has(i.italian)) items.push(i); }); } catch (e) { console.warn('own translations:', e); }
+  try { (await fetchRuWiktItalian(q)).forEach(w => { if (!has(w)) items.push({ italian: w, source: 'словарь' }); }); } catch (e) { console.warn('ru.wiktionary it=:', e); }
+  let llmError = null;
+  if (items.length < 3) {
+    try {
+      const results = await llmJson(prompt, 'dict');
+      const list = Array.isArray(results) ? results.filter(r => r && r.italian) : [];
+      const ok = await verifyWords(list.map(r => cleanQuery(r.italian)));
+      list.forEach(r => { if (ok.includes(cleanQuery(r.italian)) && !has(r.italian)) items.push({ ...r, source: 'модель' }); });
+    } catch (err) { llmError = err; console.error('lookupRussian llm:', err); }
   }
+  if (!items.length) {
+    if (llmError) { handleApiError(llmError.message || ''); return; }
+    $('errorText').textContent = `"${word}" — перевод не найден`; showState('error'); return;
+  }
+  const results = await enrichRuItems(items.slice(0, 8));
+  await sbSave('russian_search', 'word', q, results);
+  if (results.length === 1) { await lookupWord(results[0].italian); return; }
+  renderRuResults(word, results);
+  showState('rulist');
+}
+
+// Переводы из уже сохранённых статей (общий кэш) и из своих колод: поиск по подстроке, точное слово выше
+async function searchOwnTranslations(q) {
+  const out = [];
+  const pat = `*${q.replace(/[*,()]/g, '')}*`;
+  const exactIn = s => String(s || '').toLowerCase().split(/[;,]/).map(x => x.trim()).includes(q);
+  const res = await fetch(`${SB_URL}/rest/v1/dictionary?select=${encodeURIComponent('word,w:data->>word,pos:data->>partOfSpeech,g:data->>gender,ru:data->russian->>main,alt:data->russian->>alternatives,unv:data->>unverified')}&or=(${encodeURIComponent(`data->russian->>main.ilike.${pat},data->russian->>alternatives.ilike.${pat}`)})&limit=30`, { headers: SB_H });
+  if (res.ok) (await res.json()).forEach(r => {
+    if (r.unv === 'true' || !(r.w || r.word)) return;
+    const hit = [r.ru, ...String(r.alt || '').split(/[;,]/)].map(x => String(x || '').trim()).find(x => x.toLowerCase().includes(q)) || r.ru;
+    out.push({ italian: r.w || r.word, partOfSpeech: r.pos || '', gender: r.g || null, shortDefinition: hit || r.ru || '', source: 'кэш', _exact: exactIn(r.ru) || exactIn(r.alt) });
+  });
+  if (window.Auth && Auth.user()) {
+    const nr = await fetch(`${SB_URL}/rest/v1/notes?select=word,pos,translation&translation=ilike.${encodeURIComponent(pat)}&limit=20`, { headers: SB_H }).catch(() => null);
+    if (nr && nr.ok) (await nr.json()).forEach(n => {
+      if (out.some(i => i.italian.toLowerCase() === String(n.word).toLowerCase())) return;
+      out.push({ italian: n.word, partOfSpeech: n.pos || '', gender: null, shortDefinition: n.translation || '', source: 'кэш', _exact: exactIn(n.translation) });
+    });
+  }
+  out.sort((a, b) => (b._exact ? 1 : 0) - (a._exact ? 1 : 0));
+  return out.map(({ _exact, ...i }) => i);
+}
+// Строка |it= в разделе «Перевод» статьи русского слова: [[vecchio]], {{t|it|funzionario|m}}
+async function fetchRuWiktItalian(q) {
+  const res = await fetch(`https://ru.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(q)}&prop=wikitext&format=json&formatversion=2&redirects=1&origin=*`);
+  if (!res.ok) return [];
+  const text = ((await res.json()).parse || {}).wikitext || '';
+  const words = [];
+  for (const m of text.matchAll(/\|it=([^\n]*)/g)) {
+    for (const w of m[1].matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]|\{\{t\|it\|([^}|]+)/g)) {
+      const w0 = cleanQuery(w[1] || w[2] || '').toLowerCase();
+      if (w0 && /^[a-zàèéìíòóùú' ]+$/.test(w0) && !words.includes(w0)) words.push(w0);
+    }
+  }
+  return words.slice(0, 8);
+}
+// Часть речи, род и короткое значение для найденного без модели: английский Викисловарь + русский
+async function enrichRuItems(items) {
+  await Promise.all(items.map(async i => {
+    if (i.partOfSpeech && i.shortDefinition) return;
+    try {
+      const fd = await fetchFreeDictionary(i.italian);
+      const m = fd ? mapFreeDictionary(fd, { light: true }) : null;
+      if (m && !m.lemma && !m.lemmas) { i.partOfSpeech = i.partOfSpeech || m.partOfSpeech || ''; i.gender = i.gender || m.gender || null; if (!i.shortDefinition) i.shortDefinition = (m.english && m.english.main) || ''; }
+      if (!i.shortDefinition || /^[a-z ,;()-]+$/i.test(i.shortDefinition)) { const ru = await fetchRuWiktionary(i.italian).catch(() => null); if (ru && ru.main) i.shortDefinition = ru.main; }
+    } catch (e) {}
+    i.partOfSpeech = i.partOfSpeech || ''; i.shortDefinition = i.shortDefinition || '';
+  }));
+  return items;
 }
 
 // ── Поиск грамматического правила ────────────────────────────────────────────
@@ -1797,7 +1861,7 @@ function renderRuResults(query, results, titleText) {
     card.innerHTML = `
       <div class="ru-word-left">
         <div class="ru-word-italian">${item.italian}</div>
-        <div class="ru-word-meta">${item.partOfSpeech}${item.gender ? ' · ' + item.gender : ''} · ${item.shortDefinition}${item.register && item.register !== 'neutro' ? ' · <em>' + item.register + '</em>' : ''}</div>
+        <div class="ru-word-meta">${[item.partOfSpeech, item.gender, item.shortDefinition].filter(Boolean).join(' · ')}${item.register && item.register !== 'neutro' ? ' · <em>' + item.register + '</em>' : ''}${item.source === 'кэш' ? ' · <em>уже открывали</em>' : item.source === 'словарь' ? ' · <em>Викисловарь</em>' : ''}</div>
       </div>
       <div class="ru-word-arrow">→</div>
     `;
