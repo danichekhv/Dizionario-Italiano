@@ -3345,8 +3345,11 @@
 @media (max-width: 640px) { .study-typed { font-size: var(--fs-body); } .study-input { font-size: var(--fs-body); } }
 
 /* ── Сегодняшние карточки: кнопка на главной, бейдж на вкладке, итог сессии ─────────── */
-.nav-badge { font-family: var(--font-mono); font-size: var(--fs-micro); line-height: 1; background: var(--terracotta); color: white; border-radius: 10px; padding: 3px 6px; margin-left: 6px; font-style: normal; vertical-align: 1px; }
-.app-nav-btn.active .nav-badge { background: white; color: var(--terracotta); }
+.nav-badge { font-family: var(--font-mono); font-size: var(--fs-micro); line-height: 1; background: var(--accent); color: white; border-radius: 10px; padding: 3px 6px; margin-left: 6px; font-style: normal; vertical-align: 1px; }
+.app-nav-btn.active .nav-badge { background: white; color: var(--accent); }
+/* В грамматике бейдж берёт тот же синий, что и активная вкладка: --accent там светлее и тонет в фоне */
+body.mode-grammar .nav-badge { background: var(--blue-bright); }
+body.mode-grammar .app-nav-btn.active .nav-badge { background: white; color: var(--blue-deep); }
 /* Главная: ряд действий под поиском, без подсказок «введите слово» */
 #initialMsg { padding: 8px 0 16px; }
 .home-actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 8px; }
