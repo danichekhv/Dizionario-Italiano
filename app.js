@@ -1145,6 +1145,14 @@ function fdCleanGloss(def) {
 }
 function fdSenseLabel(def) { const m = (def || '').match(/^\s*\(([^)]*)\)/); return m ? m[1] : ''; }
 
+// В промпте варианты части речи перечислялись через « / », и модель иногда возвращала не выбор,
+// а кусок самого списка: «sostantivo / verbo». Оставляем первый вариант.
+function cleanPos(pos) {
+  const s = String(pos || '').trim();
+  if (!/[\/,]/.test(s)) return s;
+  return s.split(/\s*[\/,]\s*/).map(p => p.trim()).filter(Boolean)[0] || s;
+}
+
 // Пометы употребления. Без них статья врёт: у «sito» устаревшее «расположенный» и диалектное
 // «вонь» стоят рядом с обычным значением и выглядят как равноправные.
 const USAGE_RU = {
@@ -1484,7 +1492,7 @@ async function lookupWord(word, _depth = 0, opts = {}) {
 Return ONLY valid JSON, no markdown, no explanation. Schema:
 {
   "word": "canonical form",
-  "partOfSpeech": "sostantivo / verbo / aggettivo / avverbio / preposizione / congiunzione / pronome / articolo / interiezione",
+  "partOfSpeech": "EXACTLY ONE of these, never a combination: sostantivo, verbo, aggettivo, avverbio, preposizione, congiunzione, pronome, articolo, interiezione",
   "category": "${CATEGORY_PROMPT}",
   "gender": "m. / f. / m./f. / null",
   "phonetic": "IPA with ˈ before stressed syllable",
@@ -1562,6 +1570,7 @@ label: one of [obsolete, archaic, dialectal, regional, vulgar, offensive, slang,
     const entry = await llmJson(prompt, 'dict');
     if (!entry.word) { $('errorText').textContent = `"${word}" — parola non trovata`; showState('error'); return; }
     entry.relatedWords = await verifyWords(entry.relatedWords);
+    entry.partOfSpeech = cleanPos(entry.partOfSpeech);
     // Пометки модель отдаёт по-английски, на экран они идут сокращениями по-русски
     if (Array.isArray(entry.meanings)) entry.meanings = entry.meanings.map(m => ({ ...m, label: usageLabel([m && m.label], '') }));
     // Слова нет в Викисловаре, статья целиком от модели: помечаем, в граф и «мои слова» оно не попадёт
@@ -1592,7 +1601,7 @@ async function lookupPhrase(phrase) {
 Return ONLY valid JSON, no markdown:
 {
   "word": "the expression in its canonical citation form (verb in the infinitive, no quotes), or null if it is not a real Italian expression",
-  "partOfSpeech": "locuzione verbale / locuzione avverbiale / locuzione nominale / locuzione aggettivale / locuzione prepositiva / modo di dire / proverbio",
+  "partOfSpeech": "EXACTLY ONE of these, never a combination: locuzione verbale, locuzione avverbiale, locuzione nominale, locuzione aggettivale, locuzione prepositiva, modo di dire, proverbio",
   "category": "${CATEGORY_PROMPT}",
   "russian": { "main": "idiomatic Russian equivalent (not word-for-word)", "alternatives": "2-3 alternatives semicolon-separated or empty" },
   "english": { "main": "idiomatic English equivalent", "alternatives": "2-3 alternatives semicolon-separated or empty" },
@@ -1605,7 +1614,7 @@ meanings: 1-3 items, most frequent first. Do NOT include phonetic transcription,
     const raw = await llmJson(prompt, 'dict');
     if (!raw || !raw.word) { $('errorText').textContent = `"${phrase}" — espressione non trovata`; showState('error'); return; }
     const entry = {
-      word: cleanQuery(raw.word) || phrase, partOfSpeech: raw.partOfSpeech || 'locuzione', category: raw.category || 'altro',
+      word: cleanQuery(raw.word) || phrase, partOfSpeech: cleanPos(raw.partOfSpeech) || 'locuzione', category: raw.category || 'altro',
       gender: null, phonetic: await ipaJob, singular: null, plural: null, conjugations: null,
       russian: raw.russian || { main: '', alternatives: '' }, english: raw.english || { main: '', alternatives: '' },
       meanings: Array.isArray(raw.meanings) ? raw.meanings.filter(m => m && m.definition).map(m => ({ ...m, label: usageLabel([m.label], '') })) : [],
@@ -2065,7 +2074,7 @@ function renderEntry(e) {
   $('wordPhonetic').innerHTML = highlightStress(e.phonetic);
   $('wordPhonetic').classList.toggle('approx', !!e.phoneticApprox);
   $('wordPhonetic').title = e.phoneticApprox ? 'Приблизительно, по правилам чтения: в словарях транскрипции нет. Без знака ударения, если оно не очевидно' : '';
-  $('wordType').textContent = e.partOfSpeech || '—';
+  $('wordType').textContent = cleanPos(e.partOfSpeech) || '—';
   // Теги слова: по умолчанию тема из статьи, у вошедшего пользователя — свои (клик переименовывает,
   // «+» добавляет). Часть речи слева тегом не является и не редактируется.
   document.querySelectorAll('.word-tag, .word-tag-add').forEach(x => x.remove());
@@ -2149,7 +2158,7 @@ function renderEntry(e) {
         const ms = h.meanings && h.meanings.length ? h.meanings : (h.glosses || []).map((g, i) => ({ definition: g, example: i === 0 ? h.example : '' }));
         return `<div class="homograph">
           <div class="homograph-head">
-            <span class="word-type-badge">${escapeHtml(h.partOfSpeech || '')}</span>
+            <span class="word-type-badge">${escapeHtml(cleanPos(h.partOfSpeech))}</span>
             ${h.gender ? `<span class="homograph-gender">${escapeHtml(h.gender)}</span>` : ''}
             ${h.label ? `<span class="usage-tag">${escapeHtml(h.label)}</span>` : ''}
             ${h.phonetic ? `<span class="homograph-ipa">${highlightStress(escapeHtml(h.phonetic))}</span>` : ''}
@@ -2475,13 +2484,13 @@ async function regenVoices() {
   const prompt = `You are an expert Italian lexicographer. The Italian word "${word}" is already documented as: ${e.partOfSpeech || ''} — ${(e.meanings || []).map(m => m.definition).join('; ') || '—'}.
 List OTHER Italian words spelled exactly "${word}" that are separate dictionary entries (homographs): a different part of speech, a different etymology, or a distinctly different word. Do not repeat the sense(s) above and do not list inflected forms of other words.
 Return ONLY valid JSON, no markdown:
-{ "voices": [ { "partOfSpeech": "sostantivo / verbo / aggettivo / avverbio …", "gender": "m. / f. / empty", "phonetic": "IPA in slashes or empty", "label": "usage label or empty string", "russian": "Russian translation; alternatives after ;", "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural Italian example", "label": "usage label or empty string" } ] } ] }
+{ "voices": [ { "partOfSpeech": "exactly one of: sostantivo, verbo, aggettivo, avverbio, pronome, congiunzione, interiezione", "gender": "m. / f. / empty", "phonetic": "IPA in slashes or empty", "label": "usage label or empty string", "russian": "Russian translation; alternatives after ;", "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural Italian example", "label": "usage label or empty string" } ] } ] }
 label: one of [obsolete, archaic, dialectal, regional, vulgar, offensive, slang, colloquial, rare, literary, poetic, formal, figurative, humorous, technical, medicine, law, nautical, botany, zoology, military] or empty. Mark obsolete, dialectal and rare entries honestly.
 If there are no such homographs, return { "voices": [] }.`;
   try {
     const raw = await llmJson(prompt, 'dict');
     const voices = (Array.isArray(raw && raw.voices) ? raw.voices : []).map(v => ({
-      partOfSpeech: String(v.partOfSpeech || '').trim(), gender: String(v.gender || '').trim(),
+      partOfSpeech: cleanPos(v.partOfSpeech), gender: String(v.gender || '').trim(),
       phonetic: String(v.phonetic || '').trim(), label: usageLabel([v.label], ''),
       russian: String(v.russian || '').trim(), glosses: [], example: '',
       meanings: (Array.isArray(v.meanings) ? v.meanings : []).filter(m => m && m.definition)
