@@ -1486,8 +1486,8 @@ Return ONLY valid JSON, no markdown, no explanation. Schema:
   "russian": { "main": "primary Russian translation", "alternatives": "2-3 alts semicolon-separated or empty" },
   "english": { "main": "primary English translation", "alternatives": "2-3 alts semicolon-separated or empty" },
   "meanings": [
-    { "definition": "Definition in Italian (1 sentence)", "example": "Example sentence in Italian" },
-    { "definition": "Second meaning if exists", "example": "Example for second meaning" }
+    { "definition": "Definition in Italian (1 sentence)", "example": "Example sentence in Italian", "label": "usage label or empty string" },
+    { "definition": "Second meaning if exists", "example": "Example for second meaning", "label": "usage label or empty string" }
   ],
   "isNoun": true/false,
   "isVerb": true/false,
@@ -1512,7 +1512,8 @@ Return ONLY valid JSON, no markdown, no explanation. Schema:
     "Gerundio": {"Presente":"","Passato":""}
   }
 }
-If isVerb false → conjugations null. If isNoun false → singular/plural null. If not a real Italian word → word null. relatedWords: 3-5 semantically related Italian words (synonyms, antonyms, thematic). meanings: 1-4 items ordered from most frequent to least frequent usage. Always include at least 1 meaning.`;
+If isVerb false → conjugations null. If isNoun false → singular/plural null. If not a real Italian word → word null. relatedWords: 3-5 semantically related Italian words (synonyms, antonyms, thematic). meanings: 1-4 items ordered from most frequent to least frequent usage; obsolete, dialectal and rare senses go last. Always include at least 1 meaning.
+label: one of [obsolete, archaic, dialectal, regional, vulgar, offensive, slang, colloquial, rare, literary, poetic, formal, figurative, humorous, technical, medicine, law, nautical, botany, zoology, military], or an empty string for an ordinary sense. Set it only when the sense really is restricted; never guess.`;
   // 1. Кэш Supabase — мгновенно
   const cachedWord = opts.force ? null : await sbGet('dictionary', word.toLowerCase());
   if (cachedWord) {
@@ -1554,6 +1555,8 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
     const entry = await llmJson(prompt, 'dict');
     if (!entry.word) { $('errorText').textContent = `"${word}" — parola non trovata`; showState('error'); return; }
     entry.relatedWords = await verifyWords(entry.relatedWords);
+    // Пометки модель отдаёт по-английски, на экран они идут сокращениями по-русски
+    if (Array.isArray(entry.meanings)) entry.meanings = entry.meanings.map(m => ({ ...m, label: usageLabel([m && m.label], '') }));
     // Слова нет в Викисловаре, статья целиком от модели: помечаем, в граф и «мои слова» оно не попадёт
     entry.unverified = !(await wordExists(entry.word || word));
     // Транскрипцию модели не берём: словари, иначе правила чтения
@@ -1586,7 +1589,7 @@ Return ONLY valid JSON, no markdown:
   "category": "${CATEGORY_PROMPT}",
   "russian": { "main": "idiomatic Russian equivalent (not word-for-word)", "alternatives": "2-3 alternatives semicolon-separated or empty" },
   "english": { "main": "idiomatic English equivalent", "alternatives": "2-3 alternatives semicolon-separated or empty" },
-  "meanings": [ { "definition": "What the expression means, in Italian (1 sentence)", "example": "Natural Italian sentence using the whole expression" } ],
+  "meanings": [ { "definition": "What the expression means, in Italian (1 sentence)", "example": "Natural Italian sentence using the whole expression", "label": "one of [obsolete, archaic, dialectal, regional, vulgar, offensive, slang, colloquial, rare, literary, poetic, figurative, humorous] or an empty string; set it only when the sense really is restricted" } ],
   "register": "neutro / colloquiale / formale / volgare / letterario / regionale",
   "relatedWords": ["3-5 related Italian words or expressions"]
 }
@@ -1598,7 +1601,7 @@ meanings: 1-3 items, most frequent first. Do NOT include phonetic transcription,
       word: cleanQuery(raw.word) || phrase, partOfSpeech: raw.partOfSpeech || 'locuzione', category: raw.category || 'altro',
       gender: null, phonetic: await ipaJob, singular: null, plural: null, conjugations: null,
       russian: raw.russian || { main: '', alternatives: '' }, english: raw.english || { main: '', alternatives: '' },
-      meanings: Array.isArray(raw.meanings) ? raw.meanings.filter(m => m && m.definition) : [],
+      meanings: Array.isArray(raw.meanings) ? raw.meanings.filter(m => m && m.definition).map(m => ({ ...m, label: usageLabel([m.label], '') })) : [],
       isNoun: false, isVerb: false, isPhrase: true,
       register: raw.register || '',
       relatedWords: await verifyWords(raw.relatedWords),
