@@ -1462,7 +1462,11 @@ async function lookupWordHybrid(query, base, opts = {}) {
     // Если перевод уже добыт для всплывающей подсказки этого слова — показываем его сразу
     const previewQ = _previewCache['d:' + key] || _previewCache['d:' + query.toLowerCase()];
     if (previewQ && previewQ.data && previewQ.data.russian && previewQ.data.russian.main) takeRu(previewQ.data.russian);
-    const wiktJob = fetchRuWiktionary(base.word).then(takeRu).catch(() => {});
+    // ru.wiktionary отдаёт «Значение» одним плоским списком на все слова этого написания, и первым
+    // может идти перевод другой леммы: у «porto» это «переноска» (porto d'armi), а статья про гавань.
+    // Если написание делят несколько слов — переводит модель, она видит английский глосс нужного.
+    const ambiguous = (base.homographs || []).length > 0;
+    const wiktJob = ambiguous ? Promise.resolve() : fetchRuWiktionary(base.word).then(takeRu).catch(() => {});
     let shownMeanings = 0;
     const extra = await llmJsonStream(fdCompletionPrompt(base), 'dict', partial => {
       const m = partial.match(/"russian"\s*:\s*\{[^{}]*\}/);
