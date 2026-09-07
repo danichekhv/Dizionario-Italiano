@@ -696,7 +696,10 @@ function approxIpa(word) {
   const out = []; let i = 0, stressAt = -1;
   const accented = { 'à': 'a', 'è': 'ɛ', 'é': 'e', 'ì': 'i', 'í': 'i', 'ò': 'ɔ', 'ó': 'o', 'ù': 'u', 'ú': 'u' };
   while (i < w.length) {
-    const ch = w[i], nx = w[i + 1] || '', nx2 = w[i + 2] || '';
+    const ch = w[i];
+    // Для правил чтения соседние гласные берём без акцента: «cì» в слоговом делении — это всё равно c + i → tʃ
+    const BASE = { 'à': 'a', 'è': 'e', 'é': 'e', 'ì': 'i', 'í': 'i', 'ò': 'o', 'ó': 'o', 'ù': 'u', 'ú': 'u' };
+    const nx = BASE[w[i + 1]] || w[i + 1] || '', nx2 = BASE[w[i + 2]] || w[i + 2] || '';
     const dbl = w[i - 1] === ch; // вторая буква удвоенной согласной: удваиваем результат
     if (ch === "'") { i++; continue; }
     if (accented[ch]) { stressAt = out.length; out.push(accented[ch]); i++; continue; }
@@ -751,20 +754,24 @@ async function resolveIpa(word) {
   if (!k) return { ipa: '', approx: false };
   const fd = await fetchFreeDictionary(k).catch(() => null);
   const p = fd && fd.entries.flatMap(en => en.pronunciations || []).find(x => x.type === 'ipa' && x.text);
-  if (p) return { ipa: p.text, approx: false };
+  if (p) return { ipa: p.text, approx: false, src: 'wikt-en' };
   const it = await fetchItWikt(k);
-  if (it.ipa) return { ipa: it.ipa, approx: false };
-  if (/\s/.test(k)) return { ipa: '', approx: true };
-  // Слоги с ударением из итальянского Викисловаря + правила чтения: ударение и e/o из словаря, остальное по правилам
-  if (it.accented) return { ipa: approxIpa(it.accented), approx: false };
-  return { ipa: approxIpa(k), approx: true };
+  if (it.ipa) return { ipa: it.ipa, approx: false, src: 'wikt-it' };
+  if (/\s/.test(k)) return { ipa: '', approx: true, src: 'none' };
+  // Слоги с ударением из итальянского Викисловаря + правила чтения: ударение и e/o из словаря, остальное по правилам.
+  // src запоминается в статье: построенное по правилам пересчитывается при открытии, если правила поправили
+  if (it.accented) return { ipa: approxIpa(it.accented), approx: false, src: 'sill' };
+  return { ipa: approxIpa(k), approx: true, src: 'rules' };
 }
 // Статья из кэша без транскрипции или с приблизительной: пробуем добыть точную и, если пользователь вошёл, сохраняем
 async function fillPhonetic(entry) {
-  if (!entry.word || entry.isPhrase || (entry.phonetic && !entry.phoneticApprox)) return;
+  // Пересчитываем только то, что не взято из словаря: пустое, приблизительное или построенное по слогам/правилам
+  const builtByRules = !entry.phonetic || entry.phoneticApprox || entry.phoneticSrc === 'sill' || entry.phoneticSrc === 'rules';
+  if (!entry.word || entry.isPhrase || !builtByRules) return;
   const r = await resolveIpa(entry.word);
-  if (!r.ipa || (entry.phonetic && r.approx)) return;
-  entry.phonetic = r.ipa; entry.phoneticApprox = r.approx;
+  if (!r.ipa || (r.ipa === entry.phonetic && r.src === entry.phoneticSrc)) return;
+  if (entry.phonetic && r.approx && entry.phoneticSrc !== 'rules') return; // приблизительным точное не заменяем
+  entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; entry.phoneticSrc = r.src;
   if (currentDictEntry === entry) renderEntry(entry);
   if (window.Auth && Auth.user()) sbSave('dictionary', 'word', entry.word.toLowerCase(), entry);
 }
@@ -1311,7 +1318,7 @@ async function lookupWordHybrid(query, base) {
     await wiktJob;
     const entry = fdMergeCompletion(base, extra, shownRu);
     entry.relatedWords = await verifyWords(entry.relatedWords, base.relatedWords || []); // синонимы Викисловаря доверенные, добавки модели — проверяем
-    if (!entry.phonetic) { const r = await resolveIpa(entry.word); entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; }
+    if (!entry.phonetic) { const r = await resolveIpa(entry.word); entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; entry.phoneticSrc = r.src; }
     const queryKey = query.toLowerCase();
     await sbSave('dictionary', 'word', key, entry);
     if (queryKey !== key) await sbSave('dictionary', 'word', queryKey, entry);
@@ -1415,7 +1422,7 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
     // Слова нет в Викисловаре, статья целиком от модели: помечаем, в граф и «мои слова» оно не попадёт
     entry.unverified = !(await wordExists(entry.word || word));
     // Транскрипцию модели не берём: словари, иначе правила чтения
-    { const r = await resolveIpa(entry.word || word); entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; }
+    { const r = await resolveIpa(entry.word || word); entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; entry.phoneticSrc = r.src; }
     const canonicalKey = (entry.word || word).toLowerCase();
     const queryKey = word.toLowerCase();
     await sbSave('dictionary', 'word', canonicalKey, entry);
