@@ -2512,7 +2512,7 @@ async function renderSuggest() {
   items.sort((a, b) => a.w.length - b.w.length);
   const freq = await loadFreq();
   if (inp.value.trim().toLowerCase() !== q) return; // пока грузили, ввод изменился
-  for (const w of freq) { if (items.length >= 40) break; // потолок только чтобы не рисовать сотни строк на «co» if (w.startsWith(q) && w !== q && !items.some(i => i.w === w)) items.push({ w, src: '' }); }
+  for (const w of freq) { if (items.length >= 40) break; /* потолок только чтобы не рисовать сотни строк на «co» */ if (w.startsWith(q) && w !== q && !items.some(i => i.w === w)) items.push({ w, src: '' }); }
   if (!items.length) { hideRecent(); return; }
   _sugIndex = -1;
   sec.innerHTML = `<div class="suggest-list">${items.slice(0, 40).map(i =>
