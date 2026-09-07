@@ -585,9 +585,10 @@
   .cards-head-deck { color: var(--muted); font-style: italic; font-size: var(--fs-body); margin-left: auto; }
   .cards-head-counts { display: flex; gap: 12px; font-family: var(--font-mono); font-size: var(--fs-body); }
   .c-new { color: var(--blue-deep); } .c-learn { color: var(--terracotta); } .c-due { color: var(--sage); }
-  .cards-back, .cards-undo { background: none; border: 1.5px solid var(--border); border-radius: 50%; width: 36px; height: 36px; cursor: pointer; font-size: var(--fs-lead); color: var(--muted); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .cards-back:hover, .cards-undo:hover { border-color: var(--terracotta); color: var(--terracotta); }
-  .cards-undo.disabled { opacity: .35; pointer-events: none; }
+  .cards-back, .cards-undo, .cards-edit { background: none; border: 1.5px solid var(--border); border-radius: 50%; width: 36px; height: 36px; cursor: pointer; font-size: var(--fs-lead); color: var(--muted); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .cards-back:hover, .cards-undo:hover, .cards-edit:hover { border-color: var(--terracotta); color: var(--terracotta); }
+  .cards-undo.disabled, .cards-edit.disabled { opacity: .35; pointer-events: none; }
+  .cards-edit .icon { width: 16px; height: 16px; }
   .cards-head.study .cards-undo { margin-left: auto; }
   .cards-head.study .cards-head-deck { margin-left: 0; }
 

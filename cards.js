@@ -554,6 +554,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         <div class="cards-head-counts"><span class="c-new">${c.new}</span><span class="c-learn">${c.learn}</span><span class="c-due">${c.due}</span></div>
         <div class="cards-head-deck">${esc(deck ? deck.name : 'все колоды')}${S.tagFilter ? ` · #${esc(S.tagFilter)}` : ''}</div>
         <button class="cards-undo ${S.undo ? '' : 'disabled'}" onclick="Cards.undo()" title="Отменить ответ">${svgIcon('undo')}</button>
+        <button class="cards-edit ${S.current ? '' : 'disabled'}" onclick="Cards.editCurrent()" title="Редактировать карточку (E)">${svgIcon('edit')}</button>
       </div>`;
     if (!S.current) {
       // Итог сессии: сколько прошли, доля верных, когда подойдут следующие
@@ -610,7 +611,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
           ${back}
         </div>
       </div>
-      <div class="study-footer">${buttons}<div class="study-hint">${S.revealed ? 'Клавиши 1–4 — оценка, Enter — «Хорошо», Esc — выйти' : 'Enter — проверить ответ, пустой Enter или пробел — показать, Esc — выйти'}</div></div>`;
+      <div class="study-footer">${buttons}<div class="study-hint">${S.revealed ? 'Клавиши 1–4 — оценка, Enter — «Хорошо», E — править, Esc — выйти' : 'Enter — проверить ответ, пустой Enter или пробел — показать, E — править, Esc — выйти'}</div></div>`;
     // На компьютере курсор сразу в поле ответа; на телефоне клавиатуру не поднимаем, пока не тронут поле
     const inp = document.getElementById('studyInput');
     if (inp && !(typeof isTouchDevice === 'function' && isTouchDevice())) inp.focus();
@@ -902,8 +903,21 @@ ${JSON.stringify(list)}`;
   // из-за которой position: fixed считался от экрана, и окно появлялось посреди длинного списка
   function cardsModal() {
     let m = $('cardsModal');
-    if (!m) { m = document.createElement('div'); m.id = 'cardsModal'; m.className = 'cards-modal'; m.style.display = 'none'; m.addEventListener('click', e => { if (e.target === m) closeModal(); }); document.body.appendChild(m); }
+    if (!m) {
+      m = document.createElement('div'); m.id = 'cardsModal'; m.className = 'cards-modal'; m.style.display = 'none';
+      m.addEventListener('click', e => { if (e.target === m) closeModal(); });
+      m.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); closeModal(); } });
+      document.body.appendChild(m);
+    }
     return m;
+  }
+  const modalOpen = () => { const m = $('cardsModal'); return !!m && m.style.display !== 'none'; };
+  // Правка текущей карточки прямо во время учёбы: окно то же, что в списке слов
+  function editCurrent() {
+    if (!S.current) return;
+    editNote(S.current.note_id);
+    const first = document.getElementById('edit_word');
+    if (first && !(typeof isTouchDevice === 'function' && isTouchDevice())) first.focus();
   }
   function editNote(id) {
     const n = noteById(id); if (!n) return; const m = cardsModal();
@@ -919,7 +933,13 @@ ${JSON.stringify(list)}`;
   async function saveNote(id) {
     const body = { word: $('edit_word').value.trim(), translation: $('edit_translation').value.trim(), phonetic: $('edit_phonetic').value.trim(), example: $('edit_example').value.trim(), meaning: $('edit_meaning').value.trim(), tags: $('edit_tags').value.split(/[,\s]+/).map(t => t.trim().replace(/^#/, '')).filter(Boolean) };
     if (!body.word) return;
-    try { await sb(`notes?id=eq.${id}`, { method: 'PATCH', body }); Object.assign(noteById(id), body); closeModal(); render(); } catch (e) { showToast('⚠ ' + e.message); }
+    try {
+      await sb(`notes?id=eq.${id}`, { method: 'PATCH', body }); Object.assign(noteById(id), body); closeModal();
+      // В учёбе экран перерисуется целиком — не теряем уже набранный, но ещё не проверенный ответ
+      const inp = document.getElementById('studyInput'); const typed = inp ? inp.value : null;
+      render();
+      const inp2 = document.getElementById('studyInput'); if (inp2 && typed) inp2.value = typed;
+    } catch (e) { showToast('⚠ ' + e.message); }
   }
   const closeModal = () => { const m = $('cardsModal'); if (m) m.style.display = 'none'; };
 
@@ -1065,10 +1085,12 @@ ${JSON.stringify(list)}`;
   // ── Клавиатура в режиме учёбы ────────────────────────────────────────────────
   document.addEventListener('keydown', e => {
     if (_currentState !== 'cards' || S.view !== 'study' || !S.current) return;
+    if (modalOpen()) return; // открыто окно редактирования: клавиши — ему, а не карточке
     if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '')) return;
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!S.revealed) reveal(); else if (e.key === 'Enter') answer(3); }
     else if (/^[1-4]$/.test(e.key) && S.revealed) answer(parseInt(e.key));
     else if (e.key === 'z' || e.key === 'Z') undo();
+    else if (e.key === 'e' || e.key === 'E' || e.key === 'у' || e.key === 'У') editCurrent();
     else if (e.key === 'Escape') goBack();
   });
 
@@ -1151,7 +1173,7 @@ ${JSON.stringify(list)}`;
     setTagFilter(t) { S.tagFilter = t; S.browseSelected.clear(); render(); },
     selectNote(id, v) { if (v) S.browseSelected.add(id); else S.browseSelected.delete(id); render(); },
     selectAll(v) { S.browseSelected.clear(); if (v) currentNotes().forEach(n => S.browseSelected.add(n.id)); render(); },
-    tagSelected, untagSelected, moveSelected, deleteSelected, editNote, saveNote, closeModal,
+    tagSelected, untagSelected, moveSelected, deleteSelected, editNote, editCurrent, saveNote, closeModal,
     addEntries, pickDeck, pickNewDeck, closePicker,
     _state: S, _schedule: schedule, _parseLines: parseLines, _fmt: fmtInterval
   };
