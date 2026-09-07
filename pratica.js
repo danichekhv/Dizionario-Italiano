@@ -32,6 +32,8 @@ ${text}
       "fragment": "точная копия куска текста выше, буква в букву",
       "correction": "исправленный вариант этого же куска",
       "translation": "перевод исправленного варианта на русский, коротко",
+      "lemma": "словарная форма исправленного слова: инфинитив для глагола, единственное число мужского рода для существительного и прилагательного. Пустая строка, если правка не про одно слово",
+      "lemma_translation": "перевод словарной формы на русский, коротко. Пустая строка, если lemma пустая",
       "type": "одно из: grammar, vocabulary, register, word-order, spelling",
       "topic": "одно из: ${topicList().join(', ')}",
       "explanation": "объяснение по-русски, одно-два предложения"
@@ -44,6 +46,7 @@ ${text}
 
 Требования:
 - fragment обязан быть точной подстрокой исходного текста: без изменений, без многоточий, без добавленных слов. Бери самый короткий кусок, в котором видна ошибка.
+- lemma это словарная форма, а не та, что стоит в предложении: andato → andare, belle → bello, dei libri → libro. Если исправлен порядок слов, предлог внутри оборота или целое выражение, ставь пустую строку.
 - Отмечай только то, что носитель счёл бы неверным или неестественным. Не придумывай ошибок там, где текст просто написан не так, как написал бы ты.
 - Если ошибок нет, верни пустой массив issues.
 - topic только из списка выше. Если ошибка не грамматическая, ставь ${LESSICO}.
@@ -60,6 +63,8 @@ ${text}
       fragment: String((i && i.fragment) || '').trim(),
       correction: String((i && i.correction) || '').trim(),
       translation: String((i && i.translation) || '').trim(),
+      lemma: String((i && i.lemma) || '').trim(),
+      lemmaRu: String((i && i.lemma_translation) || '').trim(),
       type: TYPE_RU[i && i.type] ? i.type : 'grammar',
       topic: topics.includes(i && i.topic) ? i.topic : LESSICO,
       explanation: String((i && i.explanation) || '').trim()
@@ -171,7 +176,8 @@ ${text}
     return out.replace(/\n/g, '<br>');
   }
 
-  // Предложение вокруг ошибки — оно станет примером на карточке, уже в исправленном виде
+  // Предложение вокруг ошибки — оно станет примером на карточке. Исправляем в нём ВСЕ найденные
+  // ошибки, а не только текущую: иначе на карточку уедет пример с оставшейся второй ошибкой.
   function sentenceAround(res, i) {
     const mark = res.marks.find(m => m.i === i);
     const is = res.issues[i];
@@ -180,8 +186,13 @@ ${text}
     let start = 0, end = t.length;
     for (let p = mark.start - 1; p >= 0; p--) if ('.!?\n'.includes(t[p])) { start = p + 1; break; }
     for (let p = mark.end; p < t.length; p++) if ('.!?\n'.includes(t[p])) { end = p + 1; break; }
-    const sentence = t.slice(start, end).trim();
-    return sentence ? sentence.replace(is.fragment, is.correction) : is.correction;
+    let sentence = t.slice(start, end);
+    // Правки идут справа налево, чтобы уже применённые не сдвигали координаты следующих
+    res.marks.filter(m => m.start >= start && m.end <= end)
+      .sort((a, b) => b.start - a.start)
+      .forEach(m => { sentence = sentence.slice(0, m.start - start) + res.issues[m.i].correction + sentence.slice(m.end - start); });
+    sentence = sentence.trim();
+    return sentence || is.correction;
   }
 
   // ── Экран ────────────────────────────────────────────────────────────────────
@@ -269,10 +280,14 @@ ${text}
   function toDeck(i) {
     const res = S.result; if (!res || !res.issues[i]) return;
     const is = res.issues[i];
+    // В колоду идёт словарная форма, а не та, что стояла в предложении: учить «andato» бессмысленно,
+    // учить надо «andare». Если правка была не про одно слово, кладём исправленный кусок как есть.
+    const word = is.lemma || is.correction;
+    const ru = (is.lemma && is.lemmaRu) || is.translation || is.explanation;
     // Форма словарной статьи: её ждёт Cards.addEntries, он же покажет выбор колоды
     window.Cards && Cards.addEntries([{
-      word: is.correction,
-      russian: { main: is.translation || is.explanation },
+      word,
+      russian: { main: ru },
       meanings: [{ example: sentenceAround(res, i), definition: is.explanation }]
     }]);
     S.added.add(i); render();

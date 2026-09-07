@@ -856,8 +856,9 @@
   @media (max-width: 640px) {
     .cards-head-counts { font-size: var(--fs-small); gap: 8px; }
     .cards-actions .cards-btn { flex: 1 1 auto; text-align: center; }
-    /* «новых в день» уходит на свою строку: рядом с кнопкой ему тесно и поле сжимается */
-    .cards-actions .cards-inline { flex: 1 0 100%; justify-content: space-between; }
+    /* «новых в день» уходит на свою строку: рядом с кнопкой ему тесно и поле сжимается.
+       Поле держим сразу за подписью, а не в другом конце строки. */
+    .cards-actions .cards-inline { flex: 1 0 100%; justify-content: flex-start; }
     .cards-panel { padding: 16px 16px; }
     .study-card { padding: 28px 16px; }
     .study-buttons { gap: 8px; }

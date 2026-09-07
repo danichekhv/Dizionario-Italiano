@@ -2933,8 +2933,9 @@ function handleWordClick(word) {
 
 // ── Клик по заголовку — на главный экран ──────────────────────────────────────
 function goHome() {
-  // Из избранного возвращаемся в тот режим, откуда его открыли
-  switchMode(currentMode === 'favorites' ? _modeBeforeFav : currentMode);
+  // «На главную» значит на главную словаря, из любого раздела и с любого экрана.
+  // Раньше из избранного возвращало в тот режим, откуда его открыли, и это читалось как «назад».
+  switchMode('dict');
 }
 function doSearch() {
   const val = $('searchInput').value.trim();
