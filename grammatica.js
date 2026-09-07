@@ -335,12 +335,14 @@ ${TYPE_RULES[t.type] || TYPE_RULES.uso}
     const st = statusOf(t);
     const gen = (!st && isAdmin())
       ? `<button class="gram-gen" onclick="event.stopPropagation();Grammatica.generate('${t.slug}')" title="Создать статью вашим ключом">создать</button>` : '';
+    // Внутри раздела подписи нет: тип статьи это кухня генерации, читателю он ничего не говорит.
+    // В поиске по всем разделам подписываем раздел — иначе непонятно, откуда тема.
     const sec = withSection ? sectionOf(t) : null;
     return `
-      <div class="tile link gram-tile ${st ? 'ready' : 'empty'}" role="button" tabindex="0" onclick="Grammatica.openTopic('${t.slug}')" onkeydown="if(event.key==='Enter')Grammatica.openTopic('${t.slug}')">
+      <div class="tile link gram-tile topic ${st ? 'ready' : 'empty'}" role="button" tabindex="0" onclick="Grammatica.openTopic('${t.slug}')" onkeydown="if(event.key==='Enter')Grammatica.openTopic('${t.slug}')">
         <div class="tile-head">
           <span class="gram-dot ${st || 'none'}" title="${st ? STATUS_RU[st] : 'статьи пока нет'}"></span>
-          <span class="tile-label">${esc(sec ? sec.it : (TYPE_RU[t.type] || ''))}</span>
+          ${sec ? `<span class="tile-label">${esc(sec.it)}</span>` : ''}
           ${gen}
         </div>
         <div class="tile-title"><i>${esc(t.it)}</i></div>

@@ -856,6 +856,8 @@
   @media (max-width: 640px) {
     .cards-head-counts { font-size: var(--fs-small); gap: 8px; }
     .cards-actions .cards-btn { flex: 1 1 auto; text-align: center; }
+    /* «новых в день» уходит на свою строку: рядом с кнопкой ему тесно и поле сжимается */
+    .cards-actions .cards-inline { flex: 1 0 100%; justify-content: space-between; }
     .cards-panel { padding: 16px 16px; }
     .study-card { padding: 28px 16px; }
     .study-buttons { gap: 8px; }
@@ -1441,23 +1443,8 @@
     .definition-text { font-size: var(--fs-body); }
     .example-text { font-size: var(--fs-small); }
 
-    /* Grammar — full width */
-    .grammar-hero, .grammar-section { padding-left: 16px; padding-right: 16px; width: 100%; box-sizing: border-box; }
-    .grammar-title { font-size: var(--fs-h3); }
-    .grammar-subtitle-text { font-size: var(--fs-caption); }
-    .grammar-explanation { font-size: var(--fs-body); line-height: var(--lh-text); }
-    .grammar-rule-text { font-size: var(--fs-small); }
-    .grammar-rule { padding: 12px 12px; }
-    .grammar-rule-num { width: 22px; height: 22px; font-size: var(--fs-caption); }
-    .grammar-example-it { font-size: var(--fs-body); }
-    .grammar-example-ru { font-size: var(--fs-small); }
-    .grammar-error-form { font-size: var(--fs-small); }
-    .grammar-error-explain { font-size: var(--fs-caption); }
-    .grammar-table { font-size: var(--fs-caption); }
-    .grammar-table th { font-size: var(--fs-micro); padding: 8px 8px; }
-    .grammar-table td { padding: 8px 8px; }
-    .grammar-section-label { font-size: var(--fs-micro); }
-    .grammar-topic-badge { font-size: var(--fs-micro); }
+    /* Телефонные размеры для статьи грамматики переехали вниз, под базовые правила
+       раздела: отсюда они не работали, потому что базовые идут в файле позже. */
 
     /* Russian results */
     .ru-word-card { padding: 12px 16px; }
@@ -1752,7 +1739,10 @@
     .app-nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .app-nav-btn { padding: 8px 2px; font-size: var(--fs-caption); gap: 4px; justify-content: center; min-width: 0; }
     .app-nav-btn .icon { width: 13px; height: 13px; }
-    .app-nav-btn > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Обрезаем именно подпись, а не всю обёртку: иначе счётчик на «Le Carte» съедало краем */
+    .app-nav-btn > span:not(.nav-icon) { display: flex; align-items: center; gap: 4px; min-width: 0; }
+    .app-nav-btn .nav-label-it { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .app-nav-btn .nav-badge { flex-shrink: 0; margin-left: 2px; padding: 2px 5px; }
   }
 
   /* ── La Grammatica: справочник по разделам ───────────────── */
@@ -1818,6 +1808,10 @@
   .grammar-topic-badge {
     display: inline-flex;
     align-items: center;
+    /* Не заезжать под кнопки обновления и звезды в правом верхнем углу шапки */
+    max-width: calc(100% - 76px);
+    white-space: normal;
+    line-height: 1.35;
     gap: 8px;
     font-size: var(--fs-caption);
     letter-spacing: var(--ls-caps);
@@ -2110,6 +2104,30 @@
     color: var(--night-text);
   }
 
+  /* Телефон: статья грамматики. Блок стоит после базовых правил раздела намеренно —
+     в медиазапросе выше по файлу эти же размеры перебивались и не работали вовсе. */
+  @media (max-width: 640px) {
+    .grammar-hero, .grammar-section { padding-left: 16px; padding-right: 16px; width: 100%; box-sizing: border-box; }
+    .grammar-hero { padding-top: 24px; padding-bottom: 20px; }
+    .grammar-hero .hero-actions { top: 22px; right: 14px; }
+    .grammar-title { font-size: var(--fs-h3); }
+    .grammar-subtitle-text { font-size: var(--fs-caption); }
+    .grammar-explanation { font-size: var(--fs-body); line-height: var(--lh-text); }
+    .grammar-rule-text { font-size: var(--fs-small); }
+    .grammar-rule { padding: 12px 12px; }
+    .grammar-rule-num { width: 22px; height: 22px; font-size: var(--fs-caption); }
+    .grammar-example-it { font-size: var(--fs-body); }
+    .grammar-example-ru { font-size: var(--fs-small); }
+    .grammar-error-form { font-size: var(--fs-small); }
+    .grammar-error-explain { font-size: var(--fs-caption); }
+    .grammar-section-label { font-size: var(--fs-micro); }
+    .grammar-topic-badge { font-size: var(--fs-micro); max-width: calc(100% - 68px); }
+    /* Таблица форм: без min-width она укладывается в экран, а не уезжает за край */
+    .grammar-table { min-width: 0; font-size: var(--fs-small); }
+    .grammar-table th { font-size: var(--fs-micro); letter-spacing: .06em; padding: 8px 8px; }
+    .grammar-table td { padding: 8px 8px; font-size: var(--fs-small); line-height: var(--lh-ui); }
+  }
+
   /* ── Speak button ────────────────────────────────────────── */
   .speak-btn.speaking { animation: pulse 1s infinite; }
 
@@ -2218,9 +2236,8 @@
     background: rgba(var(--blue-deep-rgb),0.25);
   }
 
-  @media (max-width: 640px) {
-    .grammar-hero, .grammar-section { padding-left: 24px; padding-right: 24px; }
-  }
+  /* Боковые отступы статьи на телефоне заданы одним местом выше (16px), рядом с остальными
+     телефонными размерами грамматики. Прежний дубль на 24px отсюда убран. */
 
 
   /* ── Favourites ──────────────────────────────────────────── */
@@ -3363,10 +3380,12 @@ body.mode-grammar .app-nav-btn.active .nav-badge { background: white; color: var
 .tile.link { cursor: pointer; }
 .tile.link:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .tile.link:active { transform: none; }
-.tile-head { display: flex; align-items: center; gap: 10px; min-height: 36px; }
+.tile-head { display: flex; align-items: center; gap: 10px; min-height: 36px; min-width: 0; }
+/* У плитки темы в шапке только точка состояния и кнопка: держать под иконку 36px незачем */
+.gram-tile.topic .tile-head { min-height: 0; }
 .tile-icon { width: 36px; height: 36px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: var(--radius); background: var(--parchment); color: var(--accent); }
 .tile-icon .icon { width: 18px; height: 18px; }
-.tile-label { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); }
+.tile-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); }
 .tile-count { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--muted); }
 .tile-title { font-family: var(--font-display); font-size: var(--fs-h3); line-height: var(--lh-tight); overflow-wrap: anywhere; }
 .tile-big { font-family: var(--font-display); font-size: 40px; line-height: 1; color: var(--ink); }
@@ -3395,12 +3414,14 @@ body.mode-grammar .tile-bar i { background: var(--blue); }
 .crumbs .sep { opacity: .5; } .crumbs .cur { color: var(--ink); }
 body.mode-grammar .crumbs { color: var(--night-muted); } body.mode-grammar .crumbs .cur { color: var(--night-text); }
 @media (max-width: 640px) {
-  .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  /* Шаг сетки равен боковым отступам контейнера, иначе поля вокруг сетки и щели внутри спорят */
+  .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .tile { grid-column: span 1; min-height: 120px; padding: 12px 12px 14px; }
   .tile.w3, .tile.w4, .tile.w6 { grid-column: span 2; }
   .tile-title { font-size: var(--fs-lead); }
   .tile-big { font-size: 32px; }
-  .tile-foot .cards-btn { flex: 1 1 auto; text-align: center; }
+  /* Кнопки в подвале плитки делят строку поровну, а не по длине надписи */
+  .tile-foot .cards-btn { flex: 1 1 0; min-width: 0; text-align: center; }
 }
 
 /* Недавние слова под полем поиска */
