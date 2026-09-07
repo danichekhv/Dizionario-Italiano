@@ -1680,6 +1680,11 @@ const GRAMMAR_SUGGESTIONS = [
   'discorso indiretto', 'gerundio', 'participio', 'verbi riflessivi'
 ];
 
+// Одна статья лежит в базе под несколькими ключами: под заголовком от модели и под тем,
+// что было в запросе. Отметку о проверке надо ставить всем, иначе справочник и статья разойдутся.
+let _gramKeys = [];
+const grammarKeys = (topic, title) => [...new Set([topic, title].filter(Boolean).map(s => String(s).toLowerCase()))];
+
 async function lookupGrammar(topic, opts = {}) {
   if (!topic.trim()) return;
   showState('loading');
@@ -1720,7 +1725,10 @@ async function lookupGrammar(topic, opts = {}) {
 - Если тема не относится к итальянской грамматике — верни { "error": "not_grammar" }`;
 
   const cachedGram = opts.force ? null : await sbGetTopic('grammar', topic.toLowerCase());
-  if (cachedGram) { renderGrammar(cachedGram); showState('grammar'); showCacheBadge(); addToHistory(cachedGram.title || topic, 'grammar'); return; }
+  if (cachedGram) {
+    _gramKeys = grammarKeys(topic, cachedGram.title);
+    renderGrammar(cachedGram); showState('grammar'); showCacheBadge(); addToHistory(cachedGram.title || topic, 'grammar'); return;
+  }
 
   try {
     const g = await callGemini(prompt);
@@ -1730,6 +1738,10 @@ async function lookupGrammar(topic, opts = {}) {
     }
     const titleKey = (g.title || topic).toLowerCase();
     const topicKey = topic.toLowerCase();
+    // Всё, что породила модель, это черновик. «Проверено» ставится отдельно и осознанно,
+    // иначе свежая статья по общему шаблону выглядит в справочнике как законченная.
+    if (!g.status) g.status = 'draft';
+    _gramKeys = grammarKeys(topic, g.title);
     await sbSave('grammar', 'topic', titleKey, g);
     // Кэшируем и под введённым запросом: заголовок от Gemini почти никогда не совпадает с запросом
     if (topicKey !== titleKey) await sbSave('grammar', 'topic', topicKey, g);
@@ -1769,6 +1781,7 @@ function renderGrammar(g) {
     <div class="grammar-topic-badge">${g.category || 'Grammatica'}</div>
     <div class="grammar-title">${formatGrammarTitle(g.title || '')}</div>
     <div class="grammar-subtitle-text">${g.titleRu || ''}</div>
+    ${grammarStatusHtml(g)}
   `;
   card.appendChild(hero);
 
@@ -2225,6 +2238,31 @@ $('conjToggle').addEventListener('click', () => {
   $('conjBody').classList.toggle('open');
   $('conjToggle').classList.toggle('open');
 });
+
+// ── Состояние статьи: черновик, проверено моделью, вычитано ──────────────────
+// Статус хранится в самой статье, а не выводится из наличия строки в базе:
+// иначе только что сгенерированная статья выглядит в справочнике законченной.
+const GRAM_STATUS_RU = { draft: 'черновик', checked: 'проверено моделью', verified: 'вычитано' };
+function grammarStatusHtml(g) {
+  const st = GRAM_STATUS_RU[g.status] ? g.status : 'draft';
+  const admin = !!(window.Auth && Auth.isAdmin && Auth.isAdmin());
+  const btn = st === 'verified'
+    ? `<button class="gram-status-btn" onclick="setGrammarStatus('draft')">снять отметку</button>`
+    : `<button class="gram-status-btn" onclick="setGrammarStatus('verified')">отметить вычитанной</button>`;
+  return `<div class="gram-status-row"><span class="gram-status s-${st}">${GRAM_STATUS_RU[st]}</span>${admin ? btn : ''}</div>`;
+}
+async function setGrammarStatus(status) {
+  if (!(window.Auth && Auth.isAdmin && Auth.isAdmin()) || !currentGramEntry) return;
+  const g = currentGramEntry, prev = g.status;
+  g.status = status;
+  const keys = _gramKeys.length ? _gramKeys : grammarKeys(currentGramTopic, g.title);
+  const saved = await Promise.all(keys.map(k => sbSave('grammar', 'topic', k, g)));
+  if (saved.some(Boolean)) {
+    showToast(status === 'verified' ? '✓ Отмечено вычитанным' : 'Отметка снята');
+    renderGrammar(g);
+    if (window.Grammatica) Grammatica.refresh();
+  } else { g.status = prev; showToast('⚠ Не удалось сохранить отметку'); }
+}
 
 // ── Обновление статьи ────────────────────────────────────────────────────────
 async function refreshEntry(mode) {

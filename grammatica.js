@@ -201,18 +201,26 @@
   // Ключ статьи в базе: пока это итальянское название темы в нижнем регистре — под ним
   // сохраняет lookupGrammar. Slug проверяем тоже, он станет ключом после переезда.
   const topicKey = t => norm(t.it);
-  const hasArticle = t => !!(S.keys && (S.keys.has(topicKey(t)) || S.keys.has(t.slug)));
+  // null — статьи нет; иначе draft (сгенерирована), checked (прошла проверяющую модель,
+  // появится вместе с пакетной генерацией) или verified (вычитана владельцем)
+  function statusOf(t) {
+    if (!S.keys) return null;
+    const k = S.keys.has(topicKey(t)) ? topicKey(t) : (S.keys.has(t.slug) ? t.slug : null);
+    if (k === null) return null;
+    return S.keys.get(k) || 'draft';
+  }
+  const hasArticle = t => statusOf(t) !== null;
   const isAdmin = () => !!(window.Auth && Auth.isAdmin && Auth.isAdmin());
 
-  // Один запрос за списком ключей вместо ста пятидесяти семи проверок по одной
+  // Один запрос за ключами и статусами вместо ста пятидесяти семи проверок по одной
   async function loadKeys() {
     try {
-      const res = await fetch(`${SB_URL}/rest/v1/grammar?select=topic`, { headers: SB_H });
+      const res = await fetch(`${SB_URL}/rest/v1/grammar?select=topic,status:data->>status`, { headers: SB_H });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const rows = await res.json();
-      S.keys = new Set((rows || []).map(r => norm(r.topic)));
+      S.keys = new Map((rows || []).map(r => [norm(r.topic), r.status || 'draft']));
       S.failed = false;
-    } catch (e) { S.keys = new Set(); S.failed = true; }
+    } catch (e) { S.keys = new Map(); S.failed = true; }
   }
 
   // ── Поиск по дереву ──────────────────────────────────────────────────────────
@@ -224,16 +232,17 @@
   }
 
   // ── Экран ────────────────────────────────────────────────────────────────────
+  const STATUS_RU = { draft: 'черновик, никто не проверял', checked: 'проверено моделью', verified: 'вычитано' };
   function topicHtml(t) {
-    const ready = hasArticle(t);
+    const st = statusOf(t);
     // Кнопка создания стоит отдельно и только у владельца: по справочнику ходят листая,
     // и статья на всех не должна появляться от случайного нажатия на строку
-    const gen = (!ready && isAdmin())
+    const gen = (!st && isAdmin())
       ? `<button class="gram-gen" onclick="Grammatica.generate('${t.slug}')" title="Создать статью вашим ключом">создать</button>` : '';
     return `
       <div class="gram-row">
-        <button class="gram-topic ${ready ? 'ready' : 'empty'}" onclick="Grammatica.openTopic('${t.slug}')">
-          <span class="gram-dot" title="${ready ? 'статья есть' : 'статьи пока нет'}"></span>
+        <button class="gram-topic ${st ? 'ready' : 'empty'}" onclick="Grammatica.openTopic('${t.slug}')">
+          <span class="gram-dot ${st || 'none'}" title="${st ? STATUS_RU[st] : 'статьи пока нет'}"></span>
           <span class="gram-topic-it">${esc(t.it)}</span>
           <span class="gram-topic-ru">${esc(t.ru)}</span>
         </button>
@@ -263,19 +272,21 @@
     const q = norm(S.filter);
     const all = allTopics();
     const ready = all.filter(hasArticle).length;
+    const verified = all.filter(t => statusOf(t) === 'verified').length;
     const body = GRAMMAR_TREE.map(s => sectionHtml(s, q)).join('');
     const shown = GRAMMAR_TREE.reduce((n, s) => n + visibleTopics(s, q).length, 0);
     el.innerHTML = `
       <div class="gram-index-head">
         <div class="gram-index-title">Справочник</div>
-        <div class="gram-index-sub">${all.length} ${pluralRu(all.length, 'тема', 'темы', 'тем')} в ${GRAMMAR_TREE.length} разделах${S.keys ? ` · статей готово ${ready}` : ' · считаю готовые…'}</div>
+        <div class="gram-index-sub">${all.length} ${pluralRu(all.length, 'тема', 'темы', 'тем')} в ${GRAMMAR_TREE.length} разделах${S.keys ? ` · статей ${ready}, из них вычитано ${verified}` : ' · смотрю, что уже написано…'}</div>
       </div>
       ${S.failed ? `<div class="gram-note">Не удалось узнать, какие статьи уже есть. Список тем показан целиком.</div>` : ''}
       ${q ? `<div class="gram-note">Найдено тем: ${shown}. Очистите поле поиска, чтобы вернуть все разделы.</div>` : ''}
       <div class="gram-sections">${body || `<div class="gram-note">По запросу ничего не нашлось. Справочник закрытый: если темы нет в списке, статьи по ней не будет.</div>`}</div>
       <div class="gram-legend">
-        <span><i class="gram-dot ready"></i> статья есть</span>
-        <span><i class="gram-dot empty"></i> статьи пока нет</span>
+        <span><i class="gram-dot none"></i> статьи нет</span>
+        <span><i class="gram-dot draft"></i> черновик</span>
+        <span><i class="gram-dot verified"></i> вычитано</span>
         ${isAdmin() ? '<span class="gram-legend-admin">кнопка «создать» у пустой темы генерирует статью вашим ключом</span>' : ''}
       </div>`;
   }
