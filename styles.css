@@ -592,21 +592,10 @@
   .cards-head.study .cards-undo { margin-left: auto; }
   .cards-head.study .cards-head-deck { margin-left: 0; }
 
-  .deck-list { background: white; border: 1.5px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-  .deck-row { display: flex; align-items: center; gap: 8px; padding: 12px 16px 12px calc(16px + var(--depth) * 24px); border-bottom: 1px solid var(--border); }
-  .deck-row:last-child { border-bottom: none; }
-  .deck-toggle { width: 18px; height: 18px; border: none; background: none; cursor: pointer; position: relative; flex-shrink: 0; }
-  .deck-toggle::after { content: ''; position: absolute; left: 5px; top: 3px; width: 6px; height: 6px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(45deg); transition: transform var(--t-base); }
-  .deck-toggle.closed::after { transform: rotate(-45deg); }
-  .deck-toggle.hidden { visibility: hidden; }
-  .deck-name { flex: 1; text-align: left; background: none; border: none; cursor: pointer; font-family: var(--font-display); font-size: var(--fs-lead); color: var(--ink); padding: 4px 0; }
-  .deck-name:hover { color: var(--terracotta); }
-  .deck-counts { display: flex; gap: 12px; font-family: var(--font-mono); font-size: var(--fs-small); min-width: 90px; justify-content: flex-end; }
+  /* Плитка колоды (общие правила плиток — в разделе «Бенто» ниже): счётчики и ▶ */
+  .deck-counts { display: flex; gap: 12px; font-family: var(--font-mono); font-size: var(--fs-small); }
   .deck-play { width: 32px; height: 32px; border-radius: 50%; border: none; background: var(--terracotta); color: white; cursor: pointer; font-size: var(--fs-small); flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding-left: 2px; }
   .deck-play:hover { background: var(--terracotta-dark); }
-  .deck-menu { display: flex; gap: 2px; }
-  .deck-menu button { background: none; border: 1px solid transparent; border-radius: var(--radius); width: 28px; height: 28px; cursor: pointer; color: var(--muted); font-size: var(--fs-body); }
-  .deck-menu button:hover { border-color: var(--border); color: var(--terracotta); background: var(--parchment); }
   .cards-actions { display: flex; gap: 12px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
   .cards-btn { padding: 8px 16px; border: 1.5px solid var(--border); border-radius: var(--radius); background: white; color: var(--ink); font-family: var(--font-text); font-size: var(--fs-body); cursor: pointer; transition: all var(--t-base); }
   .cards-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
@@ -763,12 +752,6 @@
   .graph-screen { display: none; animation: fadeUp .4s ease both; }
   .graph-screen.active { display: block; }
   .graph-screen-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
-  .wordmap-btn { margin-top: 24px; padding: 8px 20px; border: 1.5px solid var(--border); border-radius: var(--radius); background: white; cursor: pointer; font-family: var(--font-text); font-size: var(--fs-body); color: var(--ink); font-style: normal; transition: all var(--t-base); }
-  .wordmap-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
-  body.mode-grammar .wordmap-btn { display: none; }
-  /* В грамматике на главной не показываем ни карту слов, ни сегодняшние карточки: это другой раздел.
-     !important нужен потому, что видимость блока задаётся инлайновым стилем из refreshHomeDue */
-  body.mode-grammar .home-due { display: none !important; }
   .fav-view-toggle { margin-left: 0; } /* три элемента заголовка расставляет сам flex, без принудительного прижатия */
   .fav-header .fav-tabs { margin-left: auto; margin-bottom: 0; } /* нижний отступ вкладок сдвигал их вверх относительно строки */
   .fav-view-toggle .view-toggle-btn { padding: 8px 16px; font-size: var(--fs-body); } /* одна высота с вкладками */
@@ -833,16 +816,14 @@
     .app-nav { margin-bottom: 24px; }
     .lang-toggle { margin-bottom: 16px; }
     .search-area { margin-bottom: 24px; }
-    #initialMsg { padding: 20px 20px 28px; }
-    .wordmap-btn { margin-top: 16px; }
+    #initialMsg { padding: 20px 0 28px; }
   }
-  /* На телефоне то же самое: подсказка и «Карта слов» должны быть видны без прокрутки */
+  /* На телефоне то же самое: первая плитка должна быть видна без прокрутки */
   @media (max-width: 640px) {
     header { margin-bottom: 28px; }
     .app-nav { margin-bottom: 24px; }
     .search-area { margin-bottom: 20px; }
-    #initialMsg { padding: 24px 16px 24px; }
-    .wordmap-btn { margin-top: 16px; }
+    #initialMsg { padding: 16px 0 24px; }
   }
 
   /* Теги слова в статье: клик переименовывает, «+» добавляет */
@@ -873,22 +854,6 @@
   .cards-setup p { line-height: var(--lh-ui); margin-bottom: 12px; }
   .cards-sql { background: #1e1a14; color: #e8ddc8; font-family: var(--font-mono); font-size: var(--fs-small); padding: 16px; border-radius: var(--radius); overflow: auto; max-height: 320px; white-space: pre; }
   @media (max-width: 640px) {
-    /* Колода на телефоне — карточкой: название и кнопка «учить», под ними счётчики словами, ниже действия */
-    .deck-row {
-      display: grid;
-      grid-template-columns: 18px 1fr auto;
-      grid-template-areas: "tg name play" "tg counts play" "tg menu menu";
-      gap: 4px 8px;
-      align-items: center;
-      padding: 12px 12px 8px calc(12px + var(--depth) * 16px);
-    }
-    .deck-toggle { grid-area: tg; }
-    .deck-name { grid-area: name; font-size: var(--fs-lead); padding: 0; }
-    .deck-counts { grid-area: counts; justify-content: flex-start; gap: 12px; font-size: var(--fs-small); min-width: 0; flex-wrap: wrap; }
-    .deck-counts span::after { content: ' ' attr(data-l); font-family: var(--font-text); font-style: italic; font-size: var(--fs-small); opacity: .85; }
-    .deck-play { grid-area: play; width: 40px; height: 40px; font-size: var(--fs-body); }
-    .deck-menu { grid-area: menu; justify-content: flex-start; gap: 8px; margin-top: 4px; }
-    .deck-menu button { width: 36px; height: 30px; border: 1px solid var(--border); background: white; color: var(--muted); }
     .cards-head-counts { font-size: var(--fs-small); gap: 8px; }
     .cards-actions .cards-btn { flex: 1 1 auto; text-align: center; }
     .cards-panel { padding: 16px 16px; }
@@ -1799,26 +1764,12 @@
   .gram-index-sub { font-family: var(--font-mono); font-size: var(--fs-caption); letter-spacing: var(--ls-tight); color: var(--night-muted); margin-top: 4px; }
   .gram-note { background: rgba(var(--blue-deep-rgb), .12); border: 1px solid rgba(var(--blue-rgb), .2); border-radius: var(--radius); padding: 10px 16px; color: var(--blue-soft); font-size: var(--fs-small); font-style: italic; margin-bottom: 16px; line-height: var(--lh-ui); }
 
-  .gram-sections { display: flex; flex-direction: column; gap: 8px; }
-  .gram-section { background: var(--night-surface); border: 1.5px solid rgba(var(--blue-rgb), .2); border-radius: var(--radius); overflow: hidden; }
-  .gram-sec-head { display: flex; align-items: baseline; gap: 12px; width: 100%; padding: 14px 18px; background: none; border: none; cursor: pointer; text-align: left; color: var(--night-text); font-family: var(--font-display); font-size: var(--fs-lead); }
-  .gram-sec-head:hover { background: rgba(var(--blue-rgb), .07); }
-  .gram-sec-chevron { display: flex; align-items: center; align-self: center; color: var(--night-dim); transition: transform var(--t-base); }
-  .gram-section.open .gram-sec-chevron { transform: rotate(90deg); }
-  .gram-sec-it { font-style: italic; }
-  .gram-sec-ru { color: var(--night-muted); font-family: var(--font-cyr); font-size: var(--fs-small); flex: 1; }
-  .gram-sec-count { font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--night-dim); flex-shrink: 0; }
-
-  .gram-topics { border-top: 1px solid rgba(var(--blue-rgb), .15); }
-  .gram-row { display: flex; align-items: center; gap: 8px; padding-right: 12px; border-bottom: 1px solid rgba(var(--blue-rgb), .08); }
-  .gram-row:last-child { border-bottom: none; }
-  .gram-row:hover { background: rgba(var(--blue-rgb), .1); }
-  .gram-topic { display: flex; align-items: baseline; gap: 10px; flex: 1; min-width: 0; padding: 10px 6px 10px 22px; background: none; border: none; cursor: pointer; text-align: left; color: var(--night-text); font-family: var(--font-text); font-size: var(--fs-body); }
-  .gram-gen { flex-shrink: 0; background: none; border: 1px solid rgba(var(--blue-rgb), .3); border-radius: var(--radius); color: var(--blue-soft); font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-tight); text-transform: uppercase; padding: 4px 8px; cursor: pointer; }
+  /* Разделы и темы — плитками (общие правила в разделе «Бенто»); здесь только грамматические детали */
+  .gram-index-title i { font-style: italic; }
+  .gram-tile .tile-sub { font-family: var(--font-cyr); }
+  .gram-tile.empty .tile-title { color: var(--night-muted); }
+  .gram-gen { flex-shrink: 0; margin-left: auto; background: none; border: 1px solid rgba(var(--blue-rgb), .3); border-radius: var(--radius); color: var(--blue-soft); font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-tight); text-transform: uppercase; padding: 4px 8px; cursor: pointer; }
   .gram-gen:hover { background: rgba(var(--blue-deep-rgb), .3); color: var(--night-text); border-color: var(--blue); }
-  .gram-topic-it { font-style: italic; flex-shrink: 0; }
-  .gram-topic-ru { color: var(--night-muted); font-family: var(--font-cyr); font-size: var(--fs-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .gram-topic.empty .gram-topic-it { color: var(--night-muted); }
 
   /* Точка состояния. Сейчас различаются только «есть» и «нет»;
      проверенная машиной и вычитанная вручную появятся, когда будет пакетная генерация */
@@ -1830,13 +1781,6 @@
   .gram-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 16px; font-size: var(--fs-caption); font-family: var(--font-mono); letter-spacing: var(--ls-tight); color: var(--night-dim); }
   .gram-legend span { display: flex; align-items: center; gap: 6px; }
   .gram-legend-admin { font-style: italic; font-family: var(--font-cyr); letter-spacing: 0; }
-  @media (max-width: 640px) {
-    .gram-topic { flex-direction: column; align-items: flex-start; gap: 2px; }
-    .gram-topic-ru { max-width: 100%; }
-    .gram-sec-head { flex-wrap: wrap; gap: 8px; font-size: var(--fs-body); }
-    .gram-sec-ru { flex: 1 0 100%; order: 3; }
-  }
-
   /* Состояние статьи в её шапке */
   .gram-status-row { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
   .gram-status { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; padding: 3px 10px; border-radius: var(--radius); }
@@ -3406,13 +3350,61 @@
 /* В грамматике бейдж берёт тот же синий, что и активная вкладка: --accent там светлее и тонет в фоне */
 body.mode-grammar .nav-badge { background: var(--blue-bright); }
 body.mode-grammar .app-nav-btn.active .nav-badge { background: white; color: var(--blue-deep); }
-/* Главная: ряд действий под поиском, без подсказок «введите слово» */
-#initialMsg { padding: 8px 0 16px; }
-.home-actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 8px; }
-.home-actions .wordmap-btn, .home-actions .home-due .cards-btn { margin: 0; }
-.home-due { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.home-due-sub { font-size: var(--fs-small); color: var(--muted); font-style: italic; }
-@media (max-width: 640px) { .home-actions { flex-direction: column; align-items: center; gap: 12px; } }
+/* ── Бенто: одна сетка плиток для главной, колод и разделов грамматики ──────────
+   Шесть колонок; обычная плитка занимает две (три в ряд), широкие — w4 / w6, высокая — h2.
+   dense заполняет дыры, когда плиток разной ширины не хватает на ровный ряд. На телефоне две колонки:
+   обычная плитка — одна колонка, широкие — обе. Плитки-ссылки (button.tile.link) приподнимаются при наведении. */
+#initialMsg { padding: 8px 0 16px; text-align: left; font-style: normal; font-size: var(--fs-body); color: var(--ink); }
+.bento { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-flow: dense; gap: 12px; }
+.bento + .bento, .bento + .cards-actions { margin-top: 16px; }
+.bento-label { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); margin: 24px 0 8px; }
+.tile { grid-column: span 2; display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 132px; padding: 14px 16px 16px; background: white; border: 1.5px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); color: var(--ink); font-family: var(--font-text); font-size: var(--fs-body); text-align: left; transition: border-color var(--t-base), transform var(--t-base), box-shadow var(--t-base); }
+.tile.w3 { grid-column: span 3; } .tile.w4 { grid-column: span 4; } .tile.w6 { grid-column: span 6; } .tile.h2 { grid-row: span 2; }
+.tile.link { cursor: pointer; }
+.tile.link:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.tile.link:active { transform: none; }
+.tile-head { display: flex; align-items: center; gap: 10px; min-height: 36px; }
+.tile-icon { width: 36px; height: 36px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: var(--radius); background: var(--parchment); color: var(--accent); }
+.tile-icon .icon { width: 18px; height: 18px; }
+.tile-label { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); }
+.tile-count { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--muted); }
+.tile-clear { margin-left: auto; background: none; border: none; color: var(--muted); font-family: var(--font-text); font-style: italic; font-size: var(--fs-small); cursor: pointer; }
+.tile-clear:hover { color: var(--accent); }
+.tile-title { font-family: var(--font-display); font-size: var(--fs-h3); line-height: var(--lh-tight); overflow-wrap: anywhere; }
+.tile-big { font-family: var(--font-display); font-size: 40px; line-height: 1; color: var(--ink); }
+.tile-sub { font-size: var(--fs-small); color: var(--muted); font-style: italic; line-height: var(--lh-ui); }
+.tile-foot { margin-top: auto; padding-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tile-bar { margin-top: auto; height: 5px; border-radius: var(--radius); background: rgba(var(--stone-rgb), .15); overflow: hidden; }
+.tile-bar i { display: block; height: 100%; background: var(--accent); transition: width var(--t-slow); }
+.tile-bar + .tile-bar, .tile-foot + .tile-bar { margin-top: 8px; }
+.tile-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tile.dashed { border-style: dashed; background: transparent; box-shadow: none; align-items: center; justify-content: center; flex-direction: row; gap: 8px; color: var(--muted); font-style: italic; }
+.tile.dashed:hover { color: var(--accent); }
+.tile.dashed .icon { width: 18px; height: 18px; }
+.deck-tile .tile-head .deck-play { margin-left: auto; }
+.deck-tile .tile-foot { padding-top: 0; }
+/* Ночная палитра грамматики */
+body.mode-grammar .tile { background: var(--night-surface); border-color: rgba(var(--blue-rgb), .2); color: var(--night-text); box-shadow: none; }
+body.mode-grammar .tile.link:hover { border-color: var(--blue); box-shadow: var(--shadow-md); }
+body.mode-grammar .tile-icon { background: rgba(var(--blue-deep-rgb), .3); color: var(--blue-light); }
+body.mode-grammar .tile-label, body.mode-grammar .tile-sub, body.mode-grammar .tile-count, body.mode-grammar .bento-label { color: var(--night-muted); }
+body.mode-grammar .tile-big { color: var(--night-text); }
+body.mode-grammar .tile-bar { background: rgba(var(--blue-rgb), .12); }
+body.mode-grammar .tile-bar i { background: var(--blue); }
+/* Хлебные крошки над сеткой: путь до текущего уровня, каждый шаг — кнопка наверх */
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; font-family: var(--font-mono); font-size: var(--fs-caption); letter-spacing: var(--ls-tight); color: var(--muted); }
+.crumbs button { background: none; border: none; padding: 2px 0; color: inherit; font: inherit; letter-spacing: inherit; cursor: pointer; }
+.crumbs button:hover { color: var(--accent); }
+.crumbs .sep { opacity: .5; } .crumbs .cur { color: var(--ink); }
+body.mode-grammar .crumbs { color: var(--night-muted); } body.mode-grammar .crumbs .cur { color: var(--night-text); }
+@media (max-width: 640px) {
+  .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .tile { grid-column: span 1; min-height: 120px; padding: 12px 12px 14px; }
+  .tile.w3, .tile.w4, .tile.w6 { grid-column: span 2; }
+  .tile-title { font-size: var(--fs-lead); }
+  .tile-big { font-size: 32px; }
+  .tile-foot .cards-btn { flex: 1 1 auto; text-align: center; }
+}
 
 /* Недавние слова под полем поиска */
 .search-recent { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 60; background: var(--cream); border: 1.5px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 12px 16px; text-align: left; }

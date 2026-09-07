@@ -149,12 +149,9 @@
   </button>
 
   <!-- States -->
-  <!-- Главная: действия сверху, недавние слова под ними -->
+  <!-- Главная: бенто-плитки (сегодняшние карточки, серия, недавние, карта, избранное) — см. renderHome в app.js -->
   <div class="state-msg active" id="initialMsg">
-    <div class="home-actions">
-      <div class="home-due" id="homeDue" style="display:none"></div>
-      <button class="wordmap-btn" onclick="openWordMap()" title="Все открытые слова и связи между ними"><span data-icon="graph"></span> Карта слов</button>
-    </div>
+    <div class="bento home-bento" id="homeBento"></div>
   </div>
 
   <!-- Карта всех открытых слов -->

@@ -190,8 +190,15 @@
   ];
 
 
-  // open — какие разделы раскрыты вручную; keys — ключи статей, уже лежащих в общей базе
-  const S = { open: {}, filter: '', keys: null, failed: false };
+  // Иконка раздела на плитке: по одной на раздел, из общего набора ICONS в app.js
+  const SECTION_ICON = {
+    articoli: 'tag', sostantivi: 'box', aggettivi: 'feather', numerali: 'hash', pronomi: 'user',
+    'verbi-indicativo': 'zap', 'verbi-altri-modi': 'shuffle', 'verbi-costruzioni': 'tool',
+    preposizioni: 'map-pin', avverbi: 'sliders', sintassi: 'git-branch', 'ortografia-e-pronuncia': 'mic'
+  };
+  // section — раздел, внутрь которого спустились (null — плитки всех разделов);
+  // keys — ключи статей, уже лежащих в общей базе
+  const S = { section: null, filter: '', keys: null, failed: false };
   const root = () => $('gramIndexScreen');
   const esc = s => escapeHtml(s == null ? '' : String(s));
   const norm = s => String(s || '').toLowerCase().replace(/ё/g, 'е').trim();
@@ -322,38 +329,35 @@ ${TYPE_RULES[t.type] || TYPE_RULES.uso}
 
   // ── Экран ────────────────────────────────────────────────────────────────────
   const STATUS_RU = { draft: 'черновик, никто не проверял', checked: 'проверено моделью', verified: 'вычитано' };
-  function topicHtml(t) {
+  // Плитка темы. Кнопка создания стоит отдельно и только у владельца: по справочнику ходят листая,
+  // и статья на всех не должна появляться от случайного нажатия на плитку
+  function topicTile(t, withSection) {
     const st = statusOf(t);
-    // Кнопка создания стоит отдельно и только у владельца: по справочнику ходят листая,
-    // и статья на всех не должна появляться от случайного нажатия на строку
     const gen = (!st && isAdmin())
-      ? `<button class="gram-gen" onclick="Grammatica.generate('${t.slug}')" title="Создать статью вашим ключом">создать</button>` : '';
+      ? `<button class="gram-gen" onclick="event.stopPropagation();Grammatica.generate('${t.slug}')" title="Создать статью вашим ключом">создать</button>` : '';
+    const sec = withSection ? sectionOf(t) : null;
     return `
-      <div class="gram-row">
-        <button class="gram-topic ${st ? 'ready' : 'empty'}" onclick="Grammatica.openTopic('${t.slug}')">
+      <div class="tile link gram-tile ${st ? 'ready' : 'empty'}" role="button" tabindex="0" onclick="Grammatica.openTopic('${t.slug}')" onkeydown="if(event.key==='Enter')Grammatica.openTopic('${t.slug}')">
+        <div class="tile-head">
           <span class="gram-dot ${st || 'none'}" title="${st ? STATUS_RU[st] : 'статьи пока нет'}"></span>
-          <span class="gram-topic-it">${esc(t.it)}</span>
-          <span class="gram-topic-ru">${esc(t.ru)}</span>
-        </button>
-        ${gen}
+          <span class="tile-label">${esc(sec ? sec.it : (TYPE_RU[t.type] || ''))}</span>
+          ${gen}
+        </div>
+        <div class="tile-title"><i>${esc(t.it)}</i></div>
+        <div class="tile-sub">${esc(t.ru)}</div>
       </div>`;
   }
 
-  function sectionHtml(sec, q) {
-    const topics = visibleTopics(sec, q);
-    if (!topics.length) return '';
-    const ready = topics.filter(hasArticle).length;
-    const open = q ? true : !!S.open[sec.id]; // при поиске разделы раскрыты, чтобы найденное было видно
+  // Плитка раздела: иконка, счётчик готовых статей и полоса — сколько раздела уже написано
+  function sectionTile(sec) {
+    const n = sec.topics.length, ready = sec.topics.filter(hasArticle).length;
     return `
-      <div class="gram-section ${open ? 'open' : ''}">
-        <button class="gram-sec-head" onclick="Grammatica.toggle('${sec.id}')">
-          <span class="gram-sec-chevron">${svgIcon('chevron-right')}</span>
-          <span class="gram-sec-it">${esc(sec.it)}</span>
-          <span class="gram-sec-ru">${esc(sec.ru)}</span>
-          <span class="gram-sec-count">${ready} / ${topics.length}</span>
-        </button>
-        ${open ? `<div class="gram-topics">${topics.map(topicHtml).join('')}</div>` : ''}
-      </div>`;
+      <button class="tile link gram-tile" onclick="Grammatica.openSection('${sec.id}')">
+        <div class="tile-head"><div class="tile-icon">${svgIcon(SECTION_ICON[sec.id] || 'type')}</div><span class="tile-count">${ready} / ${n}</span></div>
+        <div class="tile-title"><i>${esc(sec.it)}</i></div>
+        <div class="tile-sub">${esc(sec.ru)} · ${n} ${pluralRu(n, 'тема', 'темы', 'тем')}</div>
+        <div class="tile-bar"><i style="width:${Math.round(ready / n * 100)}%"></i></div>
+      </button>`;
   }
 
   function render() {
@@ -362,16 +366,29 @@ ${TYPE_RULES[t.type] || TYPE_RULES.uso}
     const all = allTopics();
     const ready = all.filter(hasArticle).length;
     const verified = all.filter(t => statusOf(t) === 'verified').length;
-    const body = GRAMMAR_TREE.map(s => sectionHtml(s, q)).join('');
-    const shown = GRAMMAR_TREE.reduce((n, s) => n + visibleTopics(s, q).length, 0);
+    const sec = !q && S.section ? GRAMMAR_TREE.find(s => s.id === S.section) : null;
+    // Три вида одного экрана: поиск — найденные темы с подписью раздела; раздел — его темы; корень — разделы
+    let body, note = '', crumbs = '';
+    if (q) {
+      const found = GRAMMAR_TREE.flatMap(s => visibleTopics(s, q));
+      note = `<div class="gram-note">Найдено тем: ${found.length}. Очистите поле поиска, чтобы вернуть разделы.</div>`;
+      body = found.length ? found.map(t => topicTile(t, true)).join('') : '';
+    } else if (sec) {
+      crumbs = `<div class="crumbs"><button onclick="Grammatica.openSection(null)">Справочник</button><span class="sep">›</span><span class="cur">${esc(sec.it)}</span></div>`;
+      body = sec.topics.map(t => topicTile(t, false)).join('');
+    } else body = GRAMMAR_TREE.map(sectionTile).join('');
+    const secReady = sec ? sec.topics.filter(hasArticle).length : 0;
     el.innerHTML = `
+      ${crumbs}
       <div class="gram-index-head">
-        <div class="gram-index-title">Справочник</div>
-        <div class="gram-index-sub">${all.length} ${pluralRu(all.length, 'тема', 'темы', 'тем')} в ${GRAMMAR_TREE.length} разделах${S.keys ? ` · статей ${ready}, из них вычитано ${verified}` : ' · смотрю, что уже написано…'}</div>
+        <div class="gram-index-title">${sec ? `<i>${esc(sec.it)}</i>` : 'Справочник'}</div>
+        <div class="gram-index-sub">${sec
+          ? `${esc(sec.ru)} · ${sec.topics.length} ${pluralRu(sec.topics.length, 'тема', 'темы', 'тем')}${S.keys ? `, статей ${secReady}` : ''}`
+          : `${all.length} ${pluralRu(all.length, 'тема', 'темы', 'тем')} в ${GRAMMAR_TREE.length} разделах${S.keys ? ` · статей ${ready}, из них вычитано ${verified}` : ' · смотрю, что уже написано…'}`}</div>
       </div>
       ${S.failed ? `<div class="gram-note">Не удалось узнать, какие статьи уже есть. Список тем показан целиком.</div>` : ''}
-      ${q ? `<div class="gram-note">Найдено тем: ${shown}. Очистите поле поиска, чтобы вернуть все разделы.</div>` : ''}
-      <div class="gram-sections">${body || `<div class="gram-note">По запросу ничего не нашлось. Справочник закрытый: если темы нет в списке, статьи по ней не будет.</div>`}</div>
+      ${note}
+      ${body ? `<div class="bento">${body}</div>` : `<div class="gram-note">По запросу ничего не нашлось. Справочник закрытый: если темы нет в списке, статьи по ней не будет.</div>`}
       <div class="gram-legend">
         <span><i class="gram-dot none"></i> статьи нет</span>
         <span><i class="gram-dot draft"></i> черновик</span>
@@ -395,14 +412,21 @@ ${TYPE_RULES[t.type] || TYPE_RULES.uso}
     lookupGrammar(t.it);
   }
 
+  // Спуск в раздел (null — обратно к разделам). Уровень записывается в историю: «Назад» поднимает на уровень выше
+  function openSection(id) {
+    id = id || null; if (S.section === id) return;
+    const prev = S.section;
+    pushHistory(() => { S.section = prev; if (_currentState === 'gramindex') render(); });
+    S.section = id; render();
+  }
+
   window.Grammatica = {
     async open() {
-      S.filter = ''; render();
+      S.filter = ''; S.section = null; render();
       if (!S.keys) { await loadKeys(); render(); }
     },
     render,
-    toggle(id) { S.open[id] = !S.open[id]; render(); },
-    openTopic, generate,
+    openSection, openTopic, generate,
     // Для lookupGrammar: узнать каноническую тему по строке запроса и получить её промпт
     topicByName(s) {
       const q = norm(s); if (!q) return null;

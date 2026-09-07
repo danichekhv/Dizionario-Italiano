@@ -31,6 +31,23 @@ const ICONS = {
   refresh: '<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>',
   deck: '<rect x="3" y="8" width="13" height="13" rx="1.5"/><path d="M8 4h13v13"/>',
   volume: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>',
+  // Плитки главной и колод
+  folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  'trending-up': '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
+  // Разделы грамматики: у каждого своя иконка (см. SECTION_ICON в grammatica.js)
+  tag: '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+  box: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+  feather: '<path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/>',
+  hash: '<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>',
+  user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  shuffle: '<polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/>',
+  tool: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+  'map-pin': '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+  sliders: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',
+  'git-branch': '<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+  mic: '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'
 };
 function svgIcon(name) { return `<svg class="icon icon-${name}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`; }
@@ -438,7 +455,7 @@ function showState(state) {
   _currentState = state;
   ['initialMsg','loadingMsg','errorMsg','resultCard','ruResults','grammarCard','favScreen','cardsScreen','graphScreen','praticaScreen','gramIndexScreen']
     .forEach(id => $(id).classList.remove('active'));
-  if (state === 'initial')        { $('initialMsg').classList.add('active'); renderHistory(); hideInlineHistory(); }
+  if (state === 'initial')        { $('initialMsg').classList.add('active'); renderHistory(); renderHome(); hideInlineHistory(); }
   else if (state === 'loading')   { $('loadingMsg').classList.add('active'); hideRecent(); hideInlineHistory(); }
   else if (state === 'error')     { $('errorMsg').classList.add('active'); hideRecent(); hideInlineHistory(); }
   else if (state === 'result')    { $('resultCard').classList.add('active'); hideRecent(); renderInlineHistory('dict'); }
@@ -3274,22 +3291,86 @@ function addPreviewToDeck() {
 const _sheetAddBtn = $('sheetAddBtn');
 if (_sheetAddBtn) _sheetAddBtn.addEventListener('click', () => addWordToDeck(_sheetWord, (_previewCache['d:' + _sheetWord.toLowerCase()] || {}).data));
 
-// ── Сегодняшние карточки: кнопка на главной и бейдж на вкладке Le Carte ──────
+// ── Главная: бенто-плитки ─────────────────────────────────────────────────────
+// Данные плиток из трёх мест: сводка колод (Cards.homeSummary), недавние слова (localStorage)
+// и число избранных (favorites_dict). Сводка кэшируется и обновляется после ответа на карточке,
+// входа и выхода — см. refreshHomeDue. Без входа колод нет, и плитки про них заменяет приглашение.
+let _homeSummary = null, _homeFavCount = null;
+const homePlural = (n, one, few, many) => { const m = n % 10, h = n % 100; return (m === 1 && h !== 11) ? one : (m >= 2 && m <= 4 && (h < 10 || h >= 20)) ? few : many; };
+function renderHome() {
+  const box = $('homeBento'); if (!box) return;
+  const loggedIn = !!(window.Auth && Auth.user());
+  const s = _homeSummary;
+  const head = (icon, label, right = '') => `<div class="tile-head"><div class="tile-icon">${svgIcon(icon)}</div><span class="tile-label">${label}</span>${right}</div>`;
+  const tiles = [];
+  if (!loggedIn) {
+    tiles.push(`<button class="tile w4 h2 link" onclick="Auth.require('Войдите, чтобы учить карточки')">
+      ${head('layers', 'Le Carte')}
+      <div class="tile-title">Карточки живут в аккаунте</div>
+      <div class="tile-sub">Войдите — и здесь будет видно, сколько слов пора повторить, серия дней и колоды</div>
+      <div class="tile-foot"><span class="cards-btn primary">Войти или создать аккаунт</span></div>
+    </button>`);
+  } else if (s) {
+    const repeat = s.learn + s.due, total = repeat + s.newToday;
+    const parts = [repeat ? `${repeat} к повторению` : '', s.newToday ? `${s.newToday} новых` : ''].filter(Boolean).join(' · ');
+    tiles.push(`<div class="tile w4 h2">
+      ${head('layers', 'Сегодня')}
+      <div class="tile-big">${total}</div>
+      <div class="tile-sub">${total ? parts : (s.notes ? 'Всё повторено, новых на сегодня нет' : 'Колоды пока пусты — добавляйте слова из статей')}</div>
+      <div class="tile-foot">${total ? `<button class="cards-btn primary" onclick="Cards.studyAll()">Учить сегодняшнее</button>` : ''}<button class="cards-btn" onclick="switchMode('cards')">Колоды</button></div>
+    </div>`);
+    tiles.push(`<div class="tile">
+      ${head('trending-up', 'Серия')}
+      <div class="tile-big">${s.streak}</div>
+      <div class="tile-sub">${homePlural(s.streak, 'день', 'дня', 'дней')} подряд · сегодня ${s.todayCount} ${homePlural(s.todayCount, 'повторение', 'повторения', 'повторений')}</div>
+    </div>`);
+    tiles.push(`<div class="tile">
+      ${head('book', 'В колодах')}
+      <div class="tile-big">${s.notes}</div>
+      <div class="tile-sub">${homePlural(s.notes, 'слово', 'слова', 'слов')} · выучено ${s.learnedPct}%</div>
+      <div class="tile-bar"><i style="width:${s.learnedPct}%"></i></div>
+    </div>`);
+  } else {
+    tiles.push(`<div class="tile w4 h2">${head('layers', 'Сегодня')}<div class="tile-sub">Считаю, что пора повторить…</div></div>`);
+  }
+  // Недавние — те же, что в выпадающем списке под поиском; здесь они под рукой без фокуса в поле
+  const h = getHistory().filter(i => i.mode === 'dict').slice(0, 8);
+  tiles.push(`<div class="tile w4">
+    ${head('clock', 'Недавние', h.length ? '<button class="tile-clear" onclick="clearHistory()">очистить</button>' : '')}
+    ${h.length ? `<div class="tile-chips">${h.map(i => `<button class="history-chip" onclick="historyClick('${i.word.replace(/'/g, "\\'")}','dict')">${escapeHtml(i.word)}</button>`).join('')}</div>` : '<div class="tile-sub">Слова, которые вы искали, появятся здесь</div>'}
+  </div>`);
+  tiles.push(`<button class="tile link" onclick="openWordMap()" title="Все открытые слова и связи между ними">
+    ${head('graph', 'Карта слов')}
+    <div class="tile-title">Граф</div>
+    <div class="tile-sub">Открытые слова, темы и связи между ними</div>
+  </button>`);
+  tiles.push(`<button class="tile link" onclick="openFavorites()">
+    ${head('star', 'Preferiti')}
+    <div class="tile-big">${loggedIn && _homeFavCount !== null ? _homeFavCount : '—'}</div>
+    <div class="tile-sub">${loggedIn ? `${homePlural(_homeFavCount || 0, 'сохранённое слово', 'сохранённых слова', 'сохранённых слов')}` : 'избранные слова и правила'}</div>
+  </button>`);
+  if (loggedIn && s) tiles.push(`<button class="tile link" onclick="switchMode('cards'); Cards.stats(null)">
+    ${head('chart', 'Статистика')}
+    <div class="tile-title">Прогресс</div>
+    <div class="tile-sub">Календарь, прогноз повторений, ответы</div>
+  </button>`);
+  box.innerHTML = tiles.join('');
+}
+// Сводка колод для главной и бейдж на вкладке Le Carte; вызывается после ответа на карточке, входа и выхода
 async function refreshHomeDue() {
-  const box = $('homeDue'), badge = $('navCardsBadge');
-  const hide = () => { if (box) box.style.display = 'none'; if (badge) badge.style.display = 'none'; };
-  if (!(window.Auth && Auth.user() && window.Cards && Cards.dueSummary)) { hide(); return; }
-  const s = await Cards.dueSummary().catch(() => null);
-  if (!s) { hide(); return; }
-  const repeat = s.learn + s.due, total = repeat + s.newToday;
+  const badge = $('navCardsBadge');
+  if (!(window.Auth && Auth.user() && window.Cards && Cards.homeSummary)) { _homeSummary = null; _homeFavCount = null; if (badge) badge.style.display = 'none'; renderHome(); return; }
+  const [s, favs] = await Promise.all([
+    Cards.homeSummary().catch(() => null),
+    fetch(`${SB_URL}/rest/v1/favorites_dict?select=word`, { headers: SB_H }).then(r => r.ok ? r.json() : null).catch(() => null)
+  ]);
+  _homeSummary = s; _homeFavCount = Array.isArray(favs) ? favs.length : null;
+  const total = s ? s.learn + s.due + s.newToday : 0;
   if (badge) { badge.textContent = total; badge.style.display = total ? '' : 'none'; }
-  if (!box) return;
-  if (!total) { hide(); if (badge) badge.style.display = 'none'; return; }
-  const parts = [repeat ? `${repeat} к повторению` : '', s.newToday ? `${s.newToday} новых` : ''].filter(Boolean).join(' · ');
-  box.innerHTML = `<button class="cards-btn primary" onclick="Cards.studyAll()">Учить сегодняшнее · ${total}</button><div class="home-due-sub">${parts}</div>`;
-  box.style.display = '';
+  renderHome();
 }
 window.addEventListener('load', () => refreshHomeDue());
+renderHome();
 renderHistory(); // «Недавние» на главной при первой загрузке: иначе список появлялся только после возврата на неё
 
 // ── Bottom sheet (mobile) ─────────────────────────────────────────────────────

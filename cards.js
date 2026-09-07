@@ -11,9 +11,9 @@
 
   const S = {
     decks: [], notes: [], cards: [],
-    view: 'decks', deckId: null, tagFilter: '',
+    view: 'decks', deckId: null, tagFilter: '', folder: null,
     queue: [], current: null, revealed: false, undo: null,
-    collapsed: {}, loaded: false, missingTables: false,
+    loaded: false, missingTables: false,
     build: null, browseSelected: new Set(),
     reviews: [], reviewsMissing: false, shownAt: 0, statsDeckId: null
   };
@@ -208,11 +208,12 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     if (S.view === 'sql') { renderSetup(el); return; }
     ({ decks: renderDecks, add: renderAdd, browse: renderBrowse, stats: renderStats })[S.view](el);
   }
-  // Переход на внутренний экран с записью в историю: «Назад» вернёт прежний вид
-  function pushView(view) {
-    const prev = { view: S.view, deckId: S.deckId, tagFilter: S.tagFilter };
-    if (prev.view === view) return;
-    pushHistory(() => { S.view = prev.view; S.deckId = prev.deckId; S.tagFilter = prev.tagFilter; S.build = null; S.browseSelected.clear(); render(); });
+  // Переход на внутренний экран с записью в историю: «Назад» вернёт прежний вид.
+  // Уровень колод (S.folder) — тоже экран: спуск в подколоду и подъём обратно идут через историю
+  function pushView(view, folder = S.folder) {
+    const prev = { view: S.view, deckId: S.deckId, tagFilter: S.tagFilter, folder: S.folder };
+    if (prev.view === view && prev.folder === folder) return;
+    pushHistory(() => { S.view = prev.view; S.deckId = prev.deckId; S.tagFilter = prev.tagFilter; S.folder = prev.folder; S.build = null; S.browseSelected.clear(); render(); });
   }
 
   // SQL показываем только владельцу сайта (см. ADMIN_EMAILS в auth.js); остальным — просьба подождать
@@ -233,53 +234,80 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       </div>`;
   }
 
+  // ── Экран колод: плитки, уровень за уровнем ─────────────────────────────────
+  // S.folder — колода, внутри которой стоим (null — корень). Плитка ведёт внутрь колоды, где та же
+  // сетка: сводка по её словам, действия с ней и плитки подколод. ▶ на плитке учит колоду сразу.
+  const learnedPct = cards => cards.length ? Math.round(cards.filter(c => c.state === 'review').length / cards.length * 100) : 0;
+  function crumbsHtml(id) {
+    const chain = []; let d = id ? deckById(id) : null;
+    while (d) { chain.unshift(d); d = d.parent_id ? deckById(d.parent_id) : null; }
+    if (!chain.length) return ''; // в корне путь показывать нечего: заголовок и так «Le Carte»
+    const parts = [`<button onclick="Cards.openDeck(null)">Le Carte</button>`,
+      ...chain.map((x, i) => i === chain.length - 1 ? `<span class="cur">${esc(x.name)}</span>` : `<button onclick="Cards.openDeck('${x.id}')">${esc(x.name)}</button>`)];
+    return `<div class="crumbs">${parts.join('<span class="sep">›</span>')}</div>`;
+  }
+  function deckTile(d) {
+    const kids = childrenOf(d.id).length, notes = notesInDeck(d.id), cards = cardsOfNotes(notes), c = counts(cards), pct = learnedPct(cards);
+    return `
+      <div class="tile link deck-tile" role="button" tabindex="0" onclick="Cards.openDeck('${d.id}')" onkeydown="if(event.key==='Enter')Cards.openDeck('${d.id}')">
+        <div class="tile-head"><div class="tile-icon">${svgIcon(kids ? 'folder' : 'deck')}</div>
+          <button class="deck-play" onclick="event.stopPropagation();Cards.study('${d.id}')" title="Учить">${svgIcon('play')}</button></div>
+        <div class="tile-title">${esc(d.name)}</div>
+        <div class="tile-sub">${notes.length} ${pluralRu(notes.length, 'слово', 'слова', 'слов')}${kids ? ` · ${kids} ${pluralRu(kids, 'подколода', 'подколоды', 'подколод')}` : ''}</div>
+        <div class="tile-foot deck-counts" title="новые · заучиваемые · к повторению"><span class="c-new">${c.new}</span><span class="c-learn">${c.learn}</span><span class="c-due">${c.due}</span></div>
+        <div class="tile-bar" title="выучено ${pct}%"><i style="width:${pct}%"></i></div>
+      </div>`;
+  }
   function renderDecks(el) {
-    const rows = [];
-    const walk = (pid, depth) => childrenOf(pid).forEach(d => {
-      const kids = childrenOf(d.id); const c = counts(cardsOfNotes(notesInDeck(d.id)));
-      const collapsed = !!S.collapsed[d.id];
-      rows.push(`
-        <div class="deck-row" style="--depth:${depth}">
-          <button class="deck-toggle ${kids.length ? '' : 'hidden'} ${collapsed ? 'closed' : ''}" onclick="Cards.toggleDeck('${d.id}')" title="Свернуть/развернуть"></button>
-          <button class="deck-name" onclick="Cards.study('${d.id}')" title="Учить">${esc(d.name)}</button>
-          <div class="deck-counts"><span class="c-new" data-l="новых">${c.new}</span><span class="c-learn" data-l="учить">${c.learn}</span><span class="c-due" data-l="повторить">${c.due}</span></div>
-          <button class="deck-play" onclick="Cards.study('${d.id}')" title="Учить">${svgIcon('play')}</button>
-          <div class="deck-menu">
-            <button onclick="Cards.openAdd('${d.id}')" title="Добавить слова">${svgIcon('plus')}</button>
-            <button onclick="Cards.browse('${d.id}')" title="Карточки">${svgIcon('list')}</button>
-            <button onclick="Cards.stats('${d.id}')" title="Статистика колоды">${svgIcon('chart')}</button>
-            <button onclick="Cards.shareDeck('${d.id}')" title="Поделиться колодой по ссылке">${svgIcon('link')}</button>
-            <button onclick="Cards.newDeck('${d.id}')" title="Подколода">${svgIcon('subdeck')}</button>
-            <button onclick="Cards.renameDeck('${d.id}')" title="Переименовать">${svgIcon('edit')}</button>
-            <button onclick="Cards.deleteDeck('${d.id}')" title="Удалить">${svgIcon('trash')}</button>
-          </div>
-        </div>`);
-      if (!collapsed) walk(d.id, depth + 1);
-    });
-    walk(null, 0);
-    const total = counts(S.cards);
-    const t = todayStats(null);
+    const id = S.folder || null, d = id ? deckById(id) : null;
+    if (id && !d) { S.folder = null; renderDecks(el); return; } // колоду удалили или её нет в этом аккаунте
+    const kids = childrenOf(id);
+    const notes = id ? notesInDeck(id) : S.notes, cards = id ? cardsOfNotes(notes) : S.cards;
+    const c = counts(cards), t = todayStats(id), pct = learnedPct(cards);
+    const fresh = Math.min(c.new, newPerDay()), repeat = c.learn + c.due, due = repeat + fresh;
+    const parts = [repeat ? `${repeat} к повторению` : '', fresh ? `${fresh} новых` : ''].filter(Boolean).join(' · ');
+    const head = (icon, label) => `<div class="tile-head"><div class="tile-icon">${svgIcon(icon)}</div><span class="tile-label">${label}</span></div>`;
+    const actions = id ? `
+        <button class="cards-btn" onclick="Cards.openAdd('${id}')">${svgIcon('plus')} Добавить слова</button>
+        <button class="cards-btn" onclick="Cards.browse('${id}')">${svgIcon('list')} Карточки</button>
+        <button class="cards-btn" onclick="Cards.stats('${id}')">${svgIcon('chart')} Статистика</button>
+        <button class="cards-btn" onclick="Cards.shareDeck('${id}')">${svgIcon('link')} Поделиться</button>
+        <button class="cards-btn" onclick="Cards.renameDeck('${id}')">${svgIcon('edit')} Переименовать</button>
+        <button class="cards-btn danger" onclick="Cards.deleteDeck('${id}')">${svgIcon('trash')} Удалить</button>` : `
+        <button class="cards-btn" onclick="Cards.stats(null)">${svgIcon('chart')} Статистика</button>
+        <label class="cards-inline">новых в день <input type="number" min="0" max="500" value="${newPerDay()}" onchange="Cards.setNewPerDay(this.value)"></label>`;
     el.innerHTML = `
+      ${crumbsHtml(id)}
       <div class="cards-head">
-        <div class="cards-title">Le Carte</div>
-        <div class="cards-head-counts" title="новые · заучиваемые · к повторению"><span class="c-new">${total.new}</span><span class="c-learn">${total.learn}</span><span class="c-due">${total.due}</span></div>
+        <div class="cards-title">${d ? esc(d.name) : 'Le Carte'}</div>
+        <div class="cards-head-counts" title="новые · заучиваемые · к повторению"><span class="c-new">${c.new}</span><span class="c-learn">${c.learn}</span><span class="c-due">${c.due}</span></div>
       </div>
-      <div class="today-box">
-        <div>
-          <div class="stat-label">Сегодня</div>
-          <div class="today-line"><b>${t.count}</b> повторений · <b>${t.learned}</b> новых${t.correct !== null ? ` · <b>${t.correct}%</b> верно` : ''} · <b>${t.timeMin}</b> мин · серия <b>${t.streak}</b> дн.</div>
+      <div class="bento">
+        <div class="tile w4 h2">
+          ${head('layers', 'Сегодня')}
+          <div class="tile-big">${due}</div>
+          <div class="tile-sub">${due ? parts : (notes.length ? 'На сегодня всё повторено' : 'Слов пока нет — добавьте из статьи или списком')}</div>
+          <div class="tile-foot">${due ? `<button class="cards-btn primary" onclick="${id ? `Cards.study('${id}')` : 'Cards.studyAll()'}">Учить · ${due}</button>` : ''}${notes.length ? `<button class="cards-btn" onclick="${id ? `Cards.study('${id}')` : 'Cards.studyAll()'}" title="Учить, даже если на сегодня ничего не подошло">Учить всё равно</button>` : ''}</div>
         </div>
-        <div class="today-actions">
-          ${(() => { const n = total.learn + total.due + Math.min(total.new, newPerDay()); return n ? `<button class="cards-btn primary" onclick="Cards.studyAll()">Учить сегодняшнее · ${n}</button>` : ''; })()}
-          <button class="cards-btn" onclick="Cards.stats(null)">Статистика →</button>
+        <div class="tile">
+          ${head('trending-up', 'Серия')}
+          <div class="tile-big">${t.streak}</div>
+          <div class="tile-sub">${pluralRu(t.streak, 'день', 'дня', 'дней')} · сегодня ${t.count} ${pluralRu(t.count, 'повторение', 'повторения', 'повторений')}${t.correct !== null ? `, ${t.correct}% верно` : ''}</div>
+        </div>
+        <div class="tile">
+          ${head('book', 'Слова')}
+          <div class="tile-big">${notes.length}</div>
+          <div class="tile-sub">выучено ${pct}%</div>
+          <div class="tile-bar"><i style="width:${pct}%"></i></div>
         </div>
       </div>
-      <div class="deck-list">${rows.join('') || '<div class="cards-empty">Колод пока нет</div>'}</div>
-      <div class="cards-actions">
-        <button class="cards-btn primary" onclick="Cards.newDeck(null)">${svgIcon('plus')} Новая колода</button>
-        <label class="cards-inline">новых в день <input type="number" min="0" max="500" value="${newPerDay()}" onchange="Cards.setNewPerDay(this.value)"></label>
+      <div class="cards-actions">${actions}</div>
+      <div class="bento-label">${id ? 'Подколоды' : 'Колоды'}</div>
+      <div class="bento">
+        ${kids.map(deckTile).join('')}
+        <button class="tile dashed link" onclick="Cards.newDeck(${id ? `'${id}'` : 'null'})">${svgIcon('plus')} ${id ? 'Подколода' : 'Новая колода'}</button>
       </div>
-      <div class="cards-legend"><span class="c-new">синие</span> новые · <span class="c-learn">красные</span> заучиваемые · <span class="c-due">зелёные</span> к повторению. Нажмите на название колоды, чтобы учить.</div>`;
+      <div class="cards-legend"><span class="c-new">синие</span> новые · <span class="c-learn">красные</span> заучиваемые · <span class="c-due">зелёные</span> к повторению. Плитка открывает колоду, ▶ сразу учит.</div>`;
   }
 
   // ── Статистика ───────────────────────────────────────────────────────────────
@@ -711,6 +739,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       await sb(`decks?id=eq.${id}`, { method: 'DELETE' });
       const gone = new Set(subtreeIds(id)); const goneNotes = new Set(S.notes.filter(x => gone.has(x.deck_id)).map(x => x.id));
       S.decks = S.decks.filter(x => !gone.has(x.id)); S.notes = S.notes.filter(x => !goneNotes.has(x.id)); S.cards = S.cards.filter(x => !goneNotes.has(x.note_id));
+      if (gone.has(S.folder)) S.folder = d.parent_id || null; // стояли внутри удалённой — поднимаемся к родителю
       render();
     } catch (e) { showToast('⚠ ' + e.message); }
   }
@@ -1107,7 +1136,7 @@ ${JSON.stringify(list)}`;
   // ── Публичный интерфейс ──────────────────────────────────────────────────────
   window.Cards = {
     async open() {
-      S.view = 'decks'; S.build = null; S.browseSelected.clear(); closeOverlay();
+      S.view = 'decks'; S.folder = null; S.build = null; S.browseSelected.clear(); closeOverlay();
       if (window.Auth && !Auth.user()) {
         // Колоды личные: без входа показываем приглашение вместо списка
         const el = root(); if (el) el.innerHTML = `<div class="cards-head"><div class="cards-title">Le Carte</div></div>
@@ -1118,20 +1147,21 @@ ${JSON.stringify(list)}`;
     },
     async reload() { S.loaded = false; if (_currentState === 'cards') render(); await loadAll(); if (_currentState === 'cards') render(); },
     copySql() { const t = window.DIZ_SETUP_SQL || SETUP_SQL; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => showToast('✓ SQL скопирован'), () => { const el = $('cardsSql'); const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); showToast('Выделено — скопируйте вручную'); }); },
-    toggleDeck(id) { S.collapsed[id] = !S.collapsed[id]; render(); },
+    // Спуск в колоду (null — корень): та же сетка плиток, только для её подколод
+    openDeck(id) { id = id || null; if (S.view === 'decks' && S.folder === id) return; pushView('decks', id); S.folder = id; S.view = 'decks'; render(); },
     newDeck, renameDeck, deleteDeck,
     setNewPerDay(v) { try { localStorage.setItem(NEW_PER_DAY_KEY, String(Math.max(0, parseInt(v) || 0))); } catch (e) {} render(); },
     study(id) { study(id, S.view === 'browse' ? S.tagFilter : ''); },
     // Все колоды разом: deckId = null, notesInDeck(null) обходит дерево от корня
     allWords() { return S.notes.map(n => String(n.word || '').toLowerCase()); }, // для подсказок в поиске
     studyAll() { if (window.Auth && !Auth.require('Войдите, чтобы учить карточки')) return; if (currentMode !== 'cards') { currentMode = 'cards'; applyModeUI('cards'); showState('cards'); } (S.loaded ? Promise.resolve() : loadAll()).then(() => study(null, '')); },
-    // Сводка на сегодня для главной: к повторению и новых (в пределах дневного лимита)
-    async dueSummary() {
+    // Сводка для плиток главной: к повторению и новых (в пределах дневного лимита), серия, слова
+    async homeSummary() {
       if (!(window.Auth && Auth.user())) return null;
       if (!S.loaded) await loadAll();
       if (S.missingTables) return null;
-      const c = counts(S.cards);
-      return { learn: c.learn, due: c.due, newToday: Math.min(c.new, newPerDay()) };
+      const c = counts(S.cards), t = todayStats(null);
+      return { learn: c.learn, due: c.due, newToday: Math.min(c.new, newPerDay()), streak: t.streak, todayCount: t.count, notes: S.notes.length, learnedPct: learnedPct(S.cards) };
     },
     reveal, answer, undo,
     openAdd(id) { pushView('add'); S.deckId = id; S.view = 'add'; S.build = null; render(); },
@@ -1154,7 +1184,7 @@ ${JSON.stringify(list)}`;
     // Снимок для истории: из учёбы «Назад» возвращает ту же карточку в том же состоянии
     snapshot() {
       const study = S.view === 'study' && S.current ? { current: S.current.id, queue: S.queue.map(c => c.id), revealed: S.revealed, check: S.check, shownAt: S.shownAt } : null;
-      return { view: S.view, deckId: S.deckId, tagFilter: S.tagFilter, statsDeckId: S.statsDeckId, study };
+      return { view: S.view, deckId: S.deckId, tagFilter: S.tagFilter, folder: S.folder, statsDeckId: S.statsDeckId, study };
     },
     async restore(snap) {
       closeOverlay(); S.build = null; S.browseSelected.clear();
