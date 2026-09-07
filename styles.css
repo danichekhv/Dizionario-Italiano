@@ -1790,6 +1790,48 @@
     .app-nav-btn > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   }
 
+  /* ── La Grammatica: справочник по разделам ───────────────── */
+  /* Экран показывается только в грамматике, поэтому палитра сразу ночная */
+  .gram-index-screen { display: none; animation: fadeUp .4s ease both; }
+  .gram-index-screen.active { display: block; }
+  .gram-index-head { margin-bottom: 20px; }
+  .gram-index-title { font-family: var(--font-display); font-style: italic; font-size: var(--fs-title); color: var(--night-text); }
+  .gram-index-sub { font-family: var(--font-mono); font-size: var(--fs-caption); letter-spacing: var(--ls-tight); color: var(--night-muted); margin-top: 4px; }
+  .gram-note { background: rgba(var(--blue-deep-rgb), .12); border: 1px solid rgba(var(--blue-rgb), .2); border-radius: var(--radius); padding: 10px 16px; color: var(--blue-soft); font-size: var(--fs-small); font-style: italic; margin-bottom: 16px; line-height: var(--lh-ui); }
+
+  .gram-sections { display: flex; flex-direction: column; gap: 8px; }
+  .gram-section { background: var(--night-surface); border: 1.5px solid rgba(var(--blue-rgb), .2); border-radius: var(--radius); overflow: hidden; }
+  .gram-sec-head { display: flex; align-items: baseline; gap: 12px; width: 100%; padding: 14px 18px; background: none; border: none; cursor: pointer; text-align: left; color: var(--night-text); font-family: var(--font-display); font-size: var(--fs-lead); }
+  .gram-sec-head:hover { background: rgba(var(--blue-rgb), .07); }
+  .gram-sec-chevron { display: flex; align-items: center; align-self: center; color: var(--night-dim); transition: transform var(--t-base); }
+  .gram-section.open .gram-sec-chevron { transform: rotate(90deg); }
+  .gram-sec-it { font-style: italic; }
+  .gram-sec-ru { color: var(--night-muted); font-family: var(--font-cyr); font-size: var(--fs-small); flex: 1; }
+  .gram-sec-count { font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--night-dim); flex-shrink: 0; }
+
+  .gram-topics { border-top: 1px solid rgba(var(--blue-rgb), .15); }
+  .gram-topic { display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 10px 18px 10px 22px; background: none; border: none; border-bottom: 1px solid rgba(var(--blue-rgb), .08); cursor: pointer; text-align: left; color: var(--night-text); font-family: var(--font-text); font-size: var(--fs-body); }
+  .gram-topic:last-child { border-bottom: none; }
+  .gram-topic:hover { background: rgba(var(--blue-rgb), .1); }
+  .gram-topic-it { font-style: italic; flex-shrink: 0; }
+  .gram-topic-ru { color: var(--night-muted); font-family: var(--font-cyr); font-size: var(--fs-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gram-topic.empty .gram-topic-it { color: var(--night-muted); }
+
+  /* Точка состояния. Сейчас различаются только «есть» и «нет»;
+     проверенная машиной и вычитанная вручную появятся, когда будет пакетная генерация */
+  .gram-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; align-self: center; display: inline-block; }
+  .gram-topic.ready .gram-dot, .gram-dot.ready { background: var(--blue); }
+  .gram-topic.empty .gram-dot, .gram-dot.empty { background: none; box-shadow: inset 0 0 0 1.5px var(--night-dim); }
+  .gram-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 16px; font-size: var(--fs-caption); font-family: var(--font-mono); letter-spacing: var(--ls-tight); color: var(--night-dim); }
+  .gram-legend span { display: flex; align-items: center; gap: 6px; }
+  .gram-legend-admin { font-style: italic; font-family: var(--font-cyr); letter-spacing: 0; }
+  @media (max-width: 640px) {
+    .gram-topic { flex-direction: column; align-items: flex-start; gap: 2px; }
+    .gram-topic-ru { max-width: 100%; }
+    .gram-sec-head { flex-wrap: wrap; gap: 8px; font-size: var(--fs-body); }
+    .gram-sec-ru { flex: 1 0 100%; order: 3; }
+  }
+
   /* ── Grammar result card ─────────────────────────────────── */
   .grammar-card {
     display: none;

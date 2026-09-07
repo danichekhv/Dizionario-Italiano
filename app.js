@@ -245,6 +245,7 @@ function switchMode(mode, skipHistoryClear = false) {
     if (mode === 'favorites') showState('favorites');
     else if (mode === 'cards') showState('cards');
     else if (mode === 'pratica') showState('pratica');
+    else if (mode === 'grammar') { $('searchInput').value = ''; showState('gramindex'); }
     else { $('searchInput').value = ''; showState('initial'); }
   }
   currentMode = mode;
@@ -260,6 +261,11 @@ function switchMode(mode, skipHistoryClear = false) {
   }
   if (mode === 'pratica' && !skipHistoryClear) {
     if (window.Pratica) Pratica.open();
+    return;
+  }
+  // Домашний экран грамматики — сам справочник, а не пустое место
+  if (mode === 'grammar' && !skipHistoryClear) {
+    if (window.Grammatica) Grammatica.open();
     return;
   }
   if (!skipHistoryClear) {
@@ -329,7 +335,7 @@ const TRACKABLE = ['result','rulist','grammar','favorites','initial'];
 function showState(state) {
   // Push history when moving away from a meaningful state to another
   // Don't push if we're going to loading/error (transient states), or if suppressed
-  const pushable = ['result','rulist','grammar','favorites','cards','graph','pratica','initial'];
+  const pushable = ['result','rulist','grammar','favorites','cards','graph','pratica','gramindex','initial'];
   if (!_suppressHistory && state !== _currentState && pushable.includes(_currentState)) {
     const savedState = _currentState;
     const savedMode = currentMode;
@@ -389,6 +395,14 @@ function showState(state) {
         _suppressHistory = true; showState('cards'); _suppressHistory = false;
         if (window.Cards) { if (snap && Cards.restore && window.Auth && Auth.user()) Cards.restore(snap); else Cards.open(); }
       });
+    } else if (savedState === 'gramindex') {
+      // Раскрытые разделы и фильтр живут в модуле, поэтому достаточно вернуть экран
+      pushHistory(() => {
+        currentMode = 'grammar';
+        applyModeUI('grammar');
+        _suppressHistory = true; showState('gramindex'); _suppressHistory = false;
+        if (window.Grammatica) Grammatica.render();
+      });
     } else if (savedState === 'pratica') {
       // Разбор живёт в памяти модуля, поэтому достаточно вернуть экран: текст и ошибки на месте
       pushHistory(() => {
@@ -409,7 +423,7 @@ function showState(state) {
     } else if (savedState === 'initial') {
       // Поиск всегда идёт через 'loading', поэтому фиксируем начальный экран
       // и при уходе в loading — иначе кнопка «Назад» после первого поиска не появится
-      if (['result','rulist','grammar','favorites','cards','graph','pratica','loading'].includes(state)) {
+      if (['result','rulist','grammar','favorites','cards','graph','pratica','gramindex','loading'].includes(state)) {
         const m = savedMode;
         pushHistory(() => {
           currentMode = m;
@@ -422,7 +436,7 @@ function showState(state) {
   }
 
   _currentState = state;
-  ['initialMsg','loadingMsg','errorMsg','resultCard','ruResults','grammarCard','favScreen','cardsScreen','graphScreen','praticaScreen']
+  ['initialMsg','loadingMsg','errorMsg','resultCard','ruResults','grammarCard','favScreen','cardsScreen','graphScreen','praticaScreen','gramIndexScreen']
     .forEach(id => $(id).classList.remove('active'));
   if (state === 'initial')        { $('initialMsg').classList.add('active'); renderHistory(); hideInlineHistory(); }
   else if (state === 'loading')   { $('loadingMsg').classList.add('active'); hideRecent(); hideInlineHistory(); }
@@ -434,6 +448,7 @@ function showState(state) {
   else if (state === 'cards')     { $('cardsScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
   else if (state === 'graph')     { $('graphScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
   else if (state === 'pratica')   { $('praticaScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
+  else if (state === 'gramindex') { $('gramIndexScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
 
   updateBackBtn();
 }
@@ -1721,6 +1736,7 @@ async function lookupGrammar(topic, opts = {}) {
     renderGrammar(g);
     showState('grammar');
     addToHistory(g.title || topic, 'grammar');
+    if (window.Grammatica) Grammatica.refresh(); // в справочнике тема должна сразу отметиться готовой
   } catch(err) {
     console.error("lookupGrammar error:", err);
     handleApiError(err.message || '');
@@ -2754,6 +2770,8 @@ async function renderSuggest() {
 function pickSuggest(w) { hideRecent(); const inp = $('searchInput'); inp.value = w; inp.blur(); lookupWord(w); } // blur прячет клавиатуру на телефоне
 function onSearchInput() {
   clearTimeout(_sugTimer);
+  // В грамматике то же поле фильтрует справочник: второго поля поиска на экране быть не должно
+  if (_currentState === 'gramindex' && window.Grammatica) Grammatica.setFilter($('searchInput').value.trim());
   if (!$('searchInput').value.trim()) { renderHistory(); return; }
   _sugTimer = setTimeout(renderSuggest, 80);
 }
