@@ -776,6 +776,42 @@ async function fillPhonetic(entry) {
   if (window.Auth && Auth.user()) sbSave('dictionary', 'word', entry.word.toLowerCase(), entry);
 }
 
+// ── Ловушка транслитерации: mammone → «мамон» ────────────────────────────────
+// Быстрая модель иногда вместо перевода записывает итальянское слово кириллицей. Признак: русский
+// похож на само слово, а английское толкование — нет (у настоящих когнатов, problema → проблема,
+// английское похоже тоже). Тогда перевод перезапрашивается у Gemini с явным запретом транслитерации.
+const _CYR = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'j', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'c', ч: 'ch', ш: 'sh', щ: 'sh', ы: 'y', э: 'e', ю: 'u', я: 'a', ь: '', ъ: '' };
+const translitRu = s => [...String(s || '').toLowerCase()].map(c => _CYR[c] ?? c).join('').replace(/[^a-z]/g, '');
+function strSimilarity(a, b) {
+  a = String(a || ''); b = String(b || ''); if (!a || !b) return 0;
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...new Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return 1 - d[a.length][b.length] / Math.max(a.length, b.length);
+}
+function looksTransliterated(word, ru, en) {
+  const w = cleanQuery(word).toLowerCase().replace(/[^a-z]/g, '');
+  const r = translitRu(String(ru || '').split(/[;,]/)[0]);
+  if (!w || !r || w.length < 4) return false;
+  const e = String(en || '').toLowerCase().split(/[;,]/)[0].replace(/[^a-z]/g, '');
+  return strSimilarity(w, r) >= 0.6 && (!e || strSimilarity(w, e) < 0.5);
+}
+async function fixTransliteratedRussian(entry) {
+  const ru = entry.russian && entry.russian.main, en = entry.english && entry.english.main;
+  if (!ru || !looksTransliterated(entry.word, ru, en)) return false;
+  const gloss = en || ((entry.meanings || [])[0] || {}).definition || '';
+  const prompt = `Italian ${entry.partOfSpeech || 'word'} "${entry.word}"${gloss ? ` means: ${gloss}` : ''}.
+Give its natural Russian translation as a real Russian word or phrase. Do NOT transliterate the Italian word into Cyrillic.
+Return ONLY valid JSON, no markdown: {"russian":{"main":"перевод","alternatives":"1-3 alternatives semicolon-separated or empty"}}`;
+  try {
+    const r = await callGemini(prompt);
+    const main = r && r.russian && String(r.russian.main || '').trim();
+    if (!main || looksTransliterated(entry.word, main, en)) return false;
+    entry.russian = { main, alternatives: String(r.russian.alternatives || '') };
+    return true;
+  } catch (e) { console.warn('translit fix:', e.message); return false; }
+}
+
 async function phrasePhonetic(phrase) {
   const parts = cleanQuery(phrase).toLowerCase().split(' ').filter(Boolean);
   const ipa = await Promise.all(parts.map(wordIpa));
@@ -1322,6 +1358,7 @@ async function lookupWordHybrid(query, base) {
     const entry = fdMergeCompletion(base, extra, shownRu);
     entry.relatedWords = await verifyWords(entry.relatedWords, base.relatedWords || []); // синонимы Викисловаря доверенные, добавки модели — проверяем
     if (!entry.phonetic) { const r = await resolveIpa(entry.word); entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; entry.phoneticSrc = r.src; }
+    await fixTransliteratedRussian(entry); // «мамон» вместо перевода — переспрашиваем у Gemini
     const queryKey = query.toLowerCase();
     await sbSave('dictionary', 'word', key, entry);
     if (queryKey !== key) await sbSave('dictionary', 'word', queryKey, entry);
@@ -1388,7 +1425,11 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
   // 1. Кэш Supabase — мгновенно
   const cachedWord = opts.force ? null : await sbGet('dictionary', word.toLowerCase());
   if (cachedWord) {
-    try { renderEntry(cachedWord); showState('result'); showCacheBadge(); addToHistory(cachedWord.word || word, 'dict'); pruneRelated(cachedWord); fillPhonetic(cachedWord); }
+    try {
+      renderEntry(cachedWord); showState('result'); showCacheBadge(); addToHistory(cachedWord.word || word, 'dict'); pruneRelated(cachedWord); fillPhonetic(cachedWord);
+      // сохранённый перевод-транслитерация чинится при открытии и, если пользователь вошёл, пересохраняется
+      fixTransliteratedRussian(cachedWord).then(fixed => { if (fixed && currentDictEntry === cachedWord) { renderEntry(cachedWord); if (window.Auth && Auth.user()) sbSave('dictionary', 'word', (cachedWord.word || word).toLowerCase(), cachedWord); } });
+    }
     catch(e) { console.error("renderEntry from cache failed:", e); }
     return;
   }
