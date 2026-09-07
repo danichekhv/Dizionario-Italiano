@@ -1810,9 +1810,12 @@
   .gram-sec-count { font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--night-dim); flex-shrink: 0; }
 
   .gram-topics { border-top: 1px solid rgba(var(--blue-rgb), .15); }
-  .gram-topic { display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 10px 18px 10px 22px; background: none; border: none; border-bottom: 1px solid rgba(var(--blue-rgb), .08); cursor: pointer; text-align: left; color: var(--night-text); font-family: var(--font-text); font-size: var(--fs-body); }
-  .gram-topic:last-child { border-bottom: none; }
-  .gram-topic:hover { background: rgba(var(--blue-rgb), .1); }
+  .gram-row { display: flex; align-items: center; gap: 8px; padding-right: 12px; border-bottom: 1px solid rgba(var(--blue-rgb), .08); }
+  .gram-row:last-child { border-bottom: none; }
+  .gram-row:hover { background: rgba(var(--blue-rgb), .1); }
+  .gram-topic { display: flex; align-items: baseline; gap: 10px; flex: 1; min-width: 0; padding: 10px 6px 10px 22px; background: none; border: none; cursor: pointer; text-align: left; color: var(--night-text); font-family: var(--font-text); font-size: var(--fs-body); }
+  .gram-gen { flex-shrink: 0; background: none; border: 1px solid rgba(var(--blue-rgb), .3); border-radius: var(--radius); color: var(--blue-soft); font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-tight); text-transform: uppercase; padding: 4px 8px; cursor: pointer; }
+  .gram-gen:hover { background: rgba(var(--blue-deep-rgb), .3); color: var(--night-text); border-color: var(--blue); }
   .gram-topic-it { font-style: italic; flex-shrink: 0; }
   .gram-topic-ru { color: var(--night-muted); font-family: var(--font-cyr); font-size: var(--fs-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .gram-topic.empty .gram-topic-it { color: var(--night-muted); }

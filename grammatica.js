@@ -226,12 +226,19 @@
   // ── Экран ────────────────────────────────────────────────────────────────────
   function topicHtml(t) {
     const ready = hasArticle(t);
+    // Кнопка создания стоит отдельно и только у владельца: по справочнику ходят листая,
+    // и статья на всех не должна появляться от случайного нажатия на строку
+    const gen = (!ready && isAdmin())
+      ? `<button class="gram-gen" onclick="Grammatica.generate('${t.slug}')" title="Создать статью вашим ключом">создать</button>` : '';
     return `
-      <button class="gram-topic ${ready ? 'ready' : 'empty'}" onclick="Grammatica.openTopic('${t.slug}')">
-        <span class="gram-dot" title="${ready ? 'статья есть' : 'статьи пока нет'}"></span>
-        <span class="gram-topic-it">${esc(t.it)}</span>
-        <span class="gram-topic-ru">${esc(t.ru)}</span>
-      </button>`;
+      <div class="gram-row">
+        <button class="gram-topic ${ready ? 'ready' : 'empty'}" onclick="Grammatica.openTopic('${t.slug}')">
+          <span class="gram-dot" title="${ready ? 'статья есть' : 'статьи пока нет'}"></span>
+          <span class="gram-topic-it">${esc(t.it)}</span>
+          <span class="gram-topic-ru">${esc(t.ru)}</span>
+        </button>
+        ${gen}
+      </div>`;
   }
 
   function sectionHtml(sec, q) {
@@ -269,16 +276,22 @@
       <div class="gram-legend">
         <span><i class="gram-dot ready"></i> статья есть</span>
         <span><i class="gram-dot empty"></i> статьи пока нет</span>
-        ${isAdmin() ? '<span class="gram-legend-admin">нажатие на пустую тему создаст статью вашим ключом</span>' : ''}
+        ${isAdmin() ? '<span class="gram-legend-admin">кнопка «создать» у пустой темы генерирует статью вашим ключом</span>' : ''}
       </div>`;
   }
 
   // ── Действия ─────────────────────────────────────────────────────────────────
+  // Нажатие на строку только открывает готовое. Ничего не генерируется само.
   function openTopic(slug) {
     const t = allTopics().find(x => x.slug === slug); if (!t) return;
     if (hasArticle(t)) { lookupGrammar(t.it); return; }
-    if (!isAdmin()) { showToast('Статьи по этой теме пока нет — раздел ещё наполняется'); return; }
-    // Пока пакетной генерации нет, владелец может создать статью прямо отсюда
+    showToast(isAdmin() ? 'Статьи пока нет — «создать» справа от темы' : 'Статьи по этой теме пока нет — раздел ещё наполняется');
+  }
+
+  // Пока пакетной генерации нет, владелец создаёт статьи по одной, явным нажатием
+  function generate(slug) {
+    if (!isAdmin()) return;
+    const t = allTopics().find(x => x.slug === slug); if (!t) return;
     lookupGrammar(t.it);
   }
 
@@ -289,7 +302,7 @@
     },
     render,
     toggle(id) { S.open[id] = !S.open[id]; render(); },
-    openTopic,
+    openTopic, generate,
     // Фильтр приходит из общего поля поиска: второго поля на экране быть не должно
     setFilter(q) { if (S.filter === q) return; S.filter = q; render(); },
     // После генерации статьи отметка «готово» должна появиться без перезагрузки
