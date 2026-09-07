@@ -763,11 +763,65 @@
   .wordmap-btn { margin-top: 24px; padding: 8px 20px; border: 1.5px solid var(--border); border-radius: var(--radius); background: white; cursor: pointer; font-family: var(--font-text); font-size: var(--fs-body); color: var(--ink); font-style: normal; transition: all var(--t-base); }
   .wordmap-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
   body.mode-grammar .wordmap-btn { display: none; }
+  /* В грамматике на главной не показываем ни карту слов, ни сегодняшние карточки: это другой раздел.
+     !important нужен потому, что видимость блока задаётся инлайновым стилем из refreshHomeDue */
+  body.mode-grammar .home-due { display: none !important; }
   .fav-view-toggle { margin-left: 0; } /* три элемента заголовка расставляет сам flex, без принудительного прижатия */
   .fav-header .fav-tabs { margin-left: auto; margin-bottom: 0; } /* нижний отступ вкладок сдвигал их вверх относительно строки */
   .fav-view-toggle .view-toggle-btn { padding: 8px 16px; font-size: var(--fs-body); } /* одна высота с вкладками */
   body.mode-grammar .fav-view-toggle { display: none !important; }
   @media (max-width: 640px) { .wg-hint { display: none; } .wg-bar { padding: 8px; gap: 8px; } .wg-legend { padding: 8px 8px; } }
+
+  /* ── La Pratica: разбор своего текста ─────────────────────── */
+  .pratica-screen { display: none; animation: fadeUp 0.4s ease both; }
+  .pratica-screen.active { display: block; }
+  .pr-intro { color: var(--muted); font-style: italic; line-height: var(--lh-text); margin-bottom: 16px; }
+  .pr-note { font-size: var(--fs-small); color: var(--muted); margin-bottom: 16px; line-height: var(--lh-ui); }
+  .pr-input-wrap { background: white; border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .pr-input { width: 100%; min-height: 180px; resize: vertical; border: none; background: none; font-family: var(--font-text); font-size: var(--fs-lead); line-height: var(--lh-text); color: var(--ink); }
+  .pr-input:focus { box-shadow: none; }
+  .pr-input-foot { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .pr-count { font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--muted); margin-right: auto; }
+  .pr-count.over { color: var(--danger); }
+  .pr-loading { margin-top: 16px; color: var(--muted); font-style: italic; display: flex; align-items: center; gap: 8px; }
+  .pr-error { margin-top: 16px; color: var(--danger); font-size: var(--fs-body); }
+
+  .pr-head { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+  .pr-head-count { font-family: var(--font-mono); font-size: var(--fs-small); color: var(--muted); margin-right: auto; }
+  .pr-overall { font-style: italic; color: var(--ink-light); line-height: var(--lh-text); margin-bottom: 16px; }
+  .pr-text { background: white; border: 1.5px solid var(--border); border-radius: var(--radius); padding: 20px; font-size: var(--fs-lead); line-height: 2; margin-bottom: 20px; }
+  /* Подсветка ошибки: подчёркивание, а не заливка, чтобы текст оставался читаемым */
+  .pr-mark { cursor: pointer; border-bottom: 2px solid var(--terracotta); background: rgba(var(--terracotta-rgb), .08); padding: 1px 2px; border-radius: 2px; }
+  .pr-mark:hover { background: rgba(var(--terracotta-rgb), .18); }
+  .pr-mark.t-vocabulary, .pr-mark.t-register { border-bottom-color: var(--gold); background: rgba(var(--gold-rgb), .1); }
+  .pr-mark.t-vocabulary:hover, .pr-mark.t-register:hover { background: rgba(var(--gold-rgb), .2); }
+
+  .pr-good-box { background: rgba(var(--sage-rgb), .07); border: 1.5px solid rgba(var(--sage-rgb), .25); border-radius: var(--radius); padding: 12px 20px; margin-bottom: 20px; }
+  .pr-good-box ul { margin: 0; padding-left: 20px; }
+  .pr-good-box li { line-height: var(--lh-text); color: var(--ink-light); }
+  .pr-box-label { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .pr-none { background: white; border: 1.5px solid var(--border); border-radius: var(--radius); padding: 20px; color: var(--muted); font-style: italic; }
+
+  .pr-issues { display: flex; flex-direction: column; gap: 12px; }
+  .pr-issue { background: white; border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
+  .pr-issue.pulse { animation: prPulse 1.2s ease; }
+  @keyframes prPulse { 0%, 100% { border-color: var(--border); } 25% { border-color: var(--terracotta); box-shadow: 0 0 0 3px rgba(var(--terracotta-rgb), .18); } }
+  .pr-issue-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: var(--fs-lead); }
+  .pr-bad { text-decoration: line-through; text-decoration-color: rgba(var(--danger-rgb), .6); color: var(--muted); font-style: italic; }
+  .pr-arrow { color: var(--muted); }
+  .pr-good { color: var(--sage); font-weight: 600; }
+  .pr-issue-ru { color: var(--ink-light); margin-top: 4px; }
+  .pr-issue-expl { color: var(--ink-light); line-height: var(--lh-text); margin-top: 8px; }
+  .pr-issue-foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .pr-issue-foot .pr-add { margin-left: auto; }
+  .pr-issue-foot .pr-add.done { color: var(--sage); border-color: rgba(var(--sage-rgb), .4); }
+  .pr-topic { cursor: pointer; border: none; font: inherit; }
+  .pr-type { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-tight); text-transform: uppercase; color: var(--muted); }
+  .pr-loose { opacity: .7; font-style: italic; text-transform: none; }
+
+  .pr-words { margin-top: 20px; background: white; border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
+  .pr-word-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  @media (max-width: 640px) { .pr-text { padding: 14px; font-size: var(--fs-body); } .pr-issue { padding: 14px; } }
 
   /* Стартовый экран на десктопе должен помещаться в экран целиком: отступы плотнее */
   @media (min-width: 641px) {
@@ -1361,18 +1415,17 @@
     .subtitle { font-size: var(--fs-small); }
     .header-ornament { font-size: var(--fs-caption); letter-spacing: var(--ls-caps); }
 
-    /* Nav — три равные кнопки в одну строку, без артиклей */
+    /* Nav — равные кнопки в одну строку, без артиклей */
     .app-nav {
       width: 100% !important;
       max-width: 100% !important;
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       margin-left: 0 !important;
       margin-right: 0 !important;
       overflow: visible;
     }
-    .app-nav-btn { padding: 8px 4px; font-size: var(--fs-small); min-width: 0; gap: 4px; justify-content: center; }
-    .app-nav-btn .nav-icon { font-size: var(--fs-body); }
+    /* Размеры самих кнопок задаются ниже, после общих правил навигации: там они не перебиваются */
     .app-nav-btn .nav-article { display: none; }
 
     /* Lang toggle — full width */
@@ -1723,6 +1776,15 @@
   body.mode-grammar .app-nav-btn:hover:not(.active) {
     background: rgba(var(--blue-rgb),0.1);
     color: var(--night-text);
+  }
+
+  /* Телефон: четыре вкладки в строку. Блок стоит после общих правил навигации намеренно —
+     иначе .app-nav-btn выше по файлу перебивает размеры, заданные в медиазапросе раньше. */
+  @media (max-width: 640px) {
+    .app-nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .app-nav-btn { padding: 8px 2px; font-size: var(--fs-caption); gap: 4px; justify-content: center; min-width: 0; }
+    .app-nav-btn .icon { width: 13px; height: 13px; }
+    .app-nav-btn > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   }
 
   /* ── Grammar result card ─────────────────────────────────── */

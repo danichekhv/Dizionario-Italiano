@@ -188,7 +188,29 @@ begin
   return v_root;
 end $$;
 grant execute on function shared_deck_info(text) to anon, authenticated;
-grant execute on function import_shared_deck(text) to authenticated;`;
+grant execute on function import_shared_deck(text) to authenticated;
+
+-- 6. La Pratica: журнал активной продукции (разбор своего текста, позже диалоги и ответы на карточках)
+-- Сюда пишем только то, что пользователь сам написал или сказал. Словарные поиски сюда не попадают:
+-- поиск говорит об интересе, а не об умении, и смешивать их нельзя.
+create table if not exists production_log (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid(),
+  source text not null check (source in ('text','dialogue','card')),
+  raw_text text default '',
+  words_used text[] default '{}',   -- леммы, без служебных слов: частотный словарь считается через unnest
+  issues jsonb default '[]'::jsonb,
+  good_points jsonb default '[]'::jsonb,
+  session_id uuid,
+  created_at timestamptz default now()
+);
+create index if not exists production_log_user_idx on production_log(user_id, created_at desc);
+alter table production_log enable row level security;
+drop policy if exists dz_own on production_log;
+create policy dz_own on production_log for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- набранный на карточке ответ: пока просто сохраняем, потом неверные пойдут в тот же журнал
+alter table reviews add column if not exists typed text;`;
 
   // ── Сессия ───────────────────────────────────────────────────────────────────
   function load() { try { session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { session = null; } }

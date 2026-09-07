@@ -9,6 +9,7 @@ const ICONS = {
   book: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
   type: '<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>',
   layers: '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+  pen: '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>',
   graph: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>',
   search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
   x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
@@ -194,12 +195,20 @@ function applyModeUI(mode) {
   const isFav  = mode === 'favorites';
   document.body.classList.toggle('mode-grammar', isGram);
   document.body.classList.toggle('mode-cards', mode === 'cards');
+  document.body.classList.toggle('mode-pratica', mode === 'pratica');
   $('navDict').classList.toggle('active', mode === 'dict');
   $('navGram').classList.toggle('active', isGram);
   $('navCards').classList.toggle('active', mode === 'cards');
+  $('navPratica').classList.toggle('active', mode === 'pratica');
   $('headerFavBtn').classList.toggle('active', isFav);
   updateFavFloat(mode);
-  if (mode === 'cards') {
+  if (mode === 'pratica') {
+    $('headerOrnament').textContent = 'Разбор написанного';
+    $('headerTitle').innerHTML = 'La Pra<em>tica</em>';
+    $('headerSubtitle').textContent = 'Свой текст · Ошибки · В колоду';
+    document.querySelector('.lang-toggle').style.display = 'none';
+    document.querySelector('.search-area').style.display = 'none';
+  } else if (mode === 'cards') {
     $('headerOrnament').textContent = 'Интервальные повторения';
     $('headerTitle').innerHTML = 'Le <em>Carte</em>';
     $('headerSubtitle').textContent = 'Колоды · Карточки · Повторение';
@@ -235,6 +244,7 @@ function switchMode(mode, skipHistoryClear = false) {
     // showState вызываем до смены currentMode, чтобы закладка запомнила старый режим.
     if (mode === 'favorites') showState('favorites');
     else if (mode === 'cards') showState('cards');
+    else if (mode === 'pratica') showState('pratica');
     else { $('searchInput').value = ''; showState('initial'); }
   }
   currentMode = mode;
@@ -246,6 +256,10 @@ function switchMode(mode, skipHistoryClear = false) {
   }
   if (mode === 'cards' && !skipHistoryClear) {
     if (window.Cards) Cards.open();
+    return;
+  }
+  if (mode === 'pratica' && !skipHistoryClear) {
+    if (window.Pratica) Pratica.open();
     return;
   }
   if (!skipHistoryClear) {
@@ -315,7 +329,7 @@ const TRACKABLE = ['result','rulist','grammar','favorites','initial'];
 function showState(state) {
   // Push history when moving away from a meaningful state to another
   // Don't push if we're going to loading/error (transient states), or if suppressed
-  const pushable = ['result','rulist','grammar','favorites','cards','graph','initial'];
+  const pushable = ['result','rulist','grammar','favorites','cards','graph','pratica','initial'];
   if (!_suppressHistory && state !== _currentState && pushable.includes(_currentState)) {
     const savedState = _currentState;
     const savedMode = currentMode;
@@ -375,6 +389,14 @@ function showState(state) {
         _suppressHistory = true; showState('cards'); _suppressHistory = false;
         if (window.Cards) { if (snap && Cards.restore && window.Auth && Auth.user()) Cards.restore(snap); else Cards.open(); }
       });
+    } else if (savedState === 'pratica') {
+      // Разбор живёт в памяти модуля, поэтому достаточно вернуть экран: текст и ошибки на месте
+      pushHistory(() => {
+        currentMode = 'pratica';
+        applyModeUI('pratica');
+        _suppressHistory = true; showState('pratica'); _suppressHistory = false;
+        if (window.Pratica) Pratica.render();
+      });
     } else if (savedState === 'favorites') {
       const tab = currentFavTab;
       pushHistory(() => {
@@ -387,7 +409,7 @@ function showState(state) {
     } else if (savedState === 'initial') {
       // Поиск всегда идёт через 'loading', поэтому фиксируем начальный экран
       // и при уходе в loading — иначе кнопка «Назад» после первого поиска не появится
-      if (['result','rulist','grammar','favorites','cards','graph','loading'].includes(state)) {
+      if (['result','rulist','grammar','favorites','cards','graph','pratica','loading'].includes(state)) {
         const m = savedMode;
         pushHistory(() => {
           currentMode = m;
@@ -400,7 +422,7 @@ function showState(state) {
   }
 
   _currentState = state;
-  ['initialMsg','loadingMsg','errorMsg','resultCard','ruResults','grammarCard','favScreen','cardsScreen','graphScreen']
+  ['initialMsg','loadingMsg','errorMsg','resultCard','ruResults','grammarCard','favScreen','cardsScreen','graphScreen','praticaScreen']
     .forEach(id => $(id).classList.remove('active'));
   if (state === 'initial')        { $('initialMsg').classList.add('active'); renderHistory(); hideInlineHistory(); }
   else if (state === 'loading')   { $('loadingMsg').classList.add('active'); hideRecent(); hideInlineHistory(); }
@@ -411,6 +433,7 @@ function showState(state) {
   else if (state === 'favorites') { $('favScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
   else if (state === 'cards')     { $('cardsScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
   else if (state === 'graph')     { $('graphScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
+  else if (state === 'pratica')   { $('praticaScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
 
   updateBackBtn();
 }
@@ -2790,6 +2813,8 @@ function handleWordClick(word) {
     // This function is a no-op; the capturing listener handles it
     return;
   }
+  // Из разбора текста уходим в словарь целиком, иначе статья открылась бы под шапкой «La Pratica»
+  if (currentMode === 'pratica') { currentMode = 'dict'; applyModeUI('dict'); }
   $('searchInput').value = word;
   lookupWord(word);
 }
@@ -3265,6 +3290,8 @@ function sheetOpenFull() {
       lookupGrammar(_sheetWord);
     } else if (document.body.classList.contains('study-open') && window.Cards) {
       Cards.openArticle(_sheetWord); // из карточки: закрыть экран учёбы, «Назад» вернёт карточку
+    } else if (currentMode === 'pratica' && window.Cards) {
+      Cards.openArticle(_sheetWord); // из разбора: переключить режим на словарь, «Назад» вернёт разбор
     } else {
       lookupWord(_sheetWord);
     }

@@ -106,6 +106,10 @@
       <span class="nav-icon" data-icon="layers"></span>
       <span><span class="nav-article">Le </span><span class="nav-label-it">Carte</span><span class="nav-badge" id="navCardsBadge" style="display:none"></span></span>
     </button>
+    <button class="app-nav-btn" id="navPratica" onclick="switchMode('pratica')">
+      <span class="nav-icon" data-icon="pen"></span>
+      <span><span class="nav-article">La </span><span class="nav-label-it">Pratica</span></span>
+    </button>
   </nav>
 
   <div class="search-area">
@@ -164,6 +168,9 @@
 
   <!-- Cards (Le Carte): колоды и повторение -->
   <div class="cards-screen" id="cardsScreen"></div>
+
+  <!-- Pratica: разбор своего текста -->
+  <div class="pratica-screen" id="praticaScreen"></div>
 
   <!-- Favorites screen -->
   <div class="fav-screen" id="favScreen">
@@ -336,6 +343,8 @@
 <script src="cards.js"></script>
 <!-- Граф слов: связанные слова, карта всех слов, граф избранного -->
 <script src="graph.js"></script>
+<!-- La Pratica: разбор написанного пользователем текста -->
+<script src="pratica.js"></script>
 <!-- Аккаунты: вход, профиль с ключами, права доступа к личным данным -->
 <script src="auth.js"></script>
 </body>
