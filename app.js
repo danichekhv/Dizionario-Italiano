@@ -1427,8 +1427,25 @@ function fdMergeCompletion(base, extra, fastRu) {
 }
 
 // Гибридный путь: сразу показываем факты из Викисловаря, Gemini дописывает остальное
-async function lookupWordHybrid(query, base) {
+// Одно написание — два разных слова: существительное «puzza» и форма глагола puzzare.
+// Показываем выбор, а не запихиваем чужую лемму со спряжениями в чужую же статью.
+function offerFormsChooser(entry, typed) {
+  const self = String(entry.word || typed || '').toLowerCase();
+  const forms = (entry.alsoForms || []).filter(l => l && l.lemma && l.lemma.toLowerCase() !== self);
+  if (!forms.length) return false;
+  const items = [
+    { italian: entry.word || typed, partOfSpeech: cleanPos(entry.partOfSpeech), gender: entry.gender || '',
+      shortDefinition: (entry.russian && entry.russian.main) || '', direct: true },
+    ...forms.map(l => ({ italian: l.lemma, partOfSpeech: l.pos || '', shortDefinition: l.desc || '' }))
+  ];
+  renderRuResults(typed || entry.word, items, `«${typed || entry.word}» — это несколько разных слов`);
+  showState('rulist');
+  return true;
+}
+
+async function lookupWordHybrid(query, base, opts = {}) {
   const key = base.word.toLowerCase();
+  if (!opts.skipChooser && offerFormsChooser(base, query)) return;
   renderEntry({ ...base, _pending: true });
   showState('result');
   addToHistory(base.word, 'dict');
@@ -1506,6 +1523,7 @@ Return ONLY valid JSON, no markdown, no explanation. Schema:
   ],
   "isNoun": true/false,
   "isVerb": true/false,
+  "alsoForms": [ { "lemma": "another Italian word this exact spelling is also an inflected form of", "pos": "sostantivo / verbo / aggettivo", "desc": "short Russian note, e.g. «форма глагола puzzare»" } ],
   "relatedWords": ["слово1", "слово2", "слово3"],
   "conjugations": {
     "Indicativo Presente": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
@@ -1528,10 +1546,12 @@ Return ONLY valid JSON, no markdown, no explanation. Schema:
   }
 }
 If isVerb false → conjugations null. If isNoun false → singular/plural null. If not a real Italian word → word null. relatedWords: 3-5 semantically related Italian words (synonyms, antonyms, thematic). meanings: 1-4 items ordered from most frequent to least frequent usage; obsolete, dialectal and rare senses go last. Always include at least 1 meaning.
-label: one of [obsolete, archaic, dialectal, regional, vulgar, offensive, slang, colloquial, rare, literary, poetic, formal, figurative, humorous, technical, medicine, law, nautical, botany, zoology, military], or an empty string for an ordinary sense. Set it only when the sense really is restricted; never guess.`;
+label: one of [obsolete, archaic, dialectal, regional, vulgar, offensive, slang, colloquial, rare, literary, poetic, formal, figurative, humorous, technical, medicine, law, nautical, botany, zoology, military], or an empty string for an ordinary sense. Set it only when the sense really is restricted; never guess.
+alsoForms: this article is about one word only. If the very same spelling is ALSO an inflected form of a different word (the noun "puzza" is also "puzza" from the verb puzzare), list that other word here so the reader can jump to it. Do not describe it and do not add its conjugation table here. Empty array when there is no such word.`;
   // 1. Кэш Supabase — мгновенно
   const cachedWord = opts.force ? null : await sbGet('dictionary', word.toLowerCase());
   if (cachedWord) {
+    if (!opts.skipChooser && offerFormsChooser(cachedWord, word)) return;
     try {
       renderEntry(cachedWord); showState('result'); showCacheBadge(); addToHistory(cachedWord.word || word, 'dict'); pruneRelated(cachedWord); fillPhonetic(cachedWord);
       // сохранённый перевод-транслитерация чинится при открытии и, если пользователь вошёл, пересохраняется
@@ -1562,7 +1582,7 @@ label: one of [obsolete, archaic, dialectal, regional, vulgar, offensive, slang,
       return lookupWord(mapped.lemma, _depth + 1);
     }
   } else if (mapped) {
-    return lookupWordHybrid(word, mapped);
+    return lookupWordHybrid(word, mapped, opts);
   }
 
   // 3. Fallback: слова нет в Викисловаре или таблица форм неполная — Gemini генерирует всё
@@ -1571,6 +1591,12 @@ label: one of [obsolete, archaic, dialectal, regional, vulgar, offensive, slang,
     if (!entry.word) { $('errorText').textContent = `"${word}" — parola non trovata`; showState('error'); return; }
     entry.relatedWords = await verifyWords(entry.relatedWords);
     entry.partOfSpeech = cleanPos(entry.partOfSpeech);
+    // Сноска «также форма слова»: у статей из Викисловаря она строится из его же данных,
+    // здесь данных нет, поэтому спрашиваем модель. Само другое слово живёт в своей статье.
+    entry.alsoForms = (Array.isArray(entry.alsoForms) ? entry.alsoForms : [])
+      .map(l => ({ lemma: String((l && l.lemma) || '').trim(), pos: cleanPos(l && l.pos), desc: String((l && l.desc) || '').trim() }))
+      .filter(l => l.lemma && l.lemma.toLowerCase() !== String(entry.word || '').toLowerCase())
+      .map(l => ({ ...l, desc: l.desc || `форма слова ${l.lemma}` }));
     // Пометки модель отдаёт по-английски, на экран они идут сокращениями по-русски
     if (Array.isArray(entry.meanings)) entry.meanings = entry.meanings.map(m => ({ ...m, label: usageLabel([m && m.label], '') }));
     // Слова нет в Викисловаре, статья целиком от модели: помечаем, в граф и «мои слова» оно не попадёт
@@ -1582,6 +1608,7 @@ label: one of [obsolete, archaic, dialectal, regional, vulgar, offensive, slang,
     await sbSave('dictionary', 'word', canonicalKey, entry);
     // Кэшируем и под введённым запросом, чтобы повторный поиск попадал в кэш
     if (queryKey !== canonicalKey) await sbSave('dictionary', 'word', queryKey, entry);
+    if (!opts.skipChooser && offerFormsChooser(entry, word)) return;
     renderEntry(entry);
     showState('result');
     addToHistory(entry.word || word, 'dict');
@@ -2052,7 +2079,8 @@ function renderRuResults(query, results, titleText) {
       $('btnIT').classList.add('active'); $('btnRU').classList.remove('active');
       $('searchInput').placeholder = 'Cerca una parola italiana…';
       $('searchInput').value = item.italian;
-      lookupWord(item.italian);
+      // direct — сама статья из списка выбора: заходим сразу в неё, иначе список покажется снова
+      lookupWord(item.italian, 0, item.direct ? { skipChooser: true } : {});
     };
     container.appendChild(card);
   });
