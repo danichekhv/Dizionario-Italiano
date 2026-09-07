@@ -3477,6 +3477,13 @@ body.mode-grammar .search-recent { background: var(--night-surface); border-colo
 @media (max-width: 640px) { .search-recent { max-height: 196px; } .suggest-item { padding: 10px 8px; } }
 
 /* ── Омографы в статье: ancora — наречие «ещё» и существительное «якорь» ── */
+/* Помета употребления: устар., диал., вульг. Ставится перед толкованием и в шапке омографа */
+.usage-tag { display: inline-block; margin-right: 8px; padding: 1px 7px; border-radius: var(--radius); background: rgba(var(--gold-rgb), .16); color: var(--gold); font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-tight); text-transform: lowercase; vertical-align: 2px; }
+.homograph-admin-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.homograph-admin { margin-left: auto; display: flex; gap: 8px; }
+.homograph-hint { color: var(--muted); font-style: italic; font-size: var(--fs-small); }
+.usage-edit { background: none; border: none; padding: 0; cursor: pointer; color: var(--muted); font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-tight); text-transform: uppercase; }
+.usage-edit:hover { color: var(--terracotta); }
 .homograph { padding: 16px 0; border-top: 1px solid var(--border); }
 .homograph:first-child { border-top: none; padding-top: 0; }
 .homograph-head { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; }

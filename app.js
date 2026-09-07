@@ -1145,6 +1145,29 @@ function fdCleanGloss(def) {
 }
 function fdSenseLabel(def) { const m = (def || '').match(/^\s*\(([^)]*)\)/); return m ? m[1] : ''; }
 
+// Пометы употребления. Без них статья врёт: у «sito» устаревшее «расположенный» и диалектное
+// «вонь» стоят рядом с обычным значением и выглядят как равноправные.
+const USAGE_RU = {
+  obsolete: 'устар.', archaic: 'устар.', dated: 'устар.', historical: 'истор.',
+  dialectal: 'диал.', regional: 'регион.', tuscan: 'тоскан.', 'southern italy': 'юж.',
+  vulgar: 'вульг.', offensive: 'груб.', derogatory: 'пренебр.', slang: 'сленг',
+  colloquial: 'разг.', informal: 'разг.', familiar: 'разг.',
+  rare: 'редк.', uncommon: 'редк.', literary: 'книжн.', poetic: 'поэт.', formal: 'офиц.',
+  figurative: 'перен.', humorous: 'шутл.', euphemistic: 'эвфем.',
+  technical: 'спец.', medicine: 'мед.', law: 'юр.', nautical: 'мор.', botany: 'бот.',
+  zoology: 'зоол.', anatomy: 'анат.', music: 'муз.', religion: 'религ.', military: 'воен.'
+};
+// Помета собирается и из тегов Викисловаря, и из скобки в начале толкования: «(obsolete) placed»
+function usageLabel(tags, def) {
+  const from = [...(tags || []), ...String(fdSenseLabel(def) || '').split(/[,;]/)];
+  const out = [];
+  from.forEach(t => {
+    const ru = USAGE_RU[String(t).trim().toLowerCase()];
+    if (ru && !out.includes(ru)) out.push(ru);
+  });
+  return out.join(' · ');
+}
+
 // Переводит ответ Free Dictionary в формат статьи приложения.
 // Возвращает { lemma } для словоформ, null — если данных недостаточно (тогда всё генерирует Gemini).
 function mapFreeDictionary(fd, opts = {}) {
@@ -1211,6 +1234,7 @@ function mapFreeDictionary(fd, opts = {}) {
       partOfSpeech: FD_POS[en.partOfSpeech] || en.partOfSpeech || '',
       gender: en.partOfSpeech === 'noun' ? (tg.has('feminine') && tg.has('masculine') ? 'm./f.' : tg.has('feminine') ? 'f.' : tg.has('masculine') ? 'm.' : null) : null,
       phonetic: pr ? pr.text : '',
+      label: usageLabel([...tg], ss[0] && ss[0].definition),
       glosses: ss.map(s => fdCleanGloss(s.definition)).filter(Boolean),
       example: ss.map(s => (s.examples && s.examples[0]) || '').find(Boolean) || ''
     };
@@ -1327,9 +1351,12 @@ function fdCompletionPrompt(base, opts = {}) {
   const needRelated = (base.relatedWords || []).length < 3;
   const homos = base.homographs || [];
   const homoLines = homos.map((h, i) => `${i + 1}. ${h.partOfSpeech}${h.gender ? ` (${h.gender})` : ''}${h.phonetic ? ` ${h.phonetic}` : ''}: ${h.glosses.join('; ')}`).join('\n');
+  // Викисловарь у некоторых слов не знает современного значения (у «sito» нет «сайта»),
+  // а порядок у него исторический, поэтому устаревшее идёт первым. И то и другое чиним здесь.
   const meaningsRule = base.senses.length
-    ? `exactly ${base.senses.length} item(s), one per known sense above, in the same order. Reuse the given example if it is a natural full sentence, otherwise write your own.`
+    ? `cover every known sense above, then add any frequent present-day sense that is missing from that list (for "sito" that would be "website"). Order by how common the sense is in Italian today: obsolete, dialectal and rare senses go last. Reuse a given example if it is a natural full sentence, otherwise write your own.`
     : `1-3 items ordered from most to least frequent usage.`;
+  const LABELS = 'obsolete, archaic, dialectal, regional, vulgar, offensive, slang, colloquial, rare, literary, poetic, formal, figurative, humorous, technical, medicine, law, nautical, botany, zoology, military';
   return `You are an expert Italian linguist. Complete the dictionary entry for the Italian ${base.partOfSpeech} "${base.word}"${base.gender ? ` (${base.gender})` : ''}.
 Known senses from Wiktionary (English glosses, most common first):
 ${senseLines || '(none)'}${homos.length ? `
@@ -1341,25 +1368,34 @@ Return ONLY valid JSON, no markdown:
 {${opts.skipRussian ? '' : `
   "russian": { "main": "primary Russian translation", "alternatives": "2-3 alternatives semicolon-separated or empty" },`}
   "category": "${CATEGORY_PROMPT}",
-  "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian" } ]${needRelated ? `,
+  "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian", "label": "usage label or empty string" } ]${needRelated ? `,
   "relatedWords": ["3-5 semantically related Italian words (synonyms, antonyms, thematic)"]` : ''}${homos.length ? `,
-  "homographs": [ { "russian": "primary Russian translation; alternatives after ;", "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian" } ] } ]` : ''}
+  "homographs": [ { "russian": "primary Russian translation; alternatives after ;", "label": "usage label or empty string", "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian", "label": "usage label or empty string" } ] } ]` : ''}
 }
-meanings: ${meaningsRule}${homos.length ? `
+meanings: ${meaningsRule}
+label: one of [${LABELS}], or an empty string for an ordinary sense. Set it only when the sense really is restricted; never guess.${homos.length ? `
 homographs: one object per homograph listed above, in the same order, 1-2 meanings each.` : ''}`;
 }
 
 function fdMergeCompletion(base, extra, fastRu) {
+  // Пометку берём от модели; если модель вернула ровно столько значений, сколько знает
+  // Викисловарь, и своей пометки не дала — подставляем разобранную из его тегов
   const meanings = Array.isArray(extra.meanings) && extra.meanings.some(m => m && m.definition)
-    ? extra.meanings.filter(m => m && m.definition).map(m => ({ definition: m.definition, example: m.example || '' }))
-    : base.senses.map(s => ({ definition: s.gloss, example: s.example }));
+    ? extra.meanings.filter(m => m && m.definition).map((m, i) => {
+        const same = extra.meanings.length === base.senses.length;
+        return { definition: m.definition, example: m.example || '',
+                 label: usageLabel([m.label], '') || (same ? usageLabel([], base.senses[i] && base.senses[i].label) : '') };
+      })
+    : base.senses.map(s => ({ definition: s.gloss, example: s.example, label: usageLabel([], s.label) }));
   const related = (base.relatedWords || []).slice();
   (Array.isArray(extra.relatedWords) ? extra.relatedWords : []).forEach(w => {
     if (typeof w === 'string' && w && !related.includes(w) && related.length < 6) related.push(w);
   });
   const homographs = (base.homographs || []).map((h, i) => {
     const x = (Array.isArray(extra.homographs) ? extra.homographs[i] : null) || {};
-    return { ...h, russian: typeof x.russian === 'string' ? x.russian : '', meanings: Array.isArray(x.meanings) ? x.meanings.filter(m => m && m.definition).map(m => ({ definition: m.definition, example: m.example || '' })) : [] };
+    return { ...h, russian: typeof x.russian === 'string' ? x.russian : '',
+      label: h.label || usageLabel([x.label], ''),
+      meanings: Array.isArray(x.meanings) ? x.meanings.filter(m => m && m.definition).map(m => ({ definition: m.definition, example: m.example || '', label: usageLabel([m.label], '') })) : [] };
   });
   const { senses, _pending, ...rest } = base;
   return {
@@ -2097,21 +2133,33 @@ function renderEntry(e) {
   const hs = $('homographsSection'), hc = $('homographsContainer');
   if (hs && hc) {
     const list = e.homographs || [];
+    const adminVoices = !!(window.Auth && Auth.isAdmin && Auth.isAdmin());
     if (list.length) {
-      hc.innerHTML = list.map(h => {
+      hc.innerHTML = list.map((h, i) => {
         const ms = h.meanings && h.meanings.length ? h.meanings : (h.glosses || []).map((g, i) => ({ definition: g, example: i === 0 ? h.example : '' }));
         return `<div class="homograph">
           <div class="homograph-head">
             <span class="word-type-badge">${escapeHtml(h.partOfSpeech || '')}</span>
             ${h.gender ? `<span class="homograph-gender">${escapeHtml(h.gender)}</span>` : ''}
+            ${h.label ? `<span class="usage-tag">${escapeHtml(h.label)}</span>` : ''}
             ${h.phonetic ? `<span class="homograph-ipa">${highlightStress(escapeHtml(h.phonetic))}</span>` : ''}
+            ${adminVoices ? `<span class="homograph-admin"><button class="usage-edit" onclick="editVoice(${i})">править</button><button class="usage-edit" onclick="deleteVoice(${i})">удалить</button></span>` : ''}
           </div>
           ${h.russian ? `<div class="homograph-ru">${escapeHtml(h.russian)}</div>` : ''}
-          ${ms.map(m => `<div class="definition-text">${makeClickable(m.definition || '')}</div>${m.example ? `<div class="example-text">${makeClickable(m.example)}</div>` : ''}`).join('')}
+          ${ms.map(m => `<div class="definition-text">${usageTag(m.label)}${makeClickable(m.definition || '')}</div>${m.example ? `<div class="example-text">${makeClickable(m.example)}</div>` : ''}`).join('')}
         </div>`;
       }).join('');
       hs.style.display = '';
-    } else hs.style.display = 'none';
+    } else { hc.innerHTML = ''; hs.style.display = adminVoices ? '' : 'none'; }
+    // Панель владельца: добавить статью того же написания или перегенерировать весь раздел
+    const ha = $('homographsAdmin');
+    if (ha) {
+      ha.style.display = adminVoices ? 'flex' : 'none';
+      ha.innerHTML = adminVoices
+        ? `<button class="cards-btn" onclick="addVoice()">${svgIcon('plus')} добавить</button>
+           <button class="cards-btn" onclick="regenVoices()">${svgIcon('refresh')} сгенерировать заново</button>
+           ${list.length ? '' : '<span class="homograph-hint">других значений этого написания пока нет</span>'}` : '';
+    }
   }
 
   const pluralRow = $('pluralRow');
@@ -2144,7 +2192,7 @@ function renderEntry(e) {
       // Одно значение — без номера
       const m = e.meanings[0];
       mc.innerHTML = `
-        <div class="definition-text">${makeClickable(m.definition || '—')}</div>
+        <div class="definition-text">${usageTag(m.label)}${makeClickable(m.definition || '—')}</div>
         ${m.example ? `<div class="example-text">${makeClickable(m.example)}</div>` : ''}`;
     } else {
       // Несколько значений — с нумерацией
@@ -2152,7 +2200,7 @@ function renderEntry(e) {
         <div class="meaning-item">
           <div class="meaning-num">${i + 1}</div>
           <div class="meaning-body">
-            <div class="meaning-definition">${makeClickable(m.definition || '')}</div>
+            <div class="meaning-definition">${usageTag(m.label)}${makeClickable(m.definition || '')}</div>
             ${m.example ? `<div class="meaning-example">${makeClickable(m.example)}</div>` : ''}
           </div>
         </div>`).join('')}
@@ -2317,6 +2365,111 @@ async function setGrammarStatus(status) {
     renderGrammar(g);
     if (window.Grammatica) Grammatica.refresh();
   } else { g.status = prev; showToast('⚠ Не удалось сохранить отметку'); }
+}
+
+// ── Altre voci: правка раздела владельцем ────────────────────────────────────
+// Другие слова того же написания приходят из Викисловаря или от модели и нередко бывают
+// кривыми: устаревшее без пометки, современное значение отсутствует. Владелец правит руками.
+const usageTag = l => l ? `<span class="usage-tag">${escapeHtml(l)}</span>` : '';
+const USAGE_CHOICES = ['', ...new Set(Object.values(USAGE_RU))];
+
+async function saveCurrentEntry() {
+  const e = currentDictEntry; if (!e) return false;
+  const key = String(e.word || currentDictWord || '').toLowerCase();
+  const q = String(currentDictWord || '').toLowerCase();
+  const keys = [...new Set([key, q].filter(Boolean))];
+  const ok = await Promise.all(keys.map(k => sbSave('dictionary', 'word', k, e)));
+  return ok.some(Boolean);
+}
+
+function voiceModal() {
+  let m = $('voiceModal');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'voiceModal'; m.className = 'cards-modal'; m.style.display = 'none';
+    m.addEventListener('click', ev => { if (ev.target === m) closeVoice(); });
+    m.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); closeVoice(); } });
+    document.body.appendChild(m);
+  }
+  return m;
+}
+const closeVoice = () => { const m = $('voiceModal'); if (m) m.style.display = 'none'; };
+
+function editVoice(i) {
+  const e = currentDictEntry; if (!e) return;
+  const h = (e.homographs || [])[i] || { partOfSpeech: '', gender: '', phonetic: '', label: '', russian: '', meanings: [] };
+  const ms = (h.meanings && h.meanings.length ? h.meanings : (h.glosses || []).map(g => ({ definition: g, example: '' })));
+  const lines = ms.map(m => [m.definition || '', m.example || ''].filter(Boolean).join(' | ')).join('\n');
+  const m = voiceModal(); m.style.display = 'flex';
+  m.innerHTML = `
+    <div class="cards-modal-box">
+      <div class="cards-title small">${i === -1 ? 'Новая статья того же написания' : 'Править статью'}</div>
+      <label class="cards-field"><span>Часть речи</span><input id="voice_pos" value="${escapeHtml(h.partOfSpeech || '')}" placeholder="sostantivo, verbo, aggettivo…"></label>
+      <label class="cards-field"><span>Род</span><input id="voice_gender" value="${escapeHtml(h.gender || '')}" placeholder="m. / f. / пусто"></label>
+      <label class="cards-field"><span>Транскрипция</span><input id="voice_ipa" value="${escapeHtml(h.phonetic || '')}" placeholder="/ˈsito/"></label>
+      <label class="cards-field"><span>Помета</span><select id="voice_label">${
+        // Составная пометка («диал. · редк.») в списке не значится — добавляем как есть, иначе она пропадёт при сохранении
+        (USAGE_CHOICES.includes(h.label || '') ? USAGE_CHOICES : [...USAGE_CHOICES, h.label])
+          .map(v => `<option value="${escapeHtml(v)}" ${v === (h.label || '') ? 'selected' : ''}>${escapeHtml(v) || 'без пометы'}</option>`).join('')
+      }</select></label>
+      <label class="cards-field"><span>Перевод</span><input id="voice_ru" value="${escapeHtml(h.russian || '')}" placeholder="основной; варианты через ;"></label>
+      <label class="cards-field"><span>Значения, по одному в строке: определение | пример</span><textarea id="voice_ms" rows="5">${escapeHtml(lines)}</textarea></label>
+      <div class="cards-actions"><button class="cards-btn primary" onclick="saveVoice(${i})">Сохранить</button><button class="cards-btn" onclick="closeVoice()">Отмена</button></div>
+    </div>`;
+  const first = $('voice_pos'); if (first && !isTouchDevice()) first.focus();
+}
+const addVoice = () => editVoice(-1);
+
+async function saveVoice(i) {
+  const e = currentDictEntry; if (!e) return;
+  const meanings = $('voice_ms').value.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+    const [definition, example] = l.split('|');
+    return { definition: (definition || '').trim(), example: (example || '').trim(), label: '' };
+  }).filter(m => m.definition);
+  const voice = {
+    partOfSpeech: $('voice_pos').value.trim(), gender: $('voice_gender').value.trim(),
+    phonetic: $('voice_ipa').value.trim(), label: $('voice_label').value,
+    russian: $('voice_ru').value.trim(), meanings, glosses: [], example: ''
+  };
+  if (!voice.partOfSpeech && !voice.russian && !meanings.length) { showToast('Пустая статья, нечего сохранять'); return; }
+  e.homographs = e.homographs || [];
+  if (i === -1) e.homographs.push(voice); else e.homographs[i] = voice;
+  closeVoice(); renderEntry(e);
+  showToast(await saveCurrentEntry() ? '✓ Сохранено' : '⚠ Не сохранилось в общей базе');
+}
+
+async function deleteVoice(i) {
+  const e = currentDictEntry; if (!e || !(e.homographs || [])[i]) return;
+  const h = e.homographs[i];
+  if (!confirm(`Удалить «${h.partOfSpeech || ''} ${h.russian || (h.glosses || [])[0] || ''}» из Altre voci?`)) return;
+  e.homographs.splice(i, 1);
+  renderEntry(e);
+  showToast(await saveCurrentEntry() ? '✓ Удалено' : '⚠ Не сохранилось в общей базе');
+}
+
+// Перегенерация раздела: спрашиваем у модели именно другие слова того же написания
+async function regenVoices() {
+  const e = currentDictEntry; if (!e) return;
+  const word = e.word || currentDictWord;
+  showToast('Ищу другие значения…');
+  const prompt = `You are an expert Italian lexicographer. The Italian word "${word}" is already documented as: ${e.partOfSpeech || ''} — ${(e.meanings || []).map(m => m.definition).join('; ') || '—'}.
+List OTHER Italian words spelled exactly "${word}" that are separate dictionary entries (homographs): a different part of speech, a different etymology, or a distinctly different word. Do not repeat the sense(s) above and do not list inflected forms of other words.
+Return ONLY valid JSON, no markdown:
+{ "voices": [ { "partOfSpeech": "sostantivo / verbo / aggettivo / avverbio …", "gender": "m. / f. / empty", "phonetic": "IPA in slashes or empty", "label": "usage label or empty string", "russian": "Russian translation; alternatives after ;", "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural Italian example", "label": "usage label or empty string" } ] } ] }
+label: one of [obsolete, archaic, dialectal, regional, vulgar, offensive, slang, colloquial, rare, literary, poetic, formal, figurative, humorous, technical, medicine, law, nautical, botany, zoology, military] or empty. Mark obsolete, dialectal and rare entries honestly.
+If there are no such homographs, return { "voices": [] }.`;
+  try {
+    const raw = await llmJson(prompt, 'dict');
+    const voices = (Array.isArray(raw && raw.voices) ? raw.voices : []).map(v => ({
+      partOfSpeech: String(v.partOfSpeech || '').trim(), gender: String(v.gender || '').trim(),
+      phonetic: String(v.phonetic || '').trim(), label: usageLabel([v.label], ''),
+      russian: String(v.russian || '').trim(), glosses: [], example: '',
+      meanings: (Array.isArray(v.meanings) ? v.meanings : []).filter(m => m && m.definition)
+        .map(m => ({ definition: m.definition, example: m.example || '', label: usageLabel([m.label], '') }))
+    })).filter(v => v.partOfSpeech || v.meanings.length);
+    e.homographs = voices;
+    renderEntry(e);
+    showToast(voices.length ? (await saveCurrentEntry() ? `✓ ${voices.length} · сохранено` : '⚠ Не сохранилось') : 'Других значений не нашлось');
+  } catch (err) { showToast('⚠ ' + (err.message || 'не получилось')); }
 }
 
 // ── Обновление статьи ────────────────────────────────────────────────────────
