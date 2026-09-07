@@ -703,15 +703,15 @@ function approxIpa(word) {
     const dbl = w[i - 1] === ch; // вторая буква удвоенной согласной: удваиваем результат
     if (ch === "'") { i++; continue; }
     if (accented[ch]) { stressAt = out.length; out.push(accented[ch]); i++; continue; }
-    if (ch === 'g' && nx === 'l' && nx2 === 'i') { out.push('ʎ'); i += (isV(w[i + 3] || '') ? 3 : 2); continue; }
+    if (ch === 'g' && nx === 'l' && nx2 === 'i') { out.push('ʎ'); i += (w[i + 2] === 'i' && isV(w[i + 3] || '') ? 3 : 2); continue; }
     if (ch === 'g' && nx === 'n') { out.push('ɲ'); i += 2; continue; }
-    if (ch === 's' && nx === 'c' && (nx2 === 'e' || nx2 === 'i')) { out.push('ʃ'); i += (isV(w[i + 3] || '') && nx2 === 'i' ? 3 : 2); continue; }
+    if (ch === 's' && nx === 'c' && (nx2 === 'e' || nx2 === 'i')) { out.push('ʃ'); i += (w[i + 2] === 'i' && isV(w[i + 3] || '') ? 3 : 2); continue; }
     if (ch === 's' && nx === 'c' && nx2 === 'h') { out.push('sk'); i += 3; continue; }
     if ((ch === 'c' || ch === 'g') && nx === ch && nx2 === 'h') { i++; continue; } // cch / ggh: удвоение выдаст следующая ветка
     if (ch === 'c' && nx === 'h') { out.push(dbl ? 'kk' : 'k'); i += 2; continue; }
     if (ch === 'g' && nx === 'h') { out.push(dbl ? 'gg' : 'g'); i += 2; continue; }
-    if (ch === 'c' && (nx === 'e' || nx === 'i')) { out.push(w[i - 1] === 'c' ? 'tʃ' : 'tʃ'); i += (nx === 'i' && isV(nx2) ? 2 : 1); continue; }
-    if (ch === 'g' && (nx === 'e' || nx === 'i')) { out.push('dʒ'); i += (nx === 'i' && isV(nx2) ? 2 : 1); continue; }
+    if (ch === 'c' && (nx === 'e' || nx === 'i')) { out.push(w[i - 1] === 'c' ? 'tʃ' : 'tʃ'); i += (w[i + 1] === 'i' && isV(nx2) ? 2 : 1); continue; } // немая только безударная i (bacìo: ì читается)
+    if (ch === 'g' && (nx === 'e' || nx === 'i')) { out.push('dʒ'); i += (w[i + 1] === 'i' && isV(nx2) ? 2 : 1); continue; } // немая только безударная i (bacìo: ì читается)
     if (ch === 'c' && nx === 'c' && (nx2 === 'e' || nx2 === 'i')) { out.push('t'); i++; continue; } // первая c в «cce» — удлинение: ttʃ
     if (ch === 'g' && nx === 'g' && (nx2 === 'e' || nx2 === 'i')) { out.push('d'); i++; continue; }
     if (ch === 'c') { out.push('k'); i++; continue; } // c перед a, o, u и согласной
