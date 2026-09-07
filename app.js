@@ -1445,7 +1445,9 @@ function offerFormsChooser(entry, typed) {
 
 async function lookupWordHybrid(query, base, opts = {}) {
   const key = base.word.toLowerCase();
-  if (!opts.skipChooser && offerFormsChooser(base, query)) return;
+  // force — кнопка обновления на самой статье: человек уже выбрал слово, список не показываем,
+  // иначе перегенерация и не начнётся, а выбор из списка снова вернёт старый кэш
+  if (!opts.skipChooser && !opts.force && offerFormsChooser(base, query)) return;
   renderEntry({ ...base, _pending: true });
   showState('result');
   addToHistory(base.word, 'dict');
@@ -1612,7 +1614,7 @@ alsoForms: this article is about one word only. If the very same spelling is ALS
     await sbSave('dictionary', 'word', canonicalKey, entry);
     // Кэшируем и под введённым запросом, чтобы повторный поиск попадал в кэш
     if (queryKey !== canonicalKey) await sbSave('dictionary', 'word', queryKey, entry);
-    if (!opts.skipChooser && offerFormsChooser(entry, word)) return;
+    if (!opts.skipChooser && !opts.force && offerFormsChooser(entry, word)) return;
     renderEntry(entry);
     showState('result');
     addToHistory(entry.word || word, 'dict');
