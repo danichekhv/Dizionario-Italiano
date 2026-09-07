@@ -3757,6 +3757,22 @@ if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(e => console.warn('Service worker:', e));
   });
+  // Новая сборка встаёт сразу (skipWaiting + claim), но уже открытая страница продолжает работать
+  // на старом коде до перезагрузки. Без подсказки это выглядит так, будто правка не приехала.
+  let _hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!_hadController) { _hadController = true; return; } // первая установка, перезагружать нечего
+    showUpdateToast();
+  });
+}
+function showUpdateToast() {
+  if ($('updateToast')) return;
+  let stack = document.getElementById('toastStack');
+  if (!stack) { stack = document.createElement('div'); stack.id = 'toastStack'; stack.className = 'toast-stack'; document.body.appendChild(stack); }
+  const t = document.createElement('div');
+  t.id = 'updateToast'; t.className = 'cache-toast sticky';
+  t.innerHTML = `Приложение обновилось <button type="button" onclick="location.reload()">перезагрузить</button>`;
+  stack.appendChild(t);
 }
 let _installPrompt = null;
 window.addEventListener('beforeinstallprompt', e => {

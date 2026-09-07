@@ -101,6 +101,10 @@
     max-width: min(360px, calc(100vw - 40px));
     animation: toastIn var(--t-slow) ease, toastOut var(--t-slow) ease 2s forwards;
   }
+  /* Уведомление о новой версии не исчезает само и принимает нажатие */
+  .cache-toast.sticky { animation: toastIn var(--t-slow) ease; pointer-events: auto; display: flex; align-items: center; gap: 12px; }
+  .cache-toast.sticky button { background: var(--terracotta); color: white; border: none; border-radius: var(--radius); padding: 4px 12px; font-family: var(--font-text); font-size: var(--fs-small); cursor: pointer; }
+  .cache-toast.sticky button:hover { background: var(--terracotta-dark); }
   @media (max-width: 640px) { .toast-stack { top: auto; bottom: 88px; left: 16px; right: 16px; align-items: center; } }
 
   /* ── Нативные элементы форм: один вид у всех выпадающих списков и флажков ── */
