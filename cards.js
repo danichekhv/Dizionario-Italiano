@@ -806,12 +806,14 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     }
     if (ru && ru.main) d.translation = d.translation || ru.main;
     if (!cached && !fd) d.warn = d.warn || 'слова нет в словарях, всё допишет модель';
+    if (!d.phonetic) { const r = await resolveIpa(d.word).catch(() => ({ ipa: '' })); d.phonetic = r.ipa || ''; }
     return d;
   }
 
   async function completeWithLlm(items) {
     // У выражений транскрипцию не просим: модель в них путает ударения, лучше пусто, чем неверно
-    const fieldsOf = x => x.isPhrase ? ['translation', 'example', 'meaning'] : ['translation', 'phonetic', 'example', 'meaning'];
+    // Транскрипцию у модели не просим вообще: она берётся из словарей или по правилам чтения (resolveIpa)
+    const fieldsOf = () => ['translation', 'example', 'meaning'];
     const need = items.filter(i => fieldsOf(i).some(f => !i[f]));
     if (!need.length) return null;
     const BATCH = 15; let used = null;

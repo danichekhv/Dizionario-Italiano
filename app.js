@@ -646,9 +646,105 @@ async function wordIpa(w) {
   const fd = await fetchFreeDictionary(w).catch(() => null);
   const p = fd && fd.entries.flatMap(en => en.pronunciations || []).find(p => p.type === 'ipa' && p.text);
   if (p) return p.text;
+  const it = await fetchItWiktIpa(w);
+  if (it) return it;
   const c = await sbGet('dictionary', w).catch(() => null);
-  return c && c.phonetic && !isPhrase(c.word || w) ? c.phonetic : '';
+  return c && c.phonetic && !c.phoneticApprox && !isPhrase(c.word || w) ? c.phonetic : '';
 }
+// ── Транскрипция без модели ──────────────────────────────────────────────────
+// Модель в IPA ошибается, чаще всего в ударении. Порядок источников: английский Викисловарь (fetchFreeDictionary),
+// итальянский Викисловарь (шаблон {{IPA|…}} в тексте статьи), и только потом приблизительная транскрипция
+// по правилам чтения. Правила ставят ударение лишь там, где оно известно наверняка: по написанному
+// акценту (città) или в двусложных словах; в остальных случаях знак ударения не ставится вовсе.
+const _itWiktIpa = {};
+async function fetchItWiktIpa(word) {
+  const k = word.toLowerCase();
+  if (_itWiktIpa[k] !== undefined) return _itWiktIpa[k];
+  try {
+    const res = await fetch(`https://it.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(k)}&prop=wikitext&format=json&formatversion=2&origin=*`);
+    const text = res.ok ? ((await res.json()).parse || {}).wikitext || '' : '';
+    const m = text.match(/\{\{IPA\|(\/[^}|]+\/)/);
+    _itWiktIpa[k] = m ? m[1] : '';
+  } catch (e) { return ''; }
+  return _itWiktIpa[k];
+}
+function approxIpa(word) {
+  let w = cleanQuery(word).toLowerCase().replace(/[^a-zàèéìíòóùú']/g, '');
+  if (!w) return '';
+  const V = 'aeiouàèéìíòóùú';
+  const isV = ch => !!ch && V.includes(ch); // пустая строка не гласная: ''.includes('') было бы true
+  const out = []; let i = 0, stressAt = -1;
+  const accented = { 'à': 'a', 'è': 'ɛ', 'é': 'e', 'ì': 'i', 'í': 'i', 'ò': 'ɔ', 'ó': 'o', 'ù': 'u', 'ú': 'u' };
+  while (i < w.length) {
+    const ch = w[i], nx = w[i + 1] || '', nx2 = w[i + 2] || '';
+    const dbl = w[i - 1] === ch; // вторая буква удвоенной согласной: удваиваем результат
+    if (ch === "'") { i++; continue; }
+    if (accented[ch]) { stressAt = out.length; out.push(accented[ch]); i++; continue; }
+    if (ch === 'g' && nx === 'l' && nx2 === 'i') { out.push('ʎ'); i += (isV(w[i + 3] || '') ? 3 : 2); continue; }
+    if (ch === 'g' && nx === 'n') { out.push('ɲ'); i += 2; continue; }
+    if (ch === 's' && nx === 'c' && (nx2 === 'e' || nx2 === 'i')) { out.push('ʃ'); i += (isV(w[i + 3] || '') && nx2 === 'i' ? 3 : 2); continue; }
+    if (ch === 's' && nx === 'c' && nx2 === 'h') { out.push('sk'); i += 3; continue; }
+    if ((ch === 'c' || ch === 'g') && nx === ch && nx2 === 'h') { i++; continue; } // cch / ggh: удвоение выдаст следующая ветка
+    if (ch === 'c' && nx === 'h') { out.push(dbl ? 'kk' : 'k'); i += 2; continue; }
+    if (ch === 'g' && nx === 'h') { out.push(dbl ? 'gg' : 'g'); i += 2; continue; }
+    if (ch === 'c' && (nx === 'e' || nx === 'i')) { out.push(w[i - 1] === 'c' ? 'tʃ' : 'tʃ'); i += (nx === 'i' && isV(nx2) ? 2 : 1); continue; }
+    if (ch === 'g' && (nx === 'e' || nx === 'i')) { out.push('dʒ'); i += (nx === 'i' && isV(nx2) ? 2 : 1); continue; }
+    if (ch === 'c' && nx === 'c' && (nx2 === 'e' || nx2 === 'i')) { out.push('t'); i++; continue; } // первая c в «cce» — удлинение: ttʃ
+    if (ch === 'g' && nx === 'g' && (nx2 === 'e' || nx2 === 'i')) { out.push('d'); i++; continue; }
+    if (ch === 'c') { out.push('k'); i++; continue; } // c перед a, o, u и согласной
+    if (ch === 'q' && nx === 'u') { out.push('kw'); i += 2; continue; }
+    if (ch === 'h') { i++; continue; }
+    if (ch === 'z' && nx === 'z') { out.push(i === 0 ? 'ddz' : 'tts'); i += 2; continue; }
+    if (ch === 'z') { out.push(i === 0 ? 'dz' : 'ts'); i++; continue; }
+    if (ch === 'x') { out.push('ks'); i++; continue; }
+    if (ch === 's' && isV(w[i - 1] || '') && isV(nx)) { out.push('z'); i++; continue; }
+    if ((ch === 'i' || ch === 'u') && isV(nx) && !isV(w[i - 1] || '')) { out.push(ch === 'i' ? 'j' : 'w'); i++; continue; }
+    out.push(ch); i++;
+  }
+  // Слоги считаем по гласным; ударение: акцент в написании → туда; два слога → первый; иначе не ставим
+  const nuclei = []; out.forEach((s, idx) => { if (/^[aeiouɛɔ]$/.test(s)) nuclei.push(idx); });
+  let mark = -1;
+  if (stressAt >= 0) mark = stressAt; else if (nuclei.length === 2) mark = nuclei[0];
+  let ipa = '';
+  out.forEach((s, idx) => {
+    if (idx === mark) {
+      // знак ударения — перед началом слога: одна согласная, аффриката (tʃ, dz) или кластер вроде pr, kw;
+      // удвоенная согласная делится пополам, как в словарях: /tʃitˈta/
+      const isVow = c => /[aeiouɛɔ]/.test(c);
+      let cut = ipa.length;
+      if (cut > 0 && !isVow(ipa[cut - 1])) {
+        cut--;
+        if (/[ʃʒsz]/.test(ipa[cut]) && cut > 0 && /[td]/.test(ipa[cut - 1])) cut--;
+        if (/[rlwj]/.test(ipa[cut]) && cut > 0 && !isVow(ipa[cut - 1]) && ipa[cut - 1] !== ipa[cut]) cut--;
+        if (ipa[cut] !== 's' && cut > 0 && ipa[cut - 1] === 's') cut--; // s + согласная начинает слог: ˈskwola, ˈspesso
+      }
+      ipa = ipa.slice(0, cut) + 'ˈ' + ipa.slice(cut);
+    }
+    ipa += s;
+  });
+  return '/' + ipa + '/';
+}
+// Итог: { ipa, approx } — approx=true, когда транскрипция построена по правилам, а не взята из словаря
+async function resolveIpa(word) {
+  const k = cleanQuery(word).toLowerCase();
+  if (!k) return { ipa: '', approx: false };
+  const fd = await fetchFreeDictionary(k).catch(() => null);
+  const p = fd && fd.entries.flatMap(en => en.pronunciations || []).find(x => x.type === 'ipa' && x.text);
+  if (p) return { ipa: p.text, approx: false };
+  const it = await fetchItWiktIpa(k);
+  if (it) return { ipa: it, approx: false };
+  return { ipa: /\s/.test(k) ? '' : approxIpa(k), approx: true };
+}
+// Статья из кэша без транскрипции: дописываем и, если пользователь вошёл, сохраняем
+async function fillPhonetic(entry) {
+  if (entry.phonetic || !entry.word || entry.isPhrase) return;
+  const r = await resolveIpa(entry.word);
+  if (!r.ipa) return;
+  entry.phonetic = r.ipa; entry.phoneticApprox = r.approx;
+  if (currentDictEntry === entry) renderEntry(entry);
+  if (window.Auth && Auth.user()) sbSave('dictionary', 'word', entry.word.toLowerCase(), entry);
+}
+
 async function phrasePhonetic(phrase) {
   const parts = cleanQuery(phrase).toLowerCase().split(' ').filter(Boolean);
   const ipa = await Promise.all(parts.map(wordIpa));
@@ -1165,6 +1261,7 @@ async function lookupWordHybrid(query, base) {
     await wiktJob;
     const entry = fdMergeCompletion(base, extra, shownRu);
     entry.relatedWords = await verifyWords(entry.relatedWords, base.relatedWords || []); // синонимы Викисловаря доверенные, добавки модели — проверяем
+    if (!entry.phonetic) { const r = await resolveIpa(entry.word); entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; }
     const queryKey = query.toLowerCase();
     await sbSave('dictionary', 'word', key, entry);
     if (queryKey !== key) await sbSave('dictionary', 'word', queryKey, entry);
@@ -1231,7 +1328,7 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
   // 1. Кэш Supabase — мгновенно
   const cachedWord = opts.force ? null : await sbGet('dictionary', word.toLowerCase());
   if (cachedWord) {
-    try { renderEntry(cachedWord); showState('result'); showCacheBadge(); addToHistory(cachedWord.word || word, 'dict'); pruneRelated(cachedWord); }
+    try { renderEntry(cachedWord); showState('result'); showCacheBadge(); addToHistory(cachedWord.word || word, 'dict'); pruneRelated(cachedWord); fillPhonetic(cachedWord); }
     catch(e) { console.error("renderEntry from cache failed:", e); }
     return;
   }
@@ -1267,6 +1364,8 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
     entry.relatedWords = await verifyWords(entry.relatedWords);
     // Слова нет в Викисловаре, статья целиком от модели: помечаем, в граф и «мои слова» оно не попадёт
     entry.unverified = !(await wordExists(entry.word || word));
+    // Транскрипцию модели не берём: словари, иначе правила чтения
+    { const r = await resolveIpa(entry.word || word); entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; }
     const canonicalKey = (entry.word || word).toLowerCase();
     const queryKey = word.toLowerCase();
     await sbSave('dictionary', 'word', canonicalKey, entry);
@@ -1668,6 +1767,8 @@ function renderEntry(e) {
   if (!e._pending && !e.unverified && window.Auth) Auth.logView((e.word || '').toLowerCase()); // для личной карты слов
     $('wordTitle').textContent = e.word;
   $('wordPhonetic').innerHTML = highlightStress(e.phonetic);
+  $('wordPhonetic').classList.toggle('approx', !!e.phoneticApprox);
+  $('wordPhonetic').title = e.phoneticApprox ? 'Приблизительно, по правилам чтения: в словарях транскрипции нет. Без знака ударения, если оно не очевидно' : '';
   $('wordType').textContent = e.partOfSpeech || '—';
   // Теги слова: по умолчанию тема из статьи, у вошедшего пользователя — свои (клик переименовывает,
   // «+» добавляет). Часть речи слева тегом не является и не редактируется.
@@ -2418,7 +2519,7 @@ async function renderSuggest() {
     `<button class="suggest-item" onmousedown="event.preventDefault()" onclick="pickSuggest('${i.w.replace(/'/g, "\\'")}')"><span><b>${escapeHtml(q)}</b>${escapeHtml(i.w.slice(q.length))}</span>${i.src ? `<span class="suggest-src">${i.src}</span>` : ''}</button>`).join('')}</div>`;
   sec.style.display = 'block';
 }
-function pickSuggest(w) { hideRecent(); $('searchInput').value = w; lookupWord(w); }
+function pickSuggest(w) { hideRecent(); const inp = $('searchInput'); inp.value = w; inp.blur(); lookupWord(w); } // blur прячет клавиатуру на телефоне
 function onSearchInput() {
   clearTimeout(_sugTimer);
   if (!$('searchInput').value.trim()) { renderHistory(); return; }
@@ -2458,6 +2559,7 @@ function hideInlineHistory() {
 function historyClick(word, mode) {
   hideRecent();
   $('searchInput').value = word;
+  $('searchInput').blur(); // прячем клавиатуру на телефоне
   if (mode === 'grammar') lookupGrammar(word);
   else lookupWord(word);
 }
@@ -2726,6 +2828,7 @@ async function fetchGeminiMiniPreview(word) {
 If not a real Italian word return {"word":null}.`;
   const result = await llmJson(prompt, 'dict');
   if (!result || !result.word) return null;
+  { const r = await resolveIpa(result.word); result.phonetic = r.ipa; result.phoneticApprox = r.approx; } // IPA модели не доверяем
   const q = { data: result, complete: true };
   _previewCache['d:' + word.toLowerCase()] = q;
   return q;
@@ -2737,7 +2840,8 @@ function showPreview(el, word, isGrammar, x, y) {
   popup.className = 'word-preview' + (isGrammar ? ' grammar-preview' : '');
   popup.innerHTML = `<div class="wp-loading">…</div>`;
   popup.dataset.word = word;
-  positionPreview(popup, el.getBoundingClientRect());
+  // Граф передаёт не элемент, а координаты курсора: якорем служит точка под ним
+  positionPreview(popup, el ? el.getBoundingClientRect() : { left: x, right: x, top: y - 12, bottom: y + 12 });
   popup.classList.add('visible');
   const stillMine = () => popup.classList.contains('visible') && popup.dataset.word === word;
 

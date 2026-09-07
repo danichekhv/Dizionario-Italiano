@@ -3315,3 +3315,10 @@ body.mode-grammar .search-recent { background: var(--night-surface); border-colo
 /* Ключи API: обычные текстовые поля, замаскированные точками. type="password" нельзя: Chrome видит
    заполненное поле пароля на одностраничном сайте и при каждом pushState предлагает сохранить «пароль». */
 .apikey-input.masked { -webkit-text-security: disc; }
+
+/* Транскрипция по правилам чтения (в словарях её нет): приглушена, при наведении пояснение */
+.word-phonetic.approx { opacity: .7; }
+.word-phonetic.approx::before { content: '≈ '; color: var(--muted); }
+/* Список подсказок на телефоне: половину экрана занимает клавиатура, поэтому список прокручивается сам,
+   а не тянет за собой страницу */
+.search-recent { max-height: min(40vh, 320px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
