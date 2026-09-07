@@ -1548,7 +1548,6 @@ Return ONLY valid JSON, no markdown:
   "word": "the expression in its canonical citation form (verb in the infinitive, no quotes), or null if it is not a real Italian expression",
   "partOfSpeech": "locuzione verbale / locuzione avverbiale / locuzione nominale / locuzione aggettivale / locuzione prepositiva / modo di dire / proverbio",
   "category": "${CATEGORY_PROMPT}",
-  "literal": "word-for-word Russian gloss, only if it differs from the actual meaning, otherwise empty",
   "russian": { "main": "idiomatic Russian equivalent (not word-for-word)", "alternatives": "2-3 alternatives semicolon-separated or empty" },
   "english": { "main": "idiomatic English equivalent", "alternatives": "2-3 alternatives semicolon-separated or empty" },
   "meanings": [ { "definition": "What the expression means, in Italian (1 sentence)", "example": "Natural Italian sentence using the whole expression" } ],
@@ -1565,7 +1564,7 @@ meanings: 1-3 items, most frequent first. Do NOT include phonetic transcription,
       russian: raw.russian || { main: '', alternatives: '' }, english: raw.english || { main: '', alternatives: '' },
       meanings: Array.isArray(raw.meanings) ? raw.meanings.filter(m => m && m.definition) : [],
       isNoun: false, isVerb: false, isPhrase: true,
-      literal: raw.literal || '', register: raw.register || '',
+      register: raw.register || '',
       relatedWords: await verifyWords(raw.relatedWords),
       llm: _lastDictLlm
     };
@@ -2047,9 +2046,9 @@ function renderEntry(e) {
   add.onclick = () => window.Auth && Auth.addTagUi(e.word, e.category);
   anchor.after(add);
   // Для глаголов вместо рода показываем вспомогательный глагол
-  // У выражения вместо рода — буквальный перевод и регистр
+  // У выражения вместо рода — регистр
   const genderEl = $('wordGender');
-  if (e.isPhrase) genderEl.textContent = [e.literal ? `букв. «${e.literal}»` : '', e.register && e.register !== 'neutro' ? e.register : ''].filter(Boolean).join(' · ');
+  if (e.isPhrase) genderEl.textContent = e.register && e.register !== 'neutro' ? e.register : '';
   else if (e.gender) genderEl.textContent = e.gender;
   // Вспомогательный глагол: подпись капителью, сам глагол — акцентом, чтобы строка не читалась как часть слова
   else if (e.isVerb && e.auxiliary) genderEl.innerHTML = `<span class="word-aux-label">ausiliare</span><span class="word-aux">${escapeHtml(e.auxiliary)}</span>`;
