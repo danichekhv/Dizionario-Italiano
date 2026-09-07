@@ -607,6 +607,7 @@
   .cards-search { width: 100%; box-sizing: border-box; padding: 10px 38px 10px 14px; font-family: var(--font-text); font-size: var(--fs-body); font-style: italic; background: var(--parchment); border: 1.5px solid var(--border); border-radius: var(--radius); color: var(--ink); outline: none; transition: border-color var(--t-base); }
   .cards-search::placeholder { color: var(--stone); opacity: .6; }
   .cards-search:focus { border-color: var(--terracotta); box-shadow: none; }
+  .browse-row mark { background: rgba(var(--gold-rgb), .3); color: inherit; border-radius: 2px; padding: 0 1px; }
   .cards-search-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--stone); opacity: .5; pointer-events: none; display: flex; }
   .cards-search-icon .icon { width: 16px; height: 16px; }
   .cards-inline { font-size: var(--fs-body); color: var(--muted); font-style: italic; display: flex; align-items: center; gap: 8px; }

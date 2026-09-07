@@ -686,15 +686,16 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   }
 
   function browseRowsHtml(filtered) {
+    const q = normFind(S.browseQuery).trim();
     return filtered.map(n => {
       const cs = S.cards.filter(c => c.note_id === n.id);
       const st = cs.map(c => c.state === 'new' ? 'н' : (c.state === 'review' ? 'п' : 'з')).join('');
       return `
         <div class="browse-row">
           <input type="checkbox" ${S.browseSelected.has(n.id) ? 'checked' : ''} onchange="Cards.selectNote('${n.id}', this.checked)">
-          <button class="browse-word" onclick="Cards.editNote('${n.id}')">${esc(n.word)}</button>
+          <button class="browse-word" onclick="Cards.editNote('${n.id}')">${highlight(n.word, q)}</button>
           <button class="browse-open" onclick="Cards.openArticle('${esc(n.word).replace(/'/g, '&#39;')}')" title="Открыть статью в словаре">${svgIcon('external')}</button>
-          <div class="browse-ru">${esc(n.translation)}</div>
+          <div class="browse-ru">${highlight(n.translation, q)}</div>
           <div class="browse-tags">${(n.tags || []).map(t => `<span class="tag-chip" onclick="Cards.setTagFilter('${esc(t)}')">#${esc(t)}</span>`).join('')}</div>
           <div class="browse-state" title="состояние карточек: н новая, з заучивается, п повторение">${st}</div>
         </div>`;
@@ -727,7 +728,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       <div class="cards-head"><div class="cards-title small">Карточки</div><div class="cards-head-deck">${esc(deckPath(S.deckId))} · <span id="browseCount">${filtered.length}</span></div></div>
       <div class="cards-panel">
         <div class="cards-search-wrap">
-          <input class="cards-search" id="browseSearch" type="text" value="${esc(S.browseQuery)}" placeholder="Поиск по колоде: слово, перевод, пример…"
+          <input class="cards-search" id="browseSearch" type="text" value="${esc(S.browseQuery)}" placeholder="Поиск по колоде: слово или перевод"
             autocomplete="off" spellcheck="false" oninput="Cards.setBrowseQuery(this.value)">
           <span class="cards-search-icon">${svgIcon('search')}</span>
         </div>
@@ -934,8 +935,25 @@ ${JSON.stringify(list)}`;
   // иначе кнопка выделяла бы и то, что скрыто фильтром.
   const normFind = s => String(s || '').toLowerCase().replace(/ё/g, 'е')
     .replace(/[A-Za-zÀ-ÿ]+/g, w => w.normalize('NFD').replace(/[̀-ͯ]/g, ''));
+  // Ищем только по слову и переводу: совпадение в примере или значении не видно в строке списка,
+  // и человек не понимает, почему карточка нашлась
   function noteMatches(n, q) {
-    return normFind([n.word, n.translation, n.example, n.meaning, n.pos, (n.tags || []).join(' ')].join(' ')).includes(q);
+    return normFind(n.word).includes(q) || normFind(n.translation).includes(q);
+  }
+  // Подсветка набранного. normFind не меняет длину строки (ё→е, é→e, регистр),
+  // поэтому позиции в приведённой строке годятся для исходной; на всякий случай проверяем.
+  function highlight(text, q) {
+    const s = String(text || '');
+    if (!q) return esc(s);
+    const n = normFind(s);
+    if (n.length !== s.length) return esc(s);
+    let out = '', last = 0, i = n.indexOf(q);
+    while (i !== -1) {
+      out += esc(s.slice(last, i)) + `<mark>${esc(s.slice(i, i + q.length))}</mark>`;
+      last = i + q.length;
+      i = n.indexOf(q, last);
+    }
+    return out + esc(s.slice(last));
   }
   const currentNotes = () => {
     let notes = notesInDeck(S.deckId);
