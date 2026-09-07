@@ -2578,6 +2578,15 @@ function renderHistory() {
 }
 let _freq = null, _freqLoading = null, _sugIndex = -1, _sugTimer = 0;
 function hideRecent() { const sec = $('searchRecent'); if (sec) sec.style.display = 'none'; _sugIndex = -1; }
+// Высота списка — сколько влезает от поля до низа видимой области (на телефоне — до клавиатуры);
+// остальное прокручивается внутри списка, а не страницей
+function showRecentBox(sec) {
+  const wrap = sec.parentElement.getBoundingClientRect();
+  const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+  const room = vh - wrap.bottom - 16;
+  sec.style.maxHeight = Math.max(120, Math.min(room, window.innerWidth < 640 ? 196 : 480)) + 'px';
+  sec.style.display = 'block';
+}
 
 // ── Подсказки при вводе: свои слова (недавние, колоды, избранное) и частотный список ──
 // Список it-words.txt: 30 000 слов по убыванию частоты, грузится один раз при первом вводе.
@@ -2609,7 +2618,7 @@ async function renderSuggest() {
   _sugIndex = -1;
   sec.innerHTML = `<div class="suggest-list">${items.slice(0, 40).map(i =>
     `<button class="suggest-item" onmousedown="event.preventDefault()" onclick="pickSuggest('${i.w.replace(/'/g, "\\'")}')"><span><b>${escapeHtml(q)}</b>${escapeHtml(i.w.slice(q.length))}</span>${i.src ? `<span class="suggest-src">${i.src}</span>` : ''}</button>`).join('')}</div>`;
-  sec.style.display = 'block';
+  showRecentBox(sec);
 }
 function pickSuggest(w) { hideRecent(); const inp = $('searchInput'); inp.value = w; inp.blur(); lookupWord(w); } // blur прячет клавиатуру на телефоне
 function onSearchInput() {
@@ -2630,7 +2639,7 @@ function renderInlineHistory(mode) {
   if (!sec) return;
   const h = getHistory().filter(i => i.mode === mode);
   if (h.length === 0) { sec.style.display = 'none'; return; }
-  sec.style.display = 'block';
+  showRecentBox(sec);
   sec.innerHTML = `
     <div class="history-label">
       <span>Недавние</span>
