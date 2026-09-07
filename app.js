@@ -2350,12 +2350,12 @@ function openWordMap() {
   _mapGraph = WordGraph.create($('mapGraphBox'), {
     height: window.innerWidth < 640 ? '65vh' : '70vh', neighborsToggle: true, neighbors: false, wordLinksToggle: true, wordLinks: false,
     onNeighbors: v => { _mapNeighbors = v; loadWordMap(); }, onWordLinks: v => { _mapLinks = v; loadWordMap(); },
-    extraButtons: loggedIn ? '<label class="wg-inline"><input type="checkbox" class="wg-all"> tutte le parole della base</label>' : '',
+    extraButtons: loggedIn ? '<button class="wg-toggle wg-all" title="Не только мои слова, а все статьи в общей базе">вся база</button>' : '',
     hint: 'Крупные узлы — темы и ваши теги, вокруг них ваши слова. Клик по теме подсвечивает её слова, клик по слову открывает статью. «Связи слов» добавляет связи между словами из статей.',
     ...graphHandlers()
   });
   const all = $('mapGraphBox').querySelector('.wg-all');
-  if (all) all.addEventListener('change', () => { _mapShowAll = all.checked; loadWordMap(); });
+  if (all) all.addEventListener('click', () => { _mapShowAll = all.classList.toggle('on'); loadWordMap(); });
   _mapNeighbors = false; _mapShowAll = false;
   loadWordMap();
 }

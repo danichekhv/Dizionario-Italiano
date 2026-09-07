@@ -3336,3 +3336,11 @@ body.mode-grammar .search-recent { background: var(--night-surface); border-colo
 .homograph-ru { font-family: var(--font-cyr); font-size: var(--fs-lead); color: var(--terracotta); margin-bottom: 8px; }
 .homograph .definition-text { font-size: var(--fs-body); line-height: var(--lh-ui); }
 .homograph .example-text { font-size: var(--fs-body); margin-top: 8px; }
+
+/* ── Панель графа: поле, сегментные переключатели и кнопки-тумблеры в стиле остальных контролов ── */
+.wg-bar .view-toggle { margin-left: 0; background: white; flex-shrink: 0; }
+.wg-bar .view-toggle-btn { padding: 8px 12px; font-style: normal; font-size: var(--fs-small); }
+.wg-toggle { padding: 8px 12px; border: 1.5px solid var(--border); border-radius: var(--radius); background: white; font-family: var(--font-text); font-size: var(--fs-small); color: var(--muted); cursor: pointer; white-space: nowrap; transition: all var(--t-base); }
+.wg-toggle:hover { border-color: var(--terracotta); color: var(--terracotta); }
+.wg-toggle.on { background: var(--terracotta); border-color: var(--terracotta); color: white; }
+@media (max-width: 640px) { .wg-search { flex-basis: 100%; } }

@@ -141,10 +141,10 @@
     container.innerHTML = `
       <div class="wg-bar">
         <input class="wg-search" placeholder="найти слово…" autocomplete="off" spellcheck="false">
-        <select class="wg-mode" title="Чем раскрашивать узлы"><option value="cat">colore: tema</option><option value="pos">colore: parte del discorso</option></select>
-        ${opts.depthControl ? `<label class="wg-inline">кольца <select class="wg-depth">${[1, 2, 3, 4, 5].map(n => `<option value="${n}" ${n === (opts.depth || 2) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>` : ''}
-        ${opts.wordLinksToggle ? `<label class="wg-inline"><input type="checkbox" class="wg-links" ${opts.wordLinks ? 'checked' : ''}> связи слов</label>` : ''}
-        ${opts.neighborsToggle ? `<label class="wg-inline"><input type="checkbox" class="wg-neigh" ${opts.neighbors ? 'checked' : ''}> ещё не открытые соседи</label>` : ''}
+        <div class="view-toggle wg-modes" title="Чем раскрашивать узлы"><button class="view-toggle-btn active" data-m="cat">темы</button><button class="view-toggle-btn" data-m="pos">части речи</button></div>
+        ${opts.depthControl ? `<div class="view-toggle wg-depths" title="Сколько колец связей показать">${[1, 2, 3, 4].map(n => `<button class="view-toggle-btn ${n === (opts.depth || 2) ? 'active' : ''}" data-d="${n}">${n}</button>`).join('')}</div>` : ''}
+        ${opts.wordLinksToggle ? `<button class="wg-toggle wg-links ${opts.wordLinks ? 'on' : ''}" title="Связи между словами из статей">связи слов</button>` : ''}
+        ${opts.neighborsToggle ? `<button class="wg-toggle wg-neigh ${opts.neighbors ? 'on' : ''}" title="Показать и ещё не открытые соседние слова">соседи</button>` : ''}
         <button class="wg-btn wg-fit" title="Вписать всё">${svgIcon('fit')}</button>
         ${opts.extraButtons || ''}
       </div>
@@ -292,11 +292,16 @@
     const searchEl = container.querySelector('.wg-search');
     searchEl.addEventListener('input', () => { G.query = norm(searchEl.value); G.matches = new Set(G.query ? G.nodes.filter(n => n.id.includes(G.query) || norm(n.ru).includes(G.query)) : []); draw(); });
     searchEl.addEventListener('keydown', e => { if (e.key === 'Enter' && G.matches.size) { const n = [...G.matches][0]; G.tx = G.w / 2 - n.x * G.scale; G.ty = G.h / 2 - n.y * G.scale; draw(); } });
-    const linksEl = container.querySelector('.wg-links'); if (linksEl) linksEl.addEventListener('change', e => opts.onWordLinks && opts.onWordLinks(e.target.checked));
-    container.querySelector('.wg-mode').addEventListener('change', e => { G.mode = e.target.value; G.hidden.clear(); buildLegend(); draw(); });
+    // Сегментные переключатели и кнопки-тумблеры вместо нативных списков и флажков
+    const segment = (sel, onPick) => container.querySelectorAll(sel + ' .view-toggle-btn').forEach(b => b.addEventListener('click', () => {
+      container.querySelectorAll(sel + ' .view-toggle-btn').forEach(x => x.classList.toggle('active', x === b)); onPick(b);
+    }));
+    segment('.wg-modes', b => { G.mode = b.dataset.m; G.hidden.clear(); buildLegend(); draw(); });
+    segment('.wg-depths', b => opts.onDepth && opts.onDepth(parseInt(b.dataset.d)));
+    const toggle = (sel, fn) => { const el = container.querySelector(sel); if (el) el.addEventListener('click', () => fn(el.classList.toggle('on'))); };
+    toggle('.wg-links', on => opts.onWordLinks && opts.onWordLinks(on));
+    toggle('.wg-neigh', on => opts.onNeighbors && opts.onNeighbors(on));
     container.querySelector('.wg-fit').addEventListener('click', fit);
-    const depthSel = container.querySelector('.wg-depth'); if (depthSel) depthSel.addEventListener('change', () => opts.onDepth && opts.onDepth(parseInt(depthSel.value)));
-    const neigh = container.querySelector('.wg-neigh'); if (neigh) neigh.addEventListener('change', () => opts.onNeighbors && opts.onNeighbors(neigh.checked));
 
     function destroy() { G.destroyed = true; cancelAnimationFrame(G.raf); clearTimeout(hoverTimer); ro.disconnect(); }
     function setLoading(text) { emptyEl.style.display = 'block'; emptyEl.textContent = text || 'Загрузка…'; }
