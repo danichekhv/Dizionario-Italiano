@@ -1794,19 +1794,25 @@ function renderGrammar(g) {
   `;
   card.appendChild(hero);
 
+  // Блоки собираем в словарь, а порядок и заголовки берём по типу статьи (см. GRAM_LAYOUT):
+  // в теме про формы первой должна идти таблица, а в теме про выбор — пары примеров
+  const parts = {};
+  const L = GRAM_LAYOUT[g.type] || {};
+  const secTitle = k => (L.titles && L.titles[k]) || GRAM_TITLES_DEFAULT[k];
+
   // Explanation
   if (g.explanation) {
-    const sec = makeSec('Объяснение');
+    const sec = makeSec(secTitle('explanation'));
     const p = document.createElement('div');
     p.className = 'grammar-explanation';
     p.innerHTML = parseInline(g.explanation);
     sec.appendChild(p);
-    card.appendChild(sec);
+    parts.explanation = sec;
   }
 
   // Rules
   if (g.rules && g.rules.length > 0) {
-    const sec = makeSec('Правила');
+    const sec = makeSec(secTitle('rules'));
     const list = document.createElement('div');
     list.className = 'grammar-rules';
     g.rules.forEach((r, i) => {
@@ -1819,12 +1825,12 @@ function renderGrammar(g) {
       list.appendChild(rule);
     });
     sec.appendChild(list);
-    card.appendChild(sec);
+    parts.rules = sec;
   }
 
   // Table
   if (g.table && g.table.headers && g.table.headers.length > 0) {
-    const sec = makeSec('Таблица форм');
+    const sec = makeSec(secTitle('table'));
     const tbl = document.createElement('table');
     tbl.className = 'grammar-table';
     const thead = document.createElement('thead');
@@ -1851,12 +1857,12 @@ function renderGrammar(g) {
     tblWrap.className = 'grammar-table-wrap';
     tblWrap.appendChild(tbl);
     sec.appendChild(tblWrap);
-    card.appendChild(sec);
+    parts.table = sec;
   }
 
   // Examples
   if (g.examples && g.examples.length > 0) {
-    const sec = makeSec('Примеры');
+    const sec = makeSec(secTitle('examples'));
     const list = document.createElement('div');
     list.className = 'grammar-examples';
     let currentPair = null;
@@ -1882,12 +1888,12 @@ function renderGrammar(g) {
       }
     });
     sec.appendChild(list);
-    card.appendChild(sec);
+    parts.examples = sec;
   }
 
   // Errors
   if (g.errors && g.errors.length > 0) {
-    const sec = makeSec('Типичные ошибки');
+    const sec = makeSec(secTitle('errors'));
     const list = document.createElement('div');
     list.className = 'grammar-errors';
     g.errors.forEach(err => {
@@ -1904,8 +1910,10 @@ function renderGrammar(g) {
       list.appendChild(pair);
     });
     sec.appendChild(list);
-    card.appendChild(sec);
+    parts.errors = sec;
   }
+
+  (L.order || GRAM_ORDER_DEFAULT).forEach(k => { if (parts[k]) card.appendChild(parts[k]); });
 
   // Related topics
   if (g.relatedTopics && g.relatedTopics.length > 0) {
@@ -2247,6 +2255,28 @@ $('conjToggle').addEventListener('click', () => {
   $('conjBody').classList.toggle('open');
   $('conjToggle').classList.toggle('open');
 });
+
+// ── Раскладка статьи по типу темы ────────────────────────────────────────────
+// Тип меняет не только промпт, но и саму страницу: в теме про формы человек пришёл за
+// таблицей, и она должна стоять первой, а в теме про выбор главное — пары примеров.
+const GRAM_TITLES_DEFAULT = { explanation: 'Объяснение', rules: 'Правила', table: 'Таблица форм', examples: 'Примеры', errors: 'Типичные ошибки' };
+const GRAM_ORDER_DEFAULT = ['explanation', 'rules', 'table', 'examples', 'errors'];
+const GRAM_LAYOUT = {
+  paradigma:   { order: ['table', 'rules', 'explanation', 'examples', 'errors'],
+                 titles: { table: 'Формы', rules: 'Как образуется', explanation: 'Зачем это время' } },
+  classe:      { order: ['table', 'rules', 'explanation', 'examples', 'errors'],
+                 titles: { table: 'Полный набор', rules: 'Как ведёт себя в предложении' } },
+  scelta:      { order: ['explanation', 'rules', 'examples', 'table', 'errors'],
+                 titles: { explanation: 'В чём разница', rules: 'Как выбрать', examples: 'Пары для сравнения', table: 'Коротко' } },
+  parola:      { order: ['explanation', 'rules', 'table', 'examples', 'errors'],
+                 titles: { explanation: 'Что заменяет', rules: 'Значения', table: 'Значения коротко' } },
+  costruzione: { order: ['explanation', 'rules', 'examples', 'table', 'errors'],
+                 titles: { explanation: 'Как устроена', rules: 'Из чего состоит', examples: 'Превращения', table: 'Формы конструкции' } },
+  ortografia:  { order: ['rules', 'table', 'explanation', 'examples', 'errors'],
+                 titles: { rules: 'Правило', table: 'Пары для сравнения', explanation: 'Почему так' } },
+  uso:         { order: ['explanation', 'rules', 'examples', 'table', 'errors'],
+                 titles: { rules: 'Когда так говорят', table: 'Случаи коротко' } }
+};
 
 // ── Состояние статьи: черновик, проверено моделью, вычитано ──────────────────
 // Статус хранится в самой статье, а не выводится из наличия строки в базе:
