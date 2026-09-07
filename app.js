@@ -72,6 +72,8 @@ function getApiUrl() {
 function showApiKeyScreen() {
   $('apikeyOverlay').classList.add('open');
   $('headerSettingsBtn').style.visibility = 'hidden';
+  // Проверка словаря — инструмент владельца: золотой набор и пересборка кэша
+  const qb = $('qaBtn'); if (qb) qb.style.display = (window.Auth && Auth.isAdmin && Auth.isAdmin()) ? 'block' : 'none';
   const existing = getApiKey();
   if (existing) $('apikeyInput').value = existing;
   $('fastProviderSelect').value = getFastProvider();
@@ -352,7 +354,7 @@ const TRACKABLE = ['result','rulist','grammar','favorites','initial'];
 function showState(state) {
   // Push history when moving away from a meaningful state to another
   // Don't push if we're going to loading/error (transient states), or if suppressed
-  const pushable = ['result','rulist','grammar','favorites','cards','graph','pratica','gramindex','initial'];
+  const pushable = ['result','rulist','grammar','favorites','cards','graph','pratica','gramindex','qa','initial'];
   if (!_suppressHistory && state !== _currentState && pushable.includes(_currentState)) {
     const savedState = _currentState;
     const savedMode = currentMode;
@@ -412,6 +414,8 @@ function showState(state) {
         _suppressHistory = true; showState('cards'); _suppressHistory = false;
         if (window.Cards) { if (snap && Cards.restore && window.Auth && Auth.user()) Cards.restore(snap); else Cards.open(); }
       });
+    } else if (savedState === 'qa') {
+      pushHistory(() => { currentMode = 'dict'; applyModeUI('dict'); _suppressHistory = true; showState('qa'); _suppressHistory = false; if (window.Qa) Qa.render(); });
     } else if (savedState === 'gramindex') {
       // Раскрытые разделы и фильтр живут в модуле, поэтому достаточно вернуть экран
       pushHistory(() => {
@@ -440,7 +444,7 @@ function showState(state) {
     } else if (savedState === 'initial') {
       // Поиск всегда идёт через 'loading', поэтому фиксируем начальный экран
       // и при уходе в loading — иначе кнопка «Назад» после первого поиска не появится
-      if (['result','rulist','grammar','favorites','cards','graph','pratica','gramindex','loading'].includes(state)) {
+      if (['result','rulist','grammar','favorites','cards','graph','pratica','gramindex','qa','loading'].includes(state)) {
         const m = savedMode;
         pushHistory(() => {
           currentMode = m;
@@ -453,8 +457,8 @@ function showState(state) {
   }
 
   _currentState = state;
-  ['initialMsg','loadingMsg','errorMsg','resultCard','ruResults','grammarCard','favScreen','cardsScreen','graphScreen','praticaScreen','gramIndexScreen']
-    .forEach(id => $(id).classList.remove('active'));
+  ['initialMsg','loadingMsg','errorMsg','resultCard','ruResults','grammarCard','favScreen','cardsScreen','graphScreen','praticaScreen','gramIndexScreen','qaScreen']
+    .forEach(id => { const el = $(id); if (el) el.classList.remove('active'); });
   if (state === 'initial')        { $('initialMsg').classList.add('active'); renderHistory(); renderHome(); hideInlineHistory(); }
   else if (state === 'loading')   { $('loadingMsg').classList.add('active'); hideRecent(); hideInlineHistory(); }
   else if (state === 'error')     { $('errorMsg').classList.add('active'); hideRecent(); hideInlineHistory(); }
@@ -466,6 +470,7 @@ function showState(state) {
   else if (state === 'graph')     { $('graphScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
   else if (state === 'pratica')   { $('praticaScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
   else if (state === 'gramindex') { $('gramIndexScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
+  else if (state === 'qa')        { $('qaScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
 
   updateBackBtn();
 }
@@ -602,22 +607,32 @@ function noteFastFallback(e) {
     showToast('⚠ ' + msg.slice(0, 140) + ' → Gemini');
   }
 }
+// Кто отвечает за какую задачу:
+//   dict    — подсказки и мелочи: быстрый провайдер, если есть ключ, иначе Gemini
+//   article — сохраняемая словарная статья: Gemini; быстрый провайдер только если ключа Gemini нет вовсе
+//   check   — проверка статьи: другая модель, чем писала, иначе она подтвердит собственные выдумки
+function pickModel(task) {
+  const fast = useFastForDict(), gem = !!getApiKey();
+  if (task === 'article') return gem ? 'gemini' : (fast ? 'fast' : 'gemini');
+  if (task === 'dict' || task === 'check') return fast ? 'fast' : 'gemini';
+  return 'gemini';
+}
 async function llmJson(prompt, task) {
-  if (task === 'dict' && useFastForDict()) {
+  if (pickModel(task) === 'fast') {
     try { const r = await callFast(prompt); _lastDictLlm = fastLabel(); return r; }
     catch(e) { if (isKeyError(e.message)) throw e; noteFastFallback(e); }
   }
   const r = await callGemini(prompt);
-  if (task === 'dict') _lastDictLlm = 'Gemini';
+  _lastDictLlm = 'Gemini';
   return r;
 }
 async function llmJsonStream(prompt, task, onText) {
-  if (task === 'dict' && useFastForDict()) {
+  if (pickModel(task) === 'fast') {
     try { const r = await callFastStream(prompt, onText); _lastDictLlm = fastLabel(); return r; }
     catch(e) { if (isKeyError(e.message)) throw e; noteFastFallback(e); }
   }
   const r = await callGeminiStream(prompt, onText);
-  if (task === 'dict') _lastDictLlm = 'Gemini';
+  _lastDictLlm = 'Gemini';
   return r;
 }
 
@@ -1389,7 +1404,104 @@ Return ONLY valid JSON, no markdown:
 }
 meanings: ${meaningsRule}
 label: one of [${LABELS}], or an empty string for an ordinary sense. Set it only when the sense really is restricted; never guess.${homos.length ? `
-homographs: one object per homograph listed above, in the same order, 1-2 meanings each.` : ''}`;
+homographs: one object per homograph listed above, in the same order, 1-2 meanings each.` : ''}
+russian.main MUST translate sense 1 of THIS word (the most common sense), never a homograph. Definitions are written in Italian; never copy an English gloss.${ruHintRule(opts.ruHint)}`;
+}
+
+// ── Конвейер статьи: подсказка → модель → проверка полноты → сохранение → проверка второй моделью ──
+// Русский Викисловарь больше не соперник, а подсказка внутри промпта: его список плоский на все
+// слова этого написания, поэтому что из него подходит, решает модель, которая видит глосс.
+async function ruHintFor(word) {
+  try {
+    const r = await Promise.race([fetchRuWiktionary(word), new Promise(res => setTimeout(() => res(null), 800))]);
+    if (!r || !r.main) return null;
+    return [r.main, ...String(r.alternatives || '').split(';')].map(s => s.trim()).filter(Boolean).slice(0, 6);
+  } catch (e) { return null; }
+}
+function ruHintRule(hint) {
+  if (!hint || !hint.length) return '';
+  return `\nRussian Wiktionary lists these Russian words for this spelling (they may belong to OTHER words spelled the same): ${hint.join('; ')}. Use one only if it translates the sense described above; otherwise ignore it.`;
+}
+
+// Полнота статьи проверяется механически до сохранения. Раньше кривой ответ модели молча
+// превращался в статью с английскими глоссами вместо определений и без перевода, и она уходила в кэш.
+const POS_OK = ['sostantivo', 'verbo', 'aggettivo', 'avverbio', 'preposizione', 'congiunzione', 'pronome', 'articolo', 'interiezione', 'numerale', 'locuzione', 'modo di dire', 'proverbio'];
+function validateArticle(entry, base) {
+  const problems = [];
+  const ru = entry.russian && String(entry.russian.main || '').trim();
+  if (!ru || !/[а-яё]/i.test(ru)) problems.push('нет русского перевода');
+  const ms = Array.isArray(entry.meanings) ? entry.meanings.filter(m => m && m.definition) : [];
+  if (!ms.length) problems.push('нет определений');
+  const glosses = new Set(((base && base.senses) || []).map(s => String(s.gloss || '').toLowerCase().trim()));
+  if (ms.some(m => glosses.has(String(m.definition).toLowerCase().trim()))) problems.push('определение скопировано с английского глосса');
+  const pos = cleanPos(entry.partOfSpeech).toLowerCase();
+  if (!POS_OK.some(p => pos.startsWith(p))) problems.push(`часть речи вне списка: «${entry.partOfSpeech}»`);
+  if (entry.category && !CATEGORY_KEYS.includes(entry.category)) entry.category = 'altro'; // не ошибка, просто приводим к списку
+  if (problems.length) { const err = new Error('Статья неполная: ' + problems.join(', ')); err.validation = problems; throw err; }
+}
+
+// Проверка второй моделью по фактам Викисловаря: перевод того ли значения, есть ли пометы,
+// не выдумано ли. Другая модель, чем писала, иначе она подтвердит собственные ошибки.
+async function verifyArticle(entry, base) {
+  const senses = ((base && base.senses) || []).map((s, i) => `${i + 1}. ${s.label ? '(' + s.label + ') ' : ''}${s.gloss}`).join('\n');
+  const homos = ((base && base.homographs) || []).map((h, i) => `${i + 1}. ${h.partOfSpeech}: ${(h.glosses || []).join('; ')}`).join('\n');
+  const article = {
+    word: entry.word, partOfSpeech: entry.partOfSpeech, gender: entry.gender, russian: entry.russian, english: entry.english,
+    meanings: (entry.meanings || []).map(m => ({ definition: m.definition, label: m.label || '' })),
+    homographs: (entry.homographs || []).map(h => ({ partOfSpeech: h.partOfSpeech, russian: h.russian, label: h.label || '' }))
+  };
+  const prompt = `You are checking a dictionary entry for the Italian word "${entry.word}" written by another model. Be strict and concrete.
+${senses ? `Ground truth from Wiktionary — senses of THIS word (English glosses, Wiktionary order):\n${senses}\n` : 'Wiktionary has no entry for this word; check internal consistency only.\n'}${homos ? `Other words with the same spelling, NOT this word:\n${homos}\n` : ''}
+The entry:
+${JSON.stringify(article)}
+
+Checks:
+1. russian.main correctly translates THIS word's main sense${senses ? ' (sense 1 above)' : ''}; not a homograph, not a transliteration.
+2. Every meaning is a genuine sense of this word, written in Italian, not a copy of an English gloss.
+3. Senses Wiktionary marks obsolete, archaic, dialectal, rare or vulgar carry a matching label.
+4. partOfSpeech and gender agree with Wiktionary.
+5. Each homograph's russian translates that homograph, not the main word.
+Return ONLY valid JSON: { "ok": true/false, "issues": ["one short line per REAL problem, in Russian"] }. ok is false only for real errors, never for style.`;
+  const r = await llmJson(prompt, 'check');
+  const issues = (Array.isArray(r && r.issues) ? r.issues : []).map(s => String(s).trim()).filter(Boolean).slice(0, 6);
+  return { ok: !!(r && r.ok) && !issues.length, issues, by: _lastDictLlm };
+}
+
+// Сохранить, показать, проверить второй моделью, сохранить статус. Проверка идёт после первого
+// сохранения: её сбой не должен оставить слово без статьи.
+async function finalizeArticle(entry, query, base, opts = {}) {
+  const key = String(entry.word || query).toLowerCase(), qk = String(query || '').toLowerCase();
+  entry.pipeline = 2; entry.status = 'draft'; entry.checkNotes = [];
+  const save = async () => { await sbSave('dictionary', 'word', key, entry); if (qk && qk !== key) await sbSave('dictionary', 'word', qk, entry); };
+  await save();
+  if (!opts.silent && currentDictWord === key) renderEntry(entry);
+  try {
+    const v = await verifyArticle(entry, base);
+    entry.status = v.ok ? 'checked' : 'flagged'; entry.checkNotes = v.issues;
+    entry.sources = { ...(entry.sources || {}), check: v.by };
+  } catch (e) { entry.checkNotes = ['проверка не удалась: ' + (e.message || '')]; }
+  await save();
+  if (!opts.silent && currentDictWord === key && currentDictEntry && String(currentDictEntry.word || '').toLowerCase() === key) {
+    currentDictEntry.status = entry.status; currentDictEntry.checkNotes = entry.checkNotes; currentDictEntry.sources = entry.sources;
+    renderSourceLine(currentDictEntry);
+  }
+  return entry;
+}
+
+// Объекты meanings из недописанного ответа: считаем скобки, а не подбираем регулярку под поля
+function extractMeaningsFromPartial(partial) {
+  const mi = partial.indexOf('"meanings"'); if (mi === -1) return [];
+  const s = partial.slice(mi), out = [];
+  let i = s.indexOf('['); if (i === -1) return out;
+  for (let depth = 0, start = -1, inStr = false, esc = false; i < s.length; i++) {
+    const ch = s[i];
+    if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; continue; }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === '{') { if (depth === 0) start = i; depth++; }
+    else if (ch === '}') { depth--; if (depth === 0 && start >= 0) { try { const o = JSON.parse(s.slice(start, i + 1)); if (o && o.definition) out.push(o); } catch (e) {} start = -1; } }
+    else if (ch === ']' && depth === 0) break;
+  }
+  return out;
 }
 
 function fdMergeCompletion(base, extra, fastRu) {
@@ -1448,61 +1560,51 @@ async function lookupWordHybrid(query, base, opts = {}) {
   // force — кнопка обновления на самой статье: человек уже выбрал слово, список не показываем,
   // иначе перегенерация и не начнётся, а выбор из списка снова вернёт старый кэш
   if (!opts.skipChooser && !opts.force && offerFormsChooser(base, query)) return;
-  renderEntry({ ...base, _pending: true });
-  showState('result');
-  addToHistory(base.word, 'dict');
+  // На экран сразу всё, что известно без модели: слово, часть речи, род, транскрипция, формы, английский.
+  // Русский и определения дописываются по мере ответа, статья не висит пустой.
+  if (!opts.headless) {
+    renderEntry({ ...base, _pending: true });
+    showState('result');
+    addToHistory(base.word, 'dict');
+  }
   try {
-    // Русский перевод показываем как можно раньше, но запрос к Gemini один: ответ читаем потоком,
-    // поле russian в схеме стоит первым и приходит через ~1 с, определения дочитываются следом.
-    // Параллельно бесплатно пробуем ru.wiktionary (~0.3 с).
-    let shownRu = null;
-    const takeRu = ru => {
-      if (!ru || !ru.main || shownRu) return;
-      shownRu = ru;
-      if (currentDictWord === key && currentDictEntry && currentDictEntry._pending) renderEntry({ ...currentDictEntry, russian: ru });
-    };
-    // Если перевод уже добыт для всплывающей подсказки этого слова — показываем его сразу
-    const previewQ = _previewCache['d:' + key] || _previewCache['d:' + query.toLowerCase()];
-    if (previewQ && previewQ.data && previewQ.data.russian && previewQ.data.russian.main) takeRu(previewQ.data.russian);
-    // ru.wiktionary отдаёт «Значение» одним плоским списком на все слова этого написания, и первым
-    // может идти перевод другой леммы: у «porto» это «переноска» (porto d'armi), а статья про гавань.
-    // Если написание делят несколько слов — переводит модель, она видит английский глосс нужного.
-    const ambiguous = (base.homographs || []).length > 0;
-    const wiktJob = ambiguous ? Promise.resolve() : fetchRuWiktionary(base.word).then(takeRu).catch(() => {});
-    let shownMeanings = 0;
-    const extra = await llmJsonStream(fdCompletionPrompt(base), 'dict', partial => {
-      const m = partial.match(/"russian"\s*:\s*\{[^{}]*\}/);
-      if (m) { try { takeRu(JSON.parse('{' + m[0] + '}').russian); } catch(e) {} }
-      // Определения показываем по одному, как только очередной объект в массиве meanings дописан
-      const mi = partial.indexOf('"meanings"');
-      if (mi === -1 || currentDictWord !== key || !currentDictEntry || !currentDictEntry._pending) return;
-      const objs = [...partial.slice(mi).matchAll(/\{\s*"definition"\s*:\s*"(?:[^"\\]|\\.)*"\s*(?:,\s*"example"\s*:\s*"(?:[^"\\]|\\.)*"\s*)?\}/g)];
-      if (objs.length <= shownMeanings) return;
-      const meanings = objs.map(o => { try { return JSON.parse(o[0]); } catch(e) { return null; } }).filter(Boolean);
-      if (!meanings.length) return;
-      shownMeanings = objs.length;
-      renderEntry({ ...currentDictEntry, meanings, _pending: true });
+    const ruHint = await ruHintFor(base.word);
+    let shownRu = false, shownMeanings = 0;
+    const extra = await llmJsonStream(fdCompletionPrompt(base, { ruHint }), 'article', partial => {
+      if (currentDictWord !== key || !currentDictEntry || !currentDictEntry._pending) return;
+      if (!shownRu) {
+        const m = partial.match(/"russian"\s*:\s*\{[^{}]*\}/);
+        if (m) { try { const ru = JSON.parse('{' + m[0] + '}').russian; if (ru && ru.main) { shownRu = true; renderEntry({ ...currentDictEntry, russian: ru }); } } catch (e) {} }
+      }
+      const meanings = extractMeaningsFromPartial(partial);
+      if (meanings.length > shownMeanings) {
+        shownMeanings = meanings.length;
+        renderEntry({ ...currentDictEntry, meanings: meanings.map(m => ({ ...m, label: usageLabel([m.label], '') })), _pending: true });
+      }
     });
-    await wiktJob;
-    const entry = fdMergeCompletion(base, extra, shownRu);
+    const entry = fdMergeCompletion(base, extra, null);
     entry.relatedWords = await verifyWords(entry.relatedWords, base.relatedWords || []); // синонимы Викисловаря доверенные, добавки модели — проверяем
     if (!entry.phonetic) { const r = await resolveIpa(entry.word); entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; entry.phoneticSrc = r.src; }
     await fixTransliteratedRussian(entry); // «мамон» вместо перевода — переспрашиваем у Gemini
-    const queryKey = query.toLowerCase();
-    await sbSave('dictionary', 'word', key, entry);
-    if (queryKey !== key) await sbSave('dictionary', 'word', queryKey, entry);
-    // Пока Gemini отвечал, пользователь мог уйти на другое слово
-    if (currentDictWord === key) renderEntry(entry);
+    entry.sources = { structure: 'wiktionary', text: entry.llm, ruHint: !!ruHint };
+    validateArticle(entry, base); // неполную статью не сохраняем и не показываем как готовую
+    await finalizeArticle(entry, query, base, { silent: !!opts.headless });
+    return entry;
   } catch(err) {
     console.error('lookupWordHybrid error:', err);
+    if (opts.headless) throw err;
     if (currentDictWord !== key) return;
-    // Оставляем быстрые данные на экране, вместо определений — английские глоссы и причина ошибки
+    // Быстрые данные остаются на экране; вместо определений — английские глоссы и причина.
+    // В кэш это не уходит: при следующем открытии статья попробует собраться заново.
     const { _pending, ...shown } = currentDictEntry || base;
     currentDictEntry = shown;
     $('transRU').textContent = '—'; $('transRUalt').textContent = '';
+    const why = err.validation
+      ? `Модель вернула неполную статью: ${escapeHtml(err.validation.join(', '))}. Не сохранено — нажмите обновление в шапке, чтобы попробовать ещё раз.`
+      : describeApiError(err.message || '');
     $('meaningsContainer').innerHTML = `
       <div class="definition-text">${base.senses.map(s => makeClickable(s.gloss)).join('; ') || '—'}</div>
-      <div class="pending-error">${describeApiError(err.message || '')}</div>`;
+      <div class="pending-error">${why}</div>`;
   }
 }
 
@@ -1510,7 +1612,8 @@ async function lookupWordHybrid(query, base, opts = {}) {
 async function lookupWord(word, _depth = 0, opts = {}) {
   word = cleanQuery(word);
   if (!word) return;
-  showState('loading');
+  // headless — конвейер без экрана: для прогона золотого набора и пересборки кэша. Возвращает статью.
+  if (!opts.headless) showState('loading');
   const prompt = `You are an expert Italian linguist. Given the Italian word "${word}", provide a complete dictionary entry in JSON format.
 Return ONLY valid JSON, no markdown, no explanation. Schema:
 {
@@ -1575,6 +1678,7 @@ alsoForms: this article is about one word only. If the very same spelling is ALS
   const fd = await fetchFreeDictionary(word);
   const mapped = fd ? mapFreeDictionary(fd) : null;
   if (mapped && mapped.lemmas) {
+    if (opts.headless) return { redirects: mapped.lemmas.map(l => l.lemma) };
     // Словоформа сразу нескольких слов — показываем список на выбор
     const items = mapped.lemmas.map(l => ({ italian: l.lemma, partOfSpeech: l.pos, shortDefinition: l.desc }));
     renderRuResults(word, items, `«${word}» — форма нескольких слов`);
@@ -1582,6 +1686,7 @@ alsoForms: this article is about one word only. If the very same spelling is ALS
     return;
   }
   if (mapped && mapped.lemma) {
+    if (opts.headless) return { redirects: [mapped.lemma] };
     // Введена словоформа («sono», «mangiato») — переходим к начальной форме
     if (_depth < 2 && mapped.lemma.toLowerCase() !== word.toLowerCase()) {
       showToast(`${word} → ${mapped.lemma}`);
@@ -1593,8 +1698,9 @@ alsoForms: this article is about one word only. If the very same spelling is ALS
 
   // 3. Fallback: слова нет в Викисловаре или таблица форм неполная — Gemini генерирует всё
   try {
-    const entry = await llmJson(prompt, 'dict');
-    if (!entry.word) { $('errorText').textContent = `"${word}" — parola non trovata`; showState('error'); return; }
+    const ruHint = await ruHintFor(word);
+    const entry = await llmJson(prompt + ruHintRule(ruHint), 'article');
+    if (!entry.word) { if (opts.headless) throw new Error('parola non trovata'); $('errorText').textContent = `"${word}" — parola non trovata`; showState('error'); return; }
     entry.relatedWords = await verifyWords(entry.relatedWords);
     entry.partOfSpeech = cleanPos(entry.partOfSpeech);
     // Сноска «также форма слова»: у статей из Викисловаря она строится из его же данных,
@@ -1609,16 +1715,18 @@ alsoForms: this article is about one word only. If the very same spelling is ALS
     entry.unverified = !(await wordExists(entry.word || word));
     // Транскрипцию модели не берём: словари, иначе правила чтения
     { const r = await resolveIpa(entry.word || word); entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; entry.phoneticSrc = r.src; }
-    const canonicalKey = (entry.word || word).toLowerCase();
-    const queryKey = word.toLowerCase();
-    await sbSave('dictionary', 'word', canonicalKey, entry);
-    // Кэшируем и под введённым запросом, чтобы повторный поиск попадал в кэш
-    if (queryKey !== canonicalKey) await sbSave('dictionary', 'word', queryKey, entry);
-    if (!opts.skipChooser && !opts.force && offerFormsChooser(entry, word)) return;
+    entry.llm = _lastDictLlm;
+    entry.sources = { structure: 'model', text: entry.llm, ruHint: !!ruHint };
+    validateArticle(entry, null); // неполную статью не сохраняем
+    if (opts.headless) { await finalizeArticle(entry, word, null, { silent: true }); return entry; }
+    if (!opts.skipChooser && !opts.force && offerFormsChooser(entry, word)) { await finalizeArticle(entry, word, null, { silent: true }); return entry; }
     renderEntry(entry);
     showState('result');
     addToHistory(entry.word || word, 'dict');
+    await finalizeArticle(entry, word, null);
+    return entry;
   } catch(err) {
+    if (opts.headless) throw err;
     console.error("lookupWord error:", err);
     const msg = err.message || '';
     handleApiError(msg);
@@ -2178,17 +2286,7 @@ function renderEntry(e) {
   $('transENalt').textContent = e.english?.alternatives || '';
 
   // Атрибуция источника
-  const srcEl = $('entrySource');
-  if (e.source === 'wiktionary') {
-    const href = e.sourceUrl || `https://en.wiktionary.org/wiki/${encodeURIComponent(e.word || '')}`;
-    srcEl.innerHTML = `Fonte: <a href="${href}" target="_blank" rel="noopener">Wiktionary</a> · CC BY-SA 4.0${e.llm ? ` · definizioni: ${escapeHtml(e.llm)}` : ''}`;
-    srcEl.style.display = 'block';
-  } else if (e.unverified) {
-    srcEl.innerHTML = 'В Викисловаре этого слова нет: статья составлена моделью и может быть неточной или выдуманной';
-    srcEl.style.display = 'block';
-  } else {
-    srcEl.style.display = 'none';
-  }
+  renderSourceLine(e);
 
   // Омографы: другие слова того же написания — своя часть речи, род, транскрипция, перевод и определения
   const hs = $('homographsSection'), hc = $('homographsContainer');
@@ -2426,6 +2524,30 @@ async function setGrammarStatus(status) {
     renderGrammar(g);
     if (window.Grammatica) Grammatica.refresh();
   } else { g.status = prev; showToast('⚠ Не удалось сохранить отметку'); }
+}
+
+// ── Строка источника и статуса под статьёй ───────────────────────────────────
+// Откуда структура, кто писал текст, кто проверял и что нашёл. Читателю — коротко,
+// владельцу — ещё и сами замечания проверки.
+function renderSourceLine(e) {
+  const srcEl = $('entrySource'); if (!srcEl) return;
+  const parts = [];
+  if (e.source === 'wiktionary') {
+    const href = e.sourceUrl || `https://en.wiktionary.org/wiki/${encodeURIComponent(e.word || '')}`;
+    parts.push(`Fonte: <a href="${href}" target="_blank" rel="noopener">Wiktionary</a> · CC BY-SA 4.0${e.llm ? ` · definizioni: ${escapeHtml(e.llm)}` : ''}`);
+  } else if (e.unverified) {
+    parts.push('В Викисловаре этого слова нет: статья составлена моделью и может быть неточной или выдуманной');
+  } else if (e.llm) {
+    parts.push(`definizioni: ${escapeHtml(e.llm)}`);
+  }
+  const admin = !!(window.Auth && Auth.isAdmin && Auth.isAdmin());
+  const by = e.sources && e.sources.check ? ` (${escapeHtml(e.sources.check)})` : '';
+  if (e.status === 'checked') parts.push(`<span class="src-ok">проверено${by} ✓</span>`);
+  else if (e.status === 'flagged') parts.push(`<span class="src-warn" title="${escapeHtml((e.checkNotes || []).join('\n'))}">⚠ проверка нашла расхождения${by}</span>${admin && (e.checkNotes || []).length ? `<ul class="src-notes">${e.checkNotes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : ''}`);
+  else if (admin && e.pipeline === 2) parts.push('<span class="src-muted">не проверено</span>');
+  else if (admin && !e._pending) parts.push('<span class="src-muted">старый конвейер</span>');
+  srcEl.innerHTML = parts.join(' · ');
+  srcEl.style.display = parts.length ? 'block' : 'none';
 }
 
 // ── Altre voci: правка раздела владельцем ────────────────────────────────────

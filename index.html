@@ -67,6 +67,7 @@
     <button class="apikey-btn" onclick="saveApiKey()">Сохранить</button>
     <button class="apikey-back-btn" id="apikeyBackBtn" onclick="hideApiKeyScreen()">← Назад</button>
     <button class="apikey-back-btn" id="installBtn" style="display:none" onclick="installApp()"><span data-icon="download"></span> Установить как приложение</button>
+    <button class="apikey-back-btn" id="qaBtn" style="display:none" onclick="hideApiKeyScreen(); Qa.open()"><span data-icon="chart"></span> Проверка словаря</button>
     <p class="apikey-hint">
       Ключи: Gemini на <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>,
       Groq на <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a>,
@@ -171,6 +172,9 @@
 
   <!-- Pratica: разбор своего текста -->
   <div class="pratica-screen" id="praticaScreen"></div>
+
+  <!-- Проверка словаря: золотой набор и пересборка кэша, только владельцу -->
+  <div class="qa-screen" id="qaScreen"></div>
 
   <!-- Favorites screen -->
   <div class="fav-screen" id="favScreen">
@@ -348,6 +352,8 @@
 <script src="pratica.js"></script>
 <!-- La Grammatica: справочник по разделам, закрытый список тем -->
 <script src="grammatica.js"></script>
+<!-- Проверка словаря: золотой набор слов и пересборка кэша новым конвейером -->
+<script src="qa.js"></script>
 <!-- Аккаунты: вход, профиль с ключами, права доступа к личным данным -->
 <script src="auth.js"></script>
 </body>

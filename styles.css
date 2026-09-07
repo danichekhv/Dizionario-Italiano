@@ -577,6 +577,11 @@
     color: var(--muted);
     opacity: 0.8;
   }
+  .entry-source .src-ok { color: var(--sage); }
+  .entry-source .src-warn { color: var(--gold); }
+  .entry-source .src-muted { opacity: .7; }
+  .entry-source .src-notes { margin: 6px 0 0 16px; padding: 0; font-family: var(--font-cyr); font-size: var(--fs-small); color: var(--ink-light); letter-spacing: 0; text-transform: none; }
+  .entry-source .src-notes li { margin: 2px 0; }
   .entry-source a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--border); }
   .entry-source a:hover { color: var(--terracotta); border-bottom-color: var(--terracotta); }
 
@@ -769,6 +774,26 @@
   .fav-view-toggle .view-toggle-btn { padding: 8px 16px; font-size: var(--fs-body); } /* одна высота с вкладками */
   body.mode-grammar .fav-view-toggle { display: none !important; }
   @media (max-width: 640px) { .wg-hint { display: none; } .wg-bar { padding: 8px; gap: 8px; } .wg-legend { padding: 8px 8px; } }
+
+  /* ── Проверка словаря (владелец): золотой набор и пересборка кэша ── */
+  .qa-screen { display: none; animation: fadeUp .4s ease both; }
+  .qa-screen.active { display: block; }
+  .qa-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .qa-head .cards-title { margin-right: auto; }
+  .qa-intro { color: var(--muted); font-style: italic; line-height: var(--lh-text); margin-bottom: 16px; }
+  .qa-table { width: 100%; border-collapse: collapse; background: white; border: 1.5px solid var(--border); border-radius: var(--radius); overflow: hidden; font-size: var(--fs-small); }
+  .qa-table th { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); background: var(--parchment); }
+  .qa-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .qa-table tr:last-child td { border-bottom: none; }
+  .qa-word { font-family: var(--font-display); font-size: var(--fs-body); }
+  .qa-ok { color: var(--sage); font-weight: 600; } .qa-bad { color: var(--danger); font-weight: 600; } .qa-na { color: var(--muted); }
+  .qa-note { color: var(--muted); font-style: italic; font-size: var(--fs-caption); }
+  .qa-status.checked { color: var(--sage); } .qa-status.flagged { color: var(--gold); } .qa-status.draft, .qa-status.error { color: var(--danger); }
+  .qa-batch { margin-top: 24px; background: white; border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
+  .qa-progress { height: 6px; border-radius: var(--radius); background: rgba(var(--stone-rgb), .15); overflow: hidden; margin: 12px 0; }
+  .qa-progress i { display: block; height: 100%; background: var(--terracotta); transition: width var(--t-slow); }
+  .qa-log { max-height: 260px; overflow: auto; font-family: var(--font-mono); font-size: var(--fs-caption); line-height: 1.6; color: var(--ink-light); }
+  @media (max-width: 640px) { .qa-table { display: block; overflow-x: auto; } }
 
   /* ── La Pratica: разбор своего текста ─────────────────────── */
   .pratica-screen { display: none; animation: fadeUp 0.4s ease both; }
