@@ -167,7 +167,7 @@
       canvas.style.width = r.width + 'px'; canvas.style.height = r.height + 'px';
       draw();
     }
-    const ro = new ResizeObserver(resize); ro.observe(wrap);
+    const ro = new ResizeObserver(resize); ro.observe(wrap); resize();
 
     function setData(nodes, edges, o = {}) {
       G.center = o.center || null; G.centerMoved = false;
@@ -181,7 +181,7 @@
       Object.keys(byDepth).forEach(d => { const arr = byDepth[d]; const R = d == 0 ? (arr.length > 1 ? 40 : 0) : 90 + 110 * (d - 1); arr.forEach((n, i) => { if (isNaN(n.x)) { const a = (i / arr.length) * Math.PI * 2 + d * 0.4; n.x = Math.cos(a) * R * (arr.length > 30 ? Math.sqrt(arr.length / 30) : 1); n.y = Math.sin(a) * R * (arr.length > 30 ? Math.sqrt(arr.length / 30) : 1); } }); });
       if (G.center && G.byId.get(G.center)) { const c = G.byId.get(G.center); c.x = 0; c.y = 0; }
       emptyEl.style.display = G.nodes.length ? 'none' : 'block'; emptyEl.textContent = 'Пока нет связей';
-      buildLegend(); G.alpha = 1; fitSoon(); loop();
+      buildLegend(); G.alpha = 1; if (!G.w) resize(); fit(); fitSoon(); loop(); // размер холста перечитываем сами: наблюдатель мог ещё не сработать; вписать сразу и ещё раз, когда уляжется
     }
     let fitPending = 0;
     function fitSoon() { clearTimeout(fitPending); fitPending = setTimeout(fit, 700); }
@@ -236,13 +236,17 @@
     function buildLegend() {
       const counts = {}; G.nodes.forEach(n => { if (n.hub) return; const k = keyOf(n); counts[k] = (counts[k] || 0) + 1; });
       const colors = G.mode === 'cat' ? CAT_COLORS : POS_COLORS, labels = G.mode === 'cat' ? CAT_LABELS : POS_LABELS;
-      const keys = Object.keys(colors).filter(k => counts[k]);
+      // Самые крупные темы первыми; сверх восьми — по кнопке «ещё», иначе легенда съедает экран
+      const keys = Object.keys(colors).filter(k => counts[k]).sort((a, b) => counts[b] - counts[a]);
+      const LIMIT = 8, shown = G.legendOpen || keys.length <= LIMIT ? keys : keys.slice(0, LIMIT);
       // Подписи по-итальянски (это и есть тег слова), русский перевод во всплывающей подсказке
       const it = k => k === '?' ? 'non aperte' : k;
-      legendEl.innerHTML = keys.map(k => `<button class="wg-chip ${G.hidden.has(k) ? 'off' : ''}" data-k="${k}" title="${labels[k] || k}"><i style="background:${colors[k]}"></i>${it(k)}<span>${counts[k]}</span></button>`).join('')
+      legendEl.innerHTML = shown.map(k => `<button class="wg-chip ${G.hidden.has(k) ? 'off' : ''}" data-k="${k}" title="${labels[k] || k}"><i style="background:${colors[k]}"></i>${it(k)}<span>${counts[k]}</span></button>`).join('')
+        + (keys.length > LIMIT ? `<button class="wg-chip-all wg-more">${G.legendOpen ? 'свернуть' : `ещё ${keys.length - LIMIT}`}</button>` : '')
         + (keys.length > 1 ? `<button class="wg-chip-all" data-all="1">tutte</button><button class="wg-chip-all" data-all="0">nessuna</button>` : '');
+      const more = legendEl.querySelector('.wg-more'); if (more) more.onclick = () => { G.legendOpen = !G.legendOpen; buildLegend(); };
       legendEl.querySelectorAll('.wg-chip').forEach(b => b.onclick = () => { const k = b.dataset.k; if (G.hidden.has(k)) G.hidden.delete(k); else G.hidden.add(k); buildLegend(); G.alpha = Math.max(G.alpha, 0.3); loop(); });
-      legendEl.querySelectorAll('.wg-chip-all').forEach(b => b.onclick = () => { if (b.dataset.all === '1') G.hidden.clear(); else keys.forEach(k => G.hidden.add(k)); buildLegend(); G.alpha = Math.max(G.alpha, 0.3); loop(); });
+      legendEl.querySelectorAll('.wg-chip-all[data-all]').forEach(b => b.onclick = () => { if (b.dataset.all === '1') G.hidden.clear(); else keys.forEach(k => G.hidden.add(k)); buildLegend(); G.alpha = Math.max(G.alpha, 0.3); loop(); });
     }
 
     // Координаты и попадание в узел
@@ -268,7 +272,7 @@
     canvas.addEventListener('pointermove', e => {
       if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pinch && pointers.size >= 2) { const [a, b] = [...pointers.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y); const s = Math.min(4, Math.max(0.1, pinch.s0 * d / pinch.d0)); const r = canvas.getBoundingClientRect(); const px = pinch.cx - r.left, py = pinch.cy - r.top; const mx = (a.x + b.x) / 2 - r.left, my = (a.y + b.y) / 2 - r.top; G.tx = mx - (px - pinch.tx0) * s / pinch.s0; G.ty = my - (py - pinch.ty0) * s / pinch.s0; G.scale = s; draw(); return; }
-      if (drag) { const p = toWorld(e.clientX, e.clientY); drag.node.fx = drag.node.x = p.x; drag.node.fy = drag.node.y = p.y; if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 5) drag.moved = true; G.alpha = Math.max(G.alpha, 0.25); loop(); draw(); return; }
+      if (drag) { const p = toWorld(e.clientX, e.clientY); drag.node.fx = drag.node.x = p.x; drag.node.fy = drag.node.y = p.y; if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > (drag.type === 'mouse' ? 5 : 14)) drag.moved = true; /* палец дрожит сильнее мыши: тап не считаем перетаскиванием до 14px */ G.alpha = Math.max(G.alpha, 0.25); loop(); draw(); return; }
       if (pan) { G.tx = pan.tx0 + e.clientX - pan.x0; G.ty = pan.ty0 + e.clientY - pan.y0; if (Math.hypot(e.clientX - pan.x0, e.clientY - pan.y0) > 4) pan.moved = true; draw(); return; }
       if (e.pointerType === 'mouse') setHover(hit(e.clientX, e.clientY), e);
     });
@@ -306,7 +310,7 @@
     function destroy() { G.destroyed = true; cancelAnimationFrame(G.raf); clearTimeout(hoverTimer); ro.disconnect(); }
     function setLoading(text) { emptyEl.style.display = 'block'; emptyEl.textContent = text || 'Загрузка…'; }
     resize();
-    return { setData, fit, destroy, setLoading, get nodes() { return G.nodes; } };
+    return { setData, fit, destroy, setLoading, get nodes() { return G.nodes; }, get view() { return { tx: G.tx, ty: G.ty, scale: G.scale, w: G.w, h: G.h, alpha: G.alpha }; } };
   }
 
   window.WordGraph = { create, loadAllWords, fetchWords, buildGraph, buildFromEntries, buildAround, catKey, posKey, CAT_COLORS, CAT_LABELS };

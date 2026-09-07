@@ -2320,10 +2320,11 @@ function applyRelatedView(e) {
   renderRelatedGraph(e, getRelatedDepth());
 }
 async function renderRelatedGraph(e, depth) {
-  destroyRelatedGraph();
   const word = (e.word || '').toLowerCase();
   _relatedGraphKey = word + '|' + (e.relatedWords || []).join(',');
-  _relatedGraph = WordGraph.create($('relatedGraph'), {
+  // Граф не пересоздаём при смене колец или слова: узлы остаются на местах, а вид не улетает в угол
+  if (_relatedGraph) _relatedGraph.setLoading('Загрузка…');
+  else _relatedGraph = WordGraph.create($('relatedGraph'), {
     height: window.innerWidth < 640 ? '360px' : '440px', depthControl: true, depth,
     onDepth: d => { try { localStorage.setItem('dizionario_related_depth', d); } catch(e2) {} if (currentDictEntry) renderRelatedGraph(currentDictEntry, d); },
     extraButtons: '<button class="wg-btn" onclick="openWordMap()" title="Все открытые слова">вся карта</button>',
