@@ -1729,17 +1729,25 @@ async function searchOwnTranslations(q) {
   const out = [];
   const pat = `*${q.replace(/[*,()]/g, '')}*`;
   const exactIn = s => String(s || '').toLowerCase().split(/[;,]/).map(x => x.trim()).includes(q);
+  // База ищет подстроку где угодно, и на «порт» приезжает «заниматься спортом». Оставляем только
+  // совпадения с начала слова: «порт», «порты», «портвейн» проходят, «спортом» нет.
+  const atWordStart = new RegExp('(^|[^а-яёa-z])' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  const pieces = s => String(s || '').split(/[;,]/).map(x => x.trim()).filter(Boolean);
+  const wordHit = (...fields) => fields.flatMap(pieces).find(x => atWordStart.test(x)) || '';
   const res = await fetch(`${SB_URL}/rest/v1/dictionary?select=${encodeURIComponent('word,w:data->>word,pos:data->>partOfSpeech,g:data->>gender,ru:data->russian->>main,alt:data->russian->>alternatives,unv:data->>unverified')}&or=(${encodeURIComponent(`data->russian->>main.ilike.${pat},data->russian->>alternatives.ilike.${pat}`)})&limit=30`, { headers: SB_H });
   if (res.ok) (await res.json()).forEach(r => {
     if (r.unv === 'true' || !(r.w || r.word)) return;
-    const hit = [r.ru, ...String(r.alt || '').split(/[;,]/)].map(x => String(x || '').trim()).find(x => x.toLowerCase().includes(q)) || r.ru;
-    out.push({ italian: r.w || r.word, partOfSpeech: r.pos || '', gender: r.g || null, shortDefinition: hit || r.ru || '', source: 'кэш', _exact: exactIn(r.ru) || exactIn(r.alt) });
+    const hit = wordHit(r.ru, r.alt);
+    if (!hit) return;
+    out.push({ italian: r.w || r.word, partOfSpeech: r.pos || '', gender: r.g || null, shortDefinition: hit, source: 'кэш', _exact: exactIn(r.ru) || exactIn(r.alt) });
   });
   if (window.Auth && Auth.user()) {
     const nr = await fetch(`${SB_URL}/rest/v1/notes?select=word,pos,translation&translation=ilike.${encodeURIComponent(pat)}&limit=20`, { headers: SB_H }).catch(() => null);
     if (nr && nr.ok) (await nr.json()).forEach(n => {
       if (out.some(i => i.italian.toLowerCase() === String(n.word).toLowerCase())) return;
-      out.push({ italian: n.word, partOfSpeech: n.pos || '', gender: null, shortDefinition: n.translation || '', source: 'кэш', _exact: exactIn(n.translation) });
+      const hit = wordHit(n.translation);
+      if (!hit) return;
+      out.push({ italian: n.word, partOfSpeech: n.pos || '', gender: null, shortDefinition: hit, source: 'кэш', _exact: exactIn(n.translation) });
     });
   }
   out.sort((a, b) => (b._exact ? 1 : 0) - (a._exact ? 1 : 0));
