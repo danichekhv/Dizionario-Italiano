@@ -14,7 +14,7 @@
     view: 'decks', deckId: null, tagFilter: '', folder: null,
     queue: [], current: null, revealed: false, undo: null,
     loaded: false, missingTables: false,
-    build: null, browseSelected: new Set(),
+    build: null, browseSelected: new Set(), browseQuery: '',
     reviews: [], reviewsMissing: false, shownAt: 0, statsDeckId: null
   };
 
@@ -685,11 +685,8 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       <div class="cards-panel">${body}</div>`;
   }
 
-  function renderBrowse(el) {
-    const notes = notesInDeck(S.deckId);
-    const tags = [...new Set(notes.flatMap(n => n.tags || []))].sort();
-    const filtered = S.tagFilter ? notes.filter(n => (n.tags || []).includes(S.tagFilter)) : notes;
-    const rows = filtered.map(n => {
+  function browseRowsHtml(filtered) {
+    return filtered.map(n => {
       const cs = S.cards.filter(c => c.note_id === n.id);
       const st = cs.map(c => c.state === 'new' ? 'н' : (c.state === 'review' ? 'п' : 'з')).join('');
       return `
@@ -702,23 +699,53 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
           <div class="browse-state" title="состояние карточек: н новая, з заучивается, п повторение">${st}</div>
         </div>`;
     }).join('');
+  }
+
+  function browseToolbarHtml(filtered, tags) {
+    const all = S.browseSelected.size === filtered.length && filtered.length;
+    return `
+      <select class="cards-select" onchange="Cards.setTagFilter(this.value)">
+        <option value="">все теги</option>${tags.map(t => `<option value="${esc(t)}" ${t === S.tagFilter ? 'selected' : ''}>#${esc(t)}</option>`).join('')}
+      </select>
+      <button class="cards-btn" onclick="Cards.study('${S.deckId}')">Учить ${S.tagFilter ? '#' + esc(S.tagFilter) : 'колоду'}</button>
+      <button class="cards-btn" onclick="Cards.selectAll(${all ? 'false' : 'true'})">${all ? 'Снять выделение' : 'Выделить все'}</button>
+      <button class="cards-btn" onclick="Cards.tagSelected()" ${S.browseSelected.size ? '' : 'disabled'}>Добавить тег</button>
+      <button class="cards-btn" onclick="Cards.untagSelected()" ${S.browseSelected.size ? '' : 'disabled'}>Убрать тег</button>
+      <button class="cards-btn" onclick="Cards.moveSelected()" ${S.browseSelected.size ? '' : 'disabled'}>Переместить</button>
+      <button class="cards-btn danger" onclick="Cards.deleteSelected()" ${S.browseSelected.size ? '' : 'disabled'}>Удалить</button>`;
+  }
+
+  const browseEmptyHtml = () => S.browseQuery
+    ? `<div class="cards-empty">По запросу «${esc(S.browseQuery)}» ничего не нашлось</div>`
+    : '<div class="cards-empty">В колоде пока нет слов</div>';
+
+  function renderBrowse(el) {
+    const notes = notesInDeck(S.deckId);
+    const tags = [...new Set(notes.flatMap(n => n.tags || []))].sort();
+    const filtered = currentNotes();
     el.innerHTML = `
-      <div class="cards-head"><div class="cards-title small">Карточки</div><div class="cards-head-deck">${esc(deckPath(S.deckId))} · ${filtered.length}</div></div>
+      <div class="cards-head"><div class="cards-title small">Карточки</div><div class="cards-head-deck">${esc(deckPath(S.deckId))} · <span id="browseCount">${filtered.length}</span></div></div>
       <div class="cards-panel">
-        <div class="cards-actions wrap">
-          <select class="cards-select" onchange="Cards.setTagFilter(this.value)">
-            <option value="">все теги</option>${tags.map(t => `<option value="${esc(t)}" ${t === S.tagFilter ? 'selected' : ''}>#${esc(t)}</option>`).join('')}
-          </select>
-          <button class="cards-btn" onclick="Cards.study('${S.deckId}')">Учить ${S.tagFilter ? '#' + esc(S.tagFilter) : 'колоду'}</button>
-          <button class="cards-btn" onclick="Cards.selectAll(${S.browseSelected.size === filtered.length && filtered.length ? 'false' : 'true'})">${S.browseSelected.size === filtered.length && filtered.length ? 'Снять выделение' : 'Выделить все'}</button>
-          <button class="cards-btn" onclick="Cards.tagSelected()" ${S.browseSelected.size ? '' : 'disabled'}>Добавить тег</button>
-          <button class="cards-btn" onclick="Cards.untagSelected()" ${S.browseSelected.size ? '' : 'disabled'}>Убрать тег</button>
-          <button class="cards-btn" onclick="Cards.moveSelected()" ${S.browseSelected.size ? '' : 'disabled'}>Переместить</button>
-          <button class="cards-btn danger" onclick="Cards.deleteSelected()" ${S.browseSelected.size ? '' : 'disabled'}>Удалить</button>
+        <div class="cards-search-wrap">
+          <input class="cards-search" id="browseSearch" type="text" value="${esc(S.browseQuery)}" placeholder="Поиск по колоде: слово, перевод, пример…"
+            autocomplete="off" spellcheck="false" oninput="Cards.setBrowseQuery(this.value)">
+          <span class="cards-search-icon">${svgIcon('search')}</span>
         </div>
-        <div class="browse-list">${rows || '<div class="cards-empty">В колоде пока нет слов</div>'}</div>
+        <div class="cards-actions wrap" id="browseToolbar">${browseToolbarHtml(filtered, tags)}</div>
+        <div class="browse-list" id="browseList">${browseRowsHtml(filtered) || browseEmptyHtml()}</div>
       </div>
 `;
+  }
+
+  // Перерисовываем только список и панель: полный render убил бы фокус в поле поиска
+  function setBrowseQuery(v) {
+    S.browseQuery = v;
+    const notes = notesInDeck(S.deckId);
+    const tags = [...new Set(notes.flatMap(n => n.tags || []))].sort();
+    const filtered = currentNotes();
+    const list = $('browseList'); if (list) list.innerHTML = browseRowsHtml(filtered) || browseEmptyHtml();
+    const cnt = $('browseCount'); if (cnt) cnt.textContent = filtered.length;
+    const tb = $('browseToolbar'); if (tb) tb.innerHTML = browseToolbarHtml(filtered, tags);
   }
 
   // ── Действия: колоды ─────────────────────────────────────────────────────────
@@ -903,7 +930,19 @@ ${JSON.stringify(list)}`;
   }
 
   // ── Действия: обзор и теги ───────────────────────────────────────────────────
-  const currentNotes = () => { const notes = notesInDeck(S.deckId); return S.tagFilter ? notes.filter(n => (n.tags || []).includes(S.tagFilter)) : notes; };
+  // Что сейчас видно в списке карточек: тег и строка поиска. Через это же смотрит «выделить все»,
+  // иначе кнопка выделяла бы и то, что скрыто фильтром.
+  const normFind = s => String(s || '').toLowerCase().replace(/ё/g, 'е')
+    .replace(/[A-Za-zÀ-ÿ]+/g, w => w.normalize('NFD').replace(/[̀-ͯ]/g, ''));
+  function noteMatches(n, q) {
+    return normFind([n.word, n.translation, n.example, n.meaning, n.pos, (n.tags || []).join(' ')].join(' ')).includes(q);
+  }
+  const currentNotes = () => {
+    let notes = notesInDeck(S.deckId);
+    if (S.tagFilter) notes = notes.filter(n => (n.tags || []).includes(S.tagFilter));
+    const q = normFind(S.browseQuery).trim();
+    return q ? notes.filter(n => noteMatches(n, q)) : notes;
+  };
   async function patchNotes(ids, fn) {
     for (const id of ids) { const n = noteById(id); if (!n) continue; const body = fn(n); if (!body) continue; await sb(`notes?id=eq.${id}`, { method: 'PATCH', body }); Object.assign(n, body); }
   }
@@ -1170,7 +1209,8 @@ ${JSON.stringify(list)}`;
     buildFromText, importFile, saveBuild,
     toggleItem(i, v) { S.build.items[i].include = v; render(); },
     resetBuild() { S.build = null; render(); },
-    browse(id) { pushView('browse'); S.deckId = id; S.view = 'browse'; S.tagFilter = ''; S.browseSelected.clear(); render(); },
+    browse(id) { pushView('browse'); S.deckId = id; S.view = 'browse'; S.tagFilter = ''; S.browseQuery = ''; S.browseSelected.clear(); render(); },
+    setBrowseQuery,
     stats(id) { pushView('stats'); S.statsDeckId = id || null; S.statsMonth = 0; S.view = 'stats'; render(); },
     statsMonth(delta) { S.statsMonth = Math.min(0, (S.statsMonth || 0) + delta); render(); },
     shareDeck, copyShare, revokeShare, processPendingShare,
