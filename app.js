@@ -898,7 +898,8 @@ function fdStripStress(form) {
 }
 
 // Словоформа: помечена тегом «form of»/«alt of» либо описана как «inflection of cercare:»
-const fdIsFormOf = s => (s.tags || []).some(t => t === 'form of' || t === 'alt of') || /^inflection of \S+/i.test(s.definition || '');
+// «female equivalent of anziano» Викисловарь тоже помечает как форму, но это отдельное слово со своей статьёй
+const fdIsFormOf = s => !/^female (equivalent |form )?of\b/i.test(s.definition || '') && ((s.tags || []).some(t => t === 'form of' || t === 'alt of') || /^inflection of \S+/i.test(s.definition || ''));
 
 // Начальная форма из определения словоформы: «plural of casa», «inflection of cercare:», «feminine singular of porto (…)»
 function fdLemmaOf(def) {
