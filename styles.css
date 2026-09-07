@@ -3478,7 +3478,8 @@ body.mode-grammar .search-recent { background: var(--night-surface); border-colo
 
 /* ── Омографы в статье: ancora — наречие «ещё» и существительное «якорь» ── */
 /* Помета употребления: устар., диал., вульг. Ставится перед толкованием и в шапке омографа */
-.usage-tag { display: inline-block; margin-right: 8px; padding: 1px 7px; border-radius: var(--radius); background: rgba(var(--gold-rgb), .16); color: var(--gold); font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-tight); text-transform: lowercase; vertical-align: 2px; }
+/* Геометрия та же, что у .tag-chip: плашки в статье должны читаться как одна семья */
+.usage-tag { display: inline-block; margin-right: 8px; padding: 2px 8px; border-radius: var(--radius); background: rgba(var(--gold-rgb), .1); border: 1px solid rgba(var(--gold-rgb), .3); color: var(--gold); font-family: var(--font-mono); font-size: var(--fs-caption); letter-spacing: var(--ls-tight); }
 .homograph-admin-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
 .homograph-admin { margin-left: auto; display: flex; gap: 8px; }
 .homograph-hint { color: var(--muted); font-style: italic; font-size: var(--fs-small); }

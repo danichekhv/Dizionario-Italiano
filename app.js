@@ -1155,7 +1155,14 @@ const USAGE_RU = {
   rare: 'редк.', uncommon: 'редк.', literary: 'книжн.', poetic: 'поэт.', formal: 'офиц.',
   figurative: 'перен.', humorous: 'шутл.', euphemistic: 'эвфем.',
   technical: 'спец.', medicine: 'мед.', law: 'юр.', nautical: 'мор.', botany: 'бот.',
-  zoology: 'зоол.', anatomy: 'анат.', music: 'муз.', religion: 'религ.', military: 'воен.'
+  zoology: 'зоол.', anatomy: 'анат.', music: 'муз.', religion: 'религ.', military: 'воен.',
+  // Итальянские пометы: модель пишет толкование по-итальянски и часто начинает его со скобки
+  letterario: 'книжн.', raro: 'редк.', arcaico: 'устар.', antiquato: 'устар.', storico: 'истор.',
+  dialettale: 'диал.', regionale: 'регион.', volgare: 'вульг.', spregiativo: 'пренебр.',
+  familiare: 'разг.', colloquiale: 'разг.', informale: 'разг.', gergale: 'сленг',
+  figurato: 'перен.', poetico: 'поэт.', formale: 'офиц.', scherzoso: 'шутл.', eufemistico: 'эвфем.',
+  tecnico: 'спец.', medicina: 'мед.', diritto: 'юр.', marina: 'мор.', botanica: 'бот.',
+  zoologia: 'зоол.', anatomia: 'анат.', musica: 'муз.', religione: 'религ.', militare: 'воен.'
 };
 // Помета собирается и из тегов Викисловаря, и из скобки в начале толкования: «(obsolete) placed»
 function usageLabel(tags, def) {
@@ -2149,7 +2156,7 @@ function renderEntry(e) {
             ${adminVoices ? `<span class="homograph-admin"><button class="usage-edit" onclick="editVoice(${i})">править</button><button class="usage-edit" onclick="deleteVoice(${i})">удалить</button></span>` : ''}
           </div>
           ${h.russian ? `<div class="homograph-ru">${escapeHtml(h.russian)}</div>` : ''}
-          ${ms.map(m => `<div class="definition-text">${usageTag(m.label)}${makeClickable(m.definition || '')}</div>${m.example ? `<div class="example-text">${makeClickable(m.example)}</div>` : ''}`).join('')}
+          ${ms.map(m => `<div class="definition-text">${defHtml(m)}</div>${m.example ? `<div class="example-text">${makeClickable(m.example)}</div>` : ''}`).join('')}
         </div>`;
       }).join('');
       hs.style.display = '';
@@ -2195,7 +2202,7 @@ function renderEntry(e) {
       // Одно значение — без номера
       const m = e.meanings[0];
       mc.innerHTML = `
-        <div class="definition-text">${usageTag(m.label)}${makeClickable(m.definition || '—')}</div>
+        <div class="definition-text">${m.definition ? defHtml(m) : '—'}</div>
         ${m.example ? `<div class="example-text">${makeClickable(m.example)}</div>` : ''}`;
     } else {
       // Несколько значений — с нумерацией
@@ -2203,7 +2210,7 @@ function renderEntry(e) {
         <div class="meaning-item">
           <div class="meaning-num">${i + 1}</div>
           <div class="meaning-body">
-            <div class="meaning-definition">${usageTag(m.label)}${makeClickable(m.definition || '')}</div>
+            <div class="meaning-definition">${defHtml(m)}</div>
             ${m.example ? `<div class="meaning-example">${makeClickable(m.example)}</div>` : ''}
           </div>
         </div>`).join('')}
@@ -2374,6 +2381,17 @@ async function setGrammarStatus(status) {
 // Другие слова того же написания приходят из Викисловаря или от модели и нередко бывают
 // кривыми: устаревшее без пометки, современное значение отсутствует. Владелец правит руками.
 const usageTag = l => l ? `<span class="usage-tag">${escapeHtml(l)}</span>` : '';
+// «(letterario) uso elevato» — помета уже стоит плашкой, из текста её убираем, чтобы не двоилось.
+// Скобку трогаем, только если всё в ней — известные пометы: «(di un animale)» должно остаться.
+function stripUsagePrefix(def) {
+  const s = String(def || '');
+  const m = s.match(/^\s*\(([^)]*)\)\s*/);
+  if (!m) return s;
+  const parts = m[1].split(/[,;]/).map(p => p.trim().toLowerCase()).filter(Boolean);
+  return parts.length && parts.every(p => USAGE_RU[p]) ? s.slice(m[0].length) : s;
+}
+// Толкование с пометой: у статей из кэша пометы в поле нет, но скобка в тексте есть — берём оттуда
+const defHtml = m => usageTag(m.label || usageLabel([], m.definition)) + makeClickable(stripUsagePrefix(m.definition));
 const USAGE_CHOICES = ['', ...new Set(Object.values(USAGE_RU))];
 
 async function saveCurrentEntry() {
