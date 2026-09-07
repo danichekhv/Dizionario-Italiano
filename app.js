@@ -3292,8 +3292,7 @@ const _sheetAddBtn = $('sheetAddBtn');
 if (_sheetAddBtn) _sheetAddBtn.addEventListener('click', () => addWordToDeck(_sheetWord, (_previewCache['d:' + _sheetWord.toLowerCase()] || {}).data));
 
 // ── Главная: бенто-плитки ─────────────────────────────────────────────────────
-// Данные плиток из трёх мест: сводка колод (Cards.homeSummary), недавние слова (localStorage)
-// и число избранных (favorites_dict). Сводка кэшируется и обновляется после ответа на карточке,
+// Данные плиток из двух мест: сводка колод (Cards.homeSummary) и число избранных (favorites_dict). Сводка кэшируется и обновляется после ответа на карточке,
 // входа и выхода — см. refreshHomeDue. Без входа колод нет, и плитки про них заменяет приглашение.
 let _homeSummary = null, _homeFavCount = null;
 const homePlural = (n, one, few, many) => { const m = n % 10, h = n % 100; return (m === 1 && h !== 11) ? one : (m >= 2 && m <= 4 && (h < 10 || h >= 20)) ? few : many; };
@@ -3301,7 +3300,7 @@ function renderHome() {
   const box = $('homeBento'); if (!box) return;
   const loggedIn = !!(window.Auth && Auth.user());
   const s = _homeSummary;
-  const head = (icon, label, right = '') => `<div class="tile-head"><div class="tile-icon">${svgIcon(icon)}</div><span class="tile-label">${label}</span>${right}</div>`;
+  const head = (icon, label) => `<div class="tile-head"><div class="tile-icon">${svgIcon(icon)}</div><span class="tile-label">${label}</span></div>`;
   const tiles = [];
   if (!loggedIn) {
     tiles.push(`<button class="tile w4 h2 link" onclick="Auth.require('Войдите, чтобы учить карточки')">
@@ -3333,12 +3332,7 @@ function renderHome() {
   } else {
     tiles.push(`<div class="tile w4 h2">${head('layers', 'Сегодня')}<div class="tile-sub">Считаю, что пора повторить…</div></div>`);
   }
-  // Недавние — те же, что в выпадающем списке под поиском; здесь они под рукой без фокуса в поле
-  const h = getHistory().filter(i => i.mode === 'dict').slice(0, 8);
-  tiles.push(`<div class="tile w4">
-    ${head('clock', 'Недавние', h.length ? '<button class="tile-clear" onclick="clearHistory()">очистить</button>' : '')}
-    ${h.length ? `<div class="tile-chips">${h.map(i => `<button class="history-chip" onclick="historyClick('${i.word.replace(/'/g, "\\'")}','dict')">${escapeHtml(i.word)}</button>`).join('')}</div>` : '<div class="tile-sub">Слова, которые вы искали, появятся здесь</div>'}
-  </div>`);
+  // Недавних слов здесь нет: они выпадают под полем поиска, когда оно в фокусе
   tiles.push(`<button class="tile link" onclick="openWordMap()" title="Все открытые слова и связи между ними">
     ${head('graph', 'Карта слов')}
     <div class="tile-title">Граф</div>

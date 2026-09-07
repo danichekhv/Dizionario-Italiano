@@ -3368,8 +3368,6 @@ body.mode-grammar .app-nav-btn.active .nav-badge { background: white; color: var
 .tile-icon .icon { width: 18px; height: 18px; }
 .tile-label { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); }
 .tile-count { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--muted); }
-.tile-clear { margin-left: auto; background: none; border: none; color: var(--muted); font-family: var(--font-text); font-style: italic; font-size: var(--fs-small); cursor: pointer; }
-.tile-clear:hover { color: var(--accent); }
 .tile-title { font-family: var(--font-display); font-size: var(--fs-h3); line-height: var(--lh-tight); overflow-wrap: anywhere; }
 .tile-big { font-family: var(--font-display); font-size: 40px; line-height: 1; color: var(--ink); }
 .tile-sub { font-size: var(--fs-small); color: var(--muted); font-style: italic; line-height: var(--lh-ui); }
@@ -3377,7 +3375,6 @@ body.mode-grammar .app-nav-btn.active .nav-badge { background: white; color: var
 .tile-bar { margin-top: auto; height: 5px; border-radius: var(--radius); background: rgba(var(--stone-rgb), .15); overflow: hidden; }
 .tile-bar i { display: block; height: 100%; background: var(--accent); transition: width var(--t-slow); }
 .tile-bar + .tile-bar, .tile-foot + .tile-bar { margin-top: 8px; }
-.tile-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .tile.dashed { border-style: dashed; background: transparent; box-shadow: none; align-items: center; justify-content: center; flex-direction: row; gap: 8px; color: var(--muted); font-style: italic; }
 .tile.dashed:hover { color: var(--accent); }
 .tile.dashed .icon { width: 18px; height: 18px; }
