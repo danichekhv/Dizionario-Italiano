@@ -1854,15 +1854,22 @@ function renderEntry(e) {
   else if (e.isVerb && e.auxiliary) genderEl.innerHTML = `<span class="word-aux-label">ausiliare</span><span class="word-aux">${escapeHtml(e.auxiliary)}</span>`;
   else genderEl.textContent = '';
   const alsoEl = $('wordAlso');
+  // Под словом: формы других слов (ссылки на их статьи) и омографы (ссылка вниз, к разделу «Altre voci»)
+  const POS_RU = { sostantivo: 'существительное', verbo: 'глагол', aggettivo: 'прилагательное', avverbio: 'наречие', preposizione: 'предлог', congiunzione: 'союз', pronome: 'местоимение', interiezione: 'междометие', articolo: 'артикль', numerale: 'числительное', locuzione: 'выражение' };
+  const alsoParts = [];
   if (e.alsoForms && e.alsoForms.length) {
-    alsoEl.innerHTML = 'также форма слова: ' + e.alsoForms.map(l => {
+    alsoParts.push('также форма слова: ' + e.alsoForms.map(l => {
       const safe = l.lemma.replace(/'/g, "\\'");
       return `<button type="button" title="${l.desc}" onclick="$('searchInput').value='${safe}'; lookupWord('${safe}')">${l.lemma}</button>`;
-    }).join(', ');
-    alsoEl.style.display = 'block';
-  } else {
-    alsoEl.style.display = 'none';
+    }).join(', '));
   }
+  (e.homographs || []).forEach(h => {
+    const label = POS_RU[(h.partOfSpeech || '').split(' ')[0]] || h.partOfSpeech || 'другое слово';
+    const gloss = h.russian ? h.russian.split(';')[0].trim() : (h.glosses && h.glosses[0]) || '';
+    alsoParts.push(`также ${escapeHtml(label)}: <button type="button" title="К разделу «Altre voci»" onclick="$('homographsSection').scrollIntoView({behavior:'smooth',block:'center'})">${escapeHtml(gloss)} ↓</button>`);
+  });
+  if (alsoParts.length) { alsoEl.innerHTML = alsoParts.join(' · '); alsoEl.style.display = 'block'; }
+  else alsoEl.style.display = 'none';
   if (e._pending && !e.russian?.main) {
     $('transRU').innerHTML = '<span class="pending-shimmer"></span>';
     $('transRUalt').innerHTML = '<span class="pending-shimmer short"></span>';
