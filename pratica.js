@@ -11,7 +11,7 @@
   const LESSICO = 'lessico';
   const topicList = () => (typeof GRAMMAR_SUGGESTIONS !== 'undefined' ? GRAMMAR_SUGGESTIONS : []).concat(LESSICO);
 
-  const S = { text: '', result: null, loading: false, error: '', added: new Set(), missingTable: false, noted: false };
+  const S = { text: '', result: null, loading: false, error: '', missingTable: false, noted: false };
   const root = () => $('praticaScreen');
   const esc = s => escapeHtml(s == null ? '' : String(s));
   const pluralRu = (n, one, few, many) => { const m = n % 10, h = n % 100; return (m === 1 && h !== 11) ? one : (m >= 2 && m <= 4 && (h < 10 || h >= 20)) ? few : many; };
@@ -107,7 +107,7 @@ ${text}
     if (S.loading) return;
     const cut = text.slice(0, MAX_CHARS);
     if (cut.length < text.length) showToast(`Разбираю первые ${MAX_CHARS} знаков`);
-    S.loading = true; S.error = ''; S.result = null; S.added.clear(); render();
+    S.loading = true; S.error = ''; S.result = null; render();
     try {
       // Задача не словарная, поэтому запрос идёт в Gemini: тут важны русские объяснения
       const raw = await llmJson(buildPrompt(cut), 'pratica');
@@ -218,9 +218,18 @@ ${text}
       ${S.loading ? `<div class="pr-loading">Читаю текст<span class="loading-dots"><span></span><span></span><span></span></span></div>` : ''}`;
   }
 
+  // Что уйдёт в колоду: словарная форма, а если правка не про одно слово — исправленный кусок
+  const deckWord = is => is.lemma || is.correction;
+  // Отметка «в колоде» смотрит на настоящие колоды, а не на факт нажатия: выбор колоды
+  // можно закрыть, ничего не добавив, и галочка тогда врала
+  const inDeck = is => {
+    const w = deckWord(is).toLowerCase();
+    return !!(window.Cards && Cards.allWords && Cards.allWords().includes(w));
+  };
+
   function issueHtml(res, i) {
     const is = res.issues[i];
-    const added = S.added.has(i);
+    const added = inDeck(is);
     const topicBtn = is.topic === LESSICO
       ? `<span class="tag-chip">${esc(is.topic)}</span>`
       : `<button class="tag-chip pr-topic" onclick="Pratica.openTopic('${esc(is.topic).replace(/'/g, "&#39;")}')" title="открыть правило">${esc(is.topic)}</button>`;
@@ -282,15 +291,14 @@ ${text}
     const is = res.issues[i];
     // В колоду идёт словарная форма, а не та, что стояла в предложении: учить «andato» бессмысленно,
     // учить надо «andare». Если правка была не про одно слово, кладём исправленный кусок как есть.
-    const word = is.lemma || is.correction;
     const ru = (is.lemma && is.lemmaRu) || is.translation || is.explanation;
-    // Форма словарной статьи: её ждёт Cards.addEntries, он же покажет выбор колоды
+    // Форма словарной статьи: её ждёт Cards.addEntries, он же покажет выбор колоды.
+    // Галочку здесь не ставим: слово ещё не в колоде, пользователь только увидел выбор.
     window.Cards && Cards.addEntries([{
-      word,
+      word: deckWord(is),
       russian: { main: ru },
       meanings: [{ example: sentenceAround(res, i), definition: is.explanation }]
     }]);
-    S.added.add(i); render();
   }
 
   function addWords() {
@@ -314,6 +322,9 @@ ${text}
   }
 
   // ── Публичный интерфейс ──────────────────────────────────────────────────────
+  // Слова доехали до колоды — перерисовываем, чтобы галочки встали по факту
+  document.addEventListener('cards:notes-added', () => { if (_currentState === 'pratica') render(); });
+
   window.Pratica = {
     open() { if (!S.result) S.error = ''; render(); },
     render,
@@ -323,7 +334,7 @@ ${text}
       const c = document.getElementById('prCount');
       if (c) { c.textContent = `${S.text.length} / ${MAX_CHARS}`; c.classList.toggle('over', S.text.length > MAX_CHARS); }
     },
-    reset() { S.result = null; S.error = ''; S.added.clear(); render(); const t = document.getElementById('prInput'); if (t) t.focus(); },
+    reset() { S.result = null; S.error = ''; render(); const t = document.getElementById('prInput'); if (t) t.focus(); },
     toDeck, addWords, openTopic, jumpTo,
     _state: S
   };

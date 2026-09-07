@@ -1036,6 +1036,8 @@ ${JSON.stringify(list)}`;
       S.notes.push(...notes); S.cards.push(...cards.map(c => ({ ...c, dueMs: Date.parse(c.due) || 0 })));
       showToast(`✓ ${notes.length} слов → ${deckPath(deckId)}${skipped ? ` (${skipped} уже были)` : ''}`);
       closePicker();
+      // Разбор текста показывает «в колоде» по факту, а не по нажатию: пусть перерисуется
+      document.dispatchEvent(new CustomEvent('cards:notes-added', { detail: { words: notes.map(n => n.word) } }));
       if (_currentState === 'cards') render();
       if (window.refreshHomeDue) refreshHomeDue();
     } catch (e) { showToast('⚠ ' + e.message); }
