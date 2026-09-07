@@ -1688,6 +1688,9 @@ const grammarKeys = (topic, title) => [...new Set([topic, title].filter(Boolean)
 async function lookupGrammar(topic, opts = {}) {
   if (!topic.trim()) return;
   showState('loading');
+  // Тема из справочника генерируется промптом своего типа: у таблицы форм и у правила
+  // про апостроф разные требования. Свободный запрос идёт по общему промпту ниже.
+  const canon = window.Grammatica ? Grammatica.topicByName(topic) : null;
   const prompt = `Ты эксперт по итальянской грамматике. Пользователь ищет правило по теме: "${topic}".
 
 Составь подробную грамматическую статью на РУССКОМ языке. Верни ТОЛЬКО валидный JSON без markdown:
@@ -1726,25 +1729,31 @@ async function lookupGrammar(topic, opts = {}) {
 
   const cachedGram = opts.force ? null : await sbGetTopic('grammar', topic.toLowerCase());
   if (cachedGram) {
-    _gramKeys = grammarKeys(topic, cachedGram.title);
+    _gramKeys = canon ? [...new Set([canon.slug, canon.it.toLowerCase()])] : grammarKeys(topic, cachedGram.title);
     renderGrammar(cachedGram); showState('grammar'); showCacheBadge(); addToHistory(cachedGram.title || topic, 'grammar'); return;
   }
 
   try {
-    const g = await callGemini(prompt);
+    const g = await callGemini(canon ? Grammatica.promptFor(canon) : prompt);
     if (g.error === 'not_grammar') {
       $('errorText').textContent = `"${topic}" — попробуйте другую грамматическую тему`;
       showState('error'); return;
     }
-    const titleKey = (g.title || topic).toLowerCase();
-    const topicKey = topic.toLowerCase();
     // Всё, что породила модель, это черновик. «Проверено» ставится отдельно и осознанно,
-    // иначе свежая статья по общему шаблону выглядит в справочнике как законченная.
+    // иначе свежая статья выглядит в справочнике как законченная.
     if (!g.status) g.status = 'draft';
-    _gramKeys = grammarKeys(topic, g.title);
-    await sbSave('grammar', 'topic', titleKey, g);
-    // Кэшируем и под введённым запросом: заголовок от Gemini почти никогда не совпадает с запросом
-    if (topicKey !== titleKey) await sbSave('grammar', 'topic', topicKey, g);
+    if (canon) {
+      // Каноническая тема сама задаёт заголовок, раздел, тип и смежные темы:
+      // модель ошибается в разделе, а придуманные ею смежные темы ведут в никуда
+      g.title = canon.it; g.titleRu = canon.ru; g.slug = canon.slug; g.type = canon.type;
+      g.category = Grammatica.sectionRu(canon) || g.category;
+      g.relatedTopics = Grammatica.relatedFor(canon);
+    }
+    // Ключи: для темы справочника это slug и её итальянское название, для свободного
+    // запроса — заголовок от модели и сама строка запроса
+    const keys = canon ? [canon.slug, canon.it.toLowerCase()] : grammarKeys(topic, g.title);
+    _gramKeys = [...new Set(keys)];
+    for (const k of _gramKeys) await sbSave('grammar', 'topic', k, g);
     renderGrammar(g);
     showState('grammar');
     addToHistory(g.title || topic, 'grammar');
