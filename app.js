@@ -656,18 +656,38 @@ async function wordIpa(w) {
 // итальянский Викисловарь (шаблон {{IPA|…}} в тексте статьи), и только потом приблизительная транскрипция
 // по правилам чтения. Правила ставят ударение лишь там, где оно известно наверняка: по написанному
 // акценту (città) или в двусложных словах; в остальных случаях знак ударения не ставится вовсе.
-const _itWiktIpa = {};
-async function fetchItWiktIpa(word) {
+// Итальянский Викисловарь: {{IPA|…}} и раздел {{-sill-}} с делением на слоги, где ударный слог помечен
+// акцентом («mam | mì | smo», «mè | di | co»). Слогов с акцентом хватает, чтобы построить транскрипцию по
+// правилам с верным ударением и качеством e/o даже там, где самой IPA в словаре нет.
+const _itWikt = {};
+async function fetchItWikt(word) {
   const k = word.toLowerCase();
-  if (_itWiktIpa[k] !== undefined) return _itWiktIpa[k];
+  if (_itWikt[k] !== undefined) return _itWikt[k];
+  const out = { ipa: '', accented: '' };
   try {
     const res = await fetch(`https://it.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(k)}&prop=wikitext&format=json&formatversion=2&origin=*`);
     const text = res.ok ? ((await res.json()).parse || {}).wikitext || '' : '';
     const m = text.match(/\{\{IPA\|(\/[^}|]+\/)/);
-    _itWiktIpa[k] = m ? m[1] : '';
-  } catch (e) { return ''; }
-  return _itWiktIpa[k];
+    if (m) out.ipa = m[1];
+    const s = text.match(/\{\{-sill-\}\}\s*\n([^\n]+)/);
+    if (s) {
+      let line = s[1]; const bold = line.match(/'''([^']+)'''/); if (bold) line = bold[1];
+      line = line.replace(/^[;*]\s*/, '').replace(/''[^']*''/g, '');
+      const joined = line.split('|').map(p => p.trim()).join('').replace(/[^a-zàèéìíòóùú]/gi, '').toLowerCase();
+      // Совпадает с самим словом без акцентов → берём; акцентов может быть несколько (vià…tà), главный — последний
+      if (joined && joined.normalize('NFD').replace(/[̀-ͯ]/g, '') === k.normalize('NFD').replace(/[̀-ͯ]/g, '')) {
+        const acc = [...joined].map((c, i) => /[àèéìíòóùú]/.test(c) ? i : -1).filter(i => i >= 0);
+        if (acc.length) {
+          const last = acc[acc.length - 1];
+          out.accented = [...joined].map((c, i) => (i !== last && /[àìíùú]/.test(c)) ? c.normalize('NFD')[0] : c).join('');
+        }
+      }
+    }
+    _itWikt[k] = out;
+  } catch (e) { return out; }
+  return out;
 }
+async function fetchItWiktIpa(word) { return (await fetchItWikt(word)).ipa; }
 function approxIpa(word) {
   let w = cleanQuery(word).toLowerCase().replace(/[^a-zàèéìíòóùú']/g, '');
   if (!w) return '';
@@ -732,15 +752,18 @@ async function resolveIpa(word) {
   const fd = await fetchFreeDictionary(k).catch(() => null);
   const p = fd && fd.entries.flatMap(en => en.pronunciations || []).find(x => x.type === 'ipa' && x.text);
   if (p) return { ipa: p.text, approx: false };
-  const it = await fetchItWiktIpa(k);
-  if (it) return { ipa: it, approx: false };
-  return { ipa: /\s/.test(k) ? '' : approxIpa(k), approx: true };
+  const it = await fetchItWikt(k);
+  if (it.ipa) return { ipa: it.ipa, approx: false };
+  if (/\s/.test(k)) return { ipa: '', approx: true };
+  // Слоги с ударением из итальянского Викисловаря + правила чтения: ударение и e/o из словаря, остальное по правилам
+  if (it.accented) return { ipa: approxIpa(it.accented), approx: false };
+  return { ipa: approxIpa(k), approx: true };
 }
-// Статья из кэша без транскрипции: дописываем и, если пользователь вошёл, сохраняем
+// Статья из кэша без транскрипции или с приблизительной: пробуем добыть точную и, если пользователь вошёл, сохраняем
 async function fillPhonetic(entry) {
-  if (entry.phonetic || !entry.word || entry.isPhrase) return;
+  if (!entry.word || entry.isPhrase || (entry.phonetic && !entry.phoneticApprox)) return;
   const r = await resolveIpa(entry.word);
-  if (!r.ipa) return;
+  if (!r.ipa || (entry.phonetic && r.approx)) return;
   entry.phonetic = r.ipa; entry.phoneticApprox = r.approx;
   if (currentDictEntry === entry) renderEntry(entry);
   if (window.Auth && Auth.user()) sbSave('dictionary', 'word', entry.word.toLowerCase(), entry);
