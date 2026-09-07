@@ -2512,10 +2512,10 @@ async function renderSuggest() {
   items.sort((a, b) => a.w.length - b.w.length);
   const freq = await loadFreq();
   if (inp.value.trim().toLowerCase() !== q) return; // пока грузили, ввод изменился
-  for (const w of freq) { if (items.length >= 8) break; if (w.startsWith(q) && w !== q && !items.some(i => i.w === w)) items.push({ w, src: '' }); }
+  for (const w of freq) { if (items.length >= 10) break; if (w.startsWith(q) && w !== q && !items.some(i => i.w === w)) items.push({ w, src: '' }); }
   if (!items.length) { hideRecent(); return; }
   _sugIndex = -1;
-  sec.innerHTML = `<div class="suggest-list">${items.slice(0, 8).map(i =>
+  sec.innerHTML = `<div class="suggest-list">${items.slice(0, 10).map(i =>
     `<button class="suggest-item" onmousedown="event.preventDefault()" onclick="pickSuggest('${i.w.replace(/'/g, "\\'")}')"><span><b>${escapeHtml(q)}</b>${escapeHtml(i.w.slice(q.length))}</span>${i.src ? `<span class="suggest-src">${i.src}</span>` : ''}</button>`).join('')}</div>`;
   sec.style.display = 'block';
 }

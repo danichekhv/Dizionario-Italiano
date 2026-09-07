@@ -3322,3 +3322,6 @@ body.mode-grammar .search-recent { background: var(--night-surface); border-colo
 /* Список подсказок на телефоне: половину экрана занимает клавиатура, поэтому список прокручивается сам,
    а не тянет за собой страницу */
 .search-recent { max-height: min(40vh, 320px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+/* На телефоне видно четыре строки подсказок, остальные шесть — прокруткой внутри списка: окно должно
+   целиком помещаться над клавиатурой, иначе его низ уходит под неё и прокрутка «упирается» */
+@media (max-width: 640px) { .search-recent { max-height: 196px; } .suggest-item { padding: 10px 8px; } }
