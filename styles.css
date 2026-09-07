@@ -3426,8 +3426,9 @@ body.mode-grammar .crumbs { color: var(--night-muted); } body.mode-grammar .crum
   .tile.w3, .tile.w4, .tile.w6 { grid-column: span 2; }
   .tile-title { font-size: var(--fs-lead); }
   .tile-big { font-size: 32px; }
-  /* Кнопки в подвале плитки делят строку поровну, а не по длине надписи */
-  .tile-foot .cards-btn { flex: 1 1 0; min-width: 0; text-align: center; }
+  /* Кнопки в подвале плитки делят строку поровну, а не по длине надписи.
+     Отступы уже: при широких надпись переносится и кнопка становится вдвое выше соседней. */
+  .tile-foot .cards-btn { flex: 1 1 0; min-width: 0; padding-left: 8px; padding-right: 8px; text-align: center; }
 }
 
 /* Недавние слова под полем поиска */
