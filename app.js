@@ -619,8 +619,16 @@ function pickModel(task) {
 }
 async function llmJson(prompt, task) {
   if (pickModel(task) === 'fast') {
-    try { const r = await callFast(prompt); _lastDictLlm = fastLabel(); return r; }
-    catch(e) { if (isKeyError(e.message)) throw e; noteFastFallback(e); }
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try { const r = await callFast(prompt); _lastDictLlm = fastLabel(); return r; }
+      catch(e) {
+        if (isKeyError(e.message)) throw e;
+        // Проверку статьи нельзя молча передавать Gemini: он же её и писал и подтвердит собственные
+        // ошибки. Одна повторная попытка через паузу (лимиты), дальше честный отказ.
+        if (task === 'check') { if (attempt === 0) { await new Promise(r => setTimeout(r, 2500)); continue; } throw e; }
+        noteFastFallback(e); break;
+      }
+    }
   }
   const r = await callGemini(prompt);
   _lastDictLlm = 'Gemini';
@@ -1027,7 +1035,8 @@ function fdEntryScore(en) {
     const par = fdSenseLabel(s.definition).toLowerCase().split(/[,;]\s*/);
     return FD_RESTRICTED.some(t => tags.includes(t) || par.includes(t));
   });
-  return (restricted ? 0 : 100) + Math.min(senses.length, 10);
+  // Дальше порядок Викисловаря: бонус за число значений делал у «rosso» главным существительное «красный цвет»
+  return restricted ? 0 : 100;
 }
 function fdPickPrimary(entries) {
   return entries.map((en, i) => ({ en, i, score: fdEntryScore(en) })).filter(x => x.score >= 0)
@@ -1416,7 +1425,8 @@ ${homoLines}` : ''}
 Return ONLY valid JSON, no markdown:
 {${opts.skipRussian ? '' : `
   "russian": { "main": "primary Russian translation", "alternatives": "2-3 alternatives semicolon-separated or empty" },`}
-  "category": "${CATEGORY_PROMPT}",
+  "category": "${CATEGORY_PROMPT}",${!base.gender && /^sostantivo/.test(base.partOfSpeech || '') ? `
+  "gender": "m. or f. or m./f. — Wiktionary did not record it",` : ''}
   "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian", "label": "usage label or empty string" } ]${needRelated ? `,
   "relatedWords": ["3-5 semantically related Italian words (synonyms, antonyms, thematic)"]` : ''}${homos.length ? `,
   "homographs": [ { "russian": "primary Russian translation; alternatives after ;", "label": "usage label or empty string", "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian", "label": "usage label or empty string" } ] } ]` : ''}
@@ -1471,21 +1481,27 @@ async function verifyArticle(entry, base) {
     meanings: (entry.meanings || []).map(m => ({ definition: m.definition, label: m.label || '' })),
     homographs: (entry.homographs || []).map(h => ({ partOfSpeech: h.partOfSpeech, russian: h.russian, label: h.label || '' }))
   };
-  const prompt = `You are checking a dictionary entry for the Italian word "${entry.word}" written by another model. Be strict and concrete.
-${senses ? `Ground truth from Wiktionary — senses of THIS word (English glosses, Wiktionary order):\n${senses}\n` : 'Wiktionary has no entry for this word; check internal consistency only.\n'}${homos ? `Other words with the same spelling, NOT this word:\n${homos}\n` : ''}
+  // Пометы в статье — русские сокращения тегов Викисловаря. Без этой таблицы проверяющий требовал
+  // писать их по-итальянски и браковал «муз.» за то, что у Викисловаря «другая аббревиатура».
+  const groups = {}; Object.entries(USAGE_RU).forEach(([en, ru]) => { (groups[ru] = groups[ru] || []).push(en); });
+  const labelMap = Object.entries(groups).map(([ru, ens]) => `${ru} = ${ens.join('/')}`).join('; ');
+  const prompt = `You are checking a dictionary entry for the Italian word "${entry.word}" written by another model. Report real errors; do not invent problems.
+${senses ? `Reference from Wiktionary — senses of THIS word (English glosses, Wiktionary order; the list may be incomplete and its order is historical, not by frequency):\n${senses}\n` : 'Wiktionary has no entry for this word; judge from your own knowledge of Italian.\n'}${homos ? `Other words with the same spelling, NOT this word:\n${homos}\n` : ''}
 The entry:
 ${JSON.stringify(article)}
 
-Checks:
-1. russian.main correctly translates THIS word's main sense${senses ? ' (sense 1 above)' : ''}; not a homograph, not a transliteration.
-2. Every meaning is a genuine sense of this word, written in Italian, not a copy of an English gloss.
-3. Labels (устар., диал., редк., вульг., книжн., перен. …) describe how the ITALIAN sense is used, never the Russian translation word. A label is correct when Wiktionary marks that sense the same way (its parenthetical or the "Wiktionary marks it" note above), and wrong when it is missing there or present where Wiktionary has no such mark. Do not judge whether the Russian word itself is old or rare.
-4. partOfSpeech and gender agree with Wiktionary.
-5. Each homograph's russian translates that homograph, not the main word.
-Return ONLY valid JSON: { "ok": true/false, "issues": ["one short line per REAL problem, in Russian"] }. ok is false only for real errors, never for style. When in doubt, ok is true.`;
+Rules:
+- The writer was told to cover the Wiktionary senses AND add frequent present-day senses of this word that Wiktionary lacks. A meaning beyond the list is fine if it is a genuine common sense of this word ("andare" = to work/function, "vita" = waist, "tempo" = musical tempo). It is an error only if it is not a sense of this word at all, or belongs to a homograph listed above.
+- russian.main must translate the most common present-day sense of this word, consistent with the list. Wiktionary's first line is not automatically the most common.
+- Labels describe how the ITALIAN sense is used, never the Russian word. They are Russian abbreviations by design: ${labelMap}. A label is questionable only if it contradicts Wiktionary's mark for that sense or is clearly wrong for Italian; its spelling and language are never a problem.
+
+errors (make ok false): russian.main is a wrong translation; a meaning is invented or belongs to a homograph; a definition is an English gloss or not Italian; partOfSpeech or gender contradicts Wiktionary; a homograph's russian translates the wrong word.
+warnings (ok stays true): doubtful labels, weak examples, missing common sense, style.
+Return ONLY valid JSON: { "ok": true/false, "errors": ["one short line each, in Russian"], "warnings": ["one short line each, in Russian"] }. When in doubt, it is a warning, not an error.`;
   const r = await llmJson(prompt, 'check');
-  const issues = (Array.isArray(r && r.issues) ? r.issues : []).map(s => String(s).trim()).filter(Boolean).slice(0, 6);
-  return { ok: !!(r && r.ok) && !issues.length, issues, by: _lastDictLlm };
+  const clean = a => (Array.isArray(a) ? a : []).map(s => String(s).trim()).filter(Boolean).slice(0, 6);
+  const errors = clean(r && (r.errors || r.issues)), warnings = clean(r && r.warnings);
+  return { ok: !errors.length && (r ? r.ok !== false || !errors.length : false), errors, warnings, by: _lastDictLlm };
 }
 
 // Сохранить, показать, проверить второй моделью, сохранить статус. Проверка идёт после первого
@@ -1498,12 +1514,12 @@ async function finalizeArticle(entry, query, base, opts = {}) {
   if (!opts.silent && currentDictWord === key) renderEntry(entry);
   try {
     const v = await verifyArticle(entry, base);
-    entry.status = v.ok ? 'checked' : 'flagged'; entry.checkNotes = v.issues;
+    entry.status = v.ok ? 'checked' : 'flagged'; entry.checkNotes = v.errors; entry.checkWarnings = v.warnings;
     entry.sources = { ...(entry.sources || {}), check: v.by };
-  } catch (e) { entry.checkNotes = ['проверка не удалась: ' + (e.message || '')]; }
+  } catch (e) { entry.checkNotes = ['проверка не удалась: ' + (e.message || '')]; entry.checkWarnings = []; }
   await save();
   if (!opts.silent && currentDictWord === key && currentDictEntry && String(currentDictEntry.word || '').toLowerCase() === key) {
-    currentDictEntry.status = entry.status; currentDictEntry.checkNotes = entry.checkNotes; currentDictEntry.sources = entry.sources;
+    currentDictEntry.status = entry.status; currentDictEntry.checkNotes = entry.checkNotes; currentDictEntry.checkWarnings = entry.checkWarnings; currentDictEntry.sources = entry.sources;
     renderSourceLine(currentDictEntry);
   }
   return entry;
@@ -1546,8 +1562,11 @@ function fdMergeCompletion(base, extra, fastRu) {
       meanings: Array.isArray(x.meanings) ? x.meanings.filter(m => m && m.definition).map(m => ({ definition: m.definition, example: m.example || '', label: usageLabel([m.label], '') })) : [] };
   });
   const { senses, _pending, ...rest } = base;
+  // Род берём у Викисловаря; если он его не записал (так у «sito»), принимаем от модели, но только m./f./m./f.
+  const modelGender = String((extra && extra.gender) || '').trim();
   return {
     ...rest,
+    gender: rest.gender || (/^(m\.|f\.|m\.\/f\.)$/.test(modelGender) ? modelGender : rest.gender),
     homographs,
     russian: fastRu && fastRu.main
       ? fastRu
@@ -2563,7 +2582,7 @@ function renderSourceLine(e) {
   }
   const admin = !!(window.Auth && Auth.isAdmin && Auth.isAdmin());
   const by = e.sources && e.sources.check ? ` (${escapeHtml(e.sources.check)})` : '';
-  if (e.status === 'checked') parts.push(`<span class="src-ok">проверено${by} ✓</span>`);
+  if (e.status === 'checked') parts.push(`<span class="src-ok">проверено${by} ✓</span>${admin && (e.checkWarnings || []).length ? `<ul class="src-notes">${e.checkWarnings.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : ''}`);
   else if (e.status === 'flagged') parts.push(`<span class="src-warn" title="${escapeHtml((e.checkNotes || []).join('\n'))}">⚠ проверка нашла расхождения${by}</span>${admin && (e.checkNotes || []).length ? `<ul class="src-notes">${e.checkNotes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : ''}`);
   else if (admin && e.pipeline === 2) parts.push('<span class="src-muted">не проверено</span>');
   else if (admin && !e._pending) parts.push('<span class="src-muted">старый конвейер</span>');
