@@ -32,7 +32,9 @@
     { word: 'perché',  pos: /congiunzione|avverbio/, ru: /почему|потому/i }
   ];
 
-  const S = { rows: {}, running: false, stop: false, batch: { running: false, done: 0, total: 0, log: [], counts: {} } };
+  const S = { rows: {}, running: false, stop: false, batch: { running: false, mode: '', done: 0, total: 0, log: [], counts: {} } };
+  // После срыва в лимит сбавляем темп на минуту, иначе следующие слова тоже останутся без проверки
+  const pause = async base => { const recent = Date.now() - (window._lastRateLimitAt || 0) < 60000; await sleep(recent ? 15000 : base); };
   const root = () => $('qaScreen');
   const esc = s => escapeHtml(s == null ? '' : String(s));
   const isAdmin = () => !!(window.Auth && Auth.isAdmin && Auth.isAdmin());
@@ -70,9 +72,35 @@
                  llm: e.llm || '', checker: (e.sources && e.sources.check) || '' } };
       } catch (err) { S.rows[g.word] = { state: 'error', note: err.message || String(err) }; }
       render();
-      await sleep(2000); // лимиты запросов в минуту у бесплатных ключей
+      await pause(2000);
     }
     S.running = false; render();
+  }
+
+  // ── Перепроверка: только вердикт, без перегенерации ──────────────────────────
+  // Всё, что не дождалось проверки из-за лимитов, лежит черновиком с пометкой. Статью писать заново
+  // не нужно, нужен только проверяющий.
+  async function runRecheck() {
+    const B = S.batch;
+    if (B.running) return;
+    if (!(window.Auth && Auth.user())) { showToast('Нужно войти'); return; }
+    const res = await fetch(`${SB_URL}/rest/v1/dictionary?select=word,p:data->>pipeline,st:data->>status&limit=3000`, { headers: SB_H });
+    if (!res.ok) { showToast('Не удалось прочитать кэш: HTTP ' + res.status); return; }
+    const words = [...new Set((await res.json()).filter(r => r.p === '2' && r.st === 'draft' && r.word && !/\s/.test(r.word)).map(r => r.word))];
+    if (!words.length) { showToast('Непроверенных статей нет'); return; }
+    B.running = true; B.mode = 'Перепроверка'; S.stop = false; B.done = 0; B.total = words.length; B.log = []; B.counts = { checked: 0, flagged: 0, draft: 0, error: 0 }; render();
+    for (const w of words) {
+      if (S.stop) break;
+      try {
+        const e = await recheckArticle(w);
+        const st = e ? (e.status || 'draft') : 'error';
+        B.counts[st] = (B.counts[st] || 0) + 1;
+        B.log.unshift(`${w} — ${st}${e && e.checkNotes && e.checkNotes.length ? ': ' + e.checkNotes.join('; ') : ''}`);
+      } catch (err) { B.counts.error++; B.log.unshift(`${w} — ошибка: ${err.message || err}`); }
+      B.done++; if (B.log.length > 200) B.log.length = 200; render();
+      await pause(1500);
+    }
+    B.running = false; render();
   }
 
   // ── Пересборка кэша: всё, что собрано не текущим конвейером ──────────────────
@@ -86,7 +114,7 @@
     const words = [...new Set((await res.json()).filter(r => r.p !== '2' && r.word && !/\s/.test(r.word)).map(r => r.word))];
     if (!words.length) { showToast('Весь кэш уже собран новым конвейером'); return; }
     if (!confirm(`Пересобрать ${words.length} статей? Это два запроса к моделям на каждую, можно остановить в любой момент.`)) return;
-    B.running = true; S.stop = false; B.done = 0; B.total = words.length; B.log = []; B.counts = { checked: 0, flagged: 0, draft: 0, error: 0 }; render();
+    B.running = true; B.mode = 'Пересборка'; S.stop = false; B.done = 0; B.total = words.length; B.log = []; B.counts = { checked: 0, flagged: 0, draft: 0, error: 0 }; render();
     for (const w of words) {
       if (S.stop) break;
       try {
@@ -96,7 +124,7 @@
         B.log.unshift(`${w} — ${st}${e && e.checkNotes && e.checkNotes.length ? ': ' + e.checkNotes.join('; ') : ''}`);
       } catch (err) { B.counts.error++; B.log.unshift(`${w} — ошибка: ${err.message || err}`); }
       B.done++; if (B.log.length > 200) B.log.length = 200; render();
-      await sleep(1500);
+      await pause(1500);
     }
     B.running = false; render();
   }
@@ -137,12 +165,12 @@
         <tbody>${GOLDEN.map(rowHtml).join('')}</tbody>
       </table></div>
       <div class="qa-batch">
-        <div class="cards-title small">Пересборка кэша</div>
-        <div class="qa-intro">Все статьи, собранные старой склейкой, пересобираются новым конвейером и проверяются. Уже пересобранные пропускаются, поэтому процесс можно останавливать и продолжать.</div>
-        ${B.running || B.total ? `<div class="qa-progress"><i style="width:${B.total ? Math.round(B.done / B.total * 100) : 0}%"></i></div>
+        <div class="cards-title small">Кэш целиком</div>
+        <div class="qa-intro">«Пересобрать» заново пишет и проверяет всё, что собрано старой склейкой; уже пересобранное пропускается. «Перепроверить» трогает только статьи без вердикта: те, что не дождались проверяющего из-за лимитов, и статью не переписывает. После срыва в лимит темп сам сбавляется на минуту.</div>
+        ${B.running || B.total ? `<div class="qa-note">${esc(B.mode)}</div><div class="qa-progress"><i style="width:${B.total ? Math.round(B.done / B.total * 100) : 0}%"></i></div>
           <div class="qa-note">${B.done} / ${B.total} · проверено ${B.counts.checked || 0} · с расхождениями ${B.counts.flagged || 0} · не проверено ${B.counts.draft || 0} · ошибок ${B.counts.error || 0}</div>
           <div class="qa-log">${B.log.map(esc).join('<br>')}</div>` : ''}
-        ${B.running ? '' : `<div class="cards-actions"><button class="cards-btn" onclick="Qa.runBatch()">${svgIcon('refresh')} Пересобрать кэш</button></div>`}
+        ${B.running ? '' : `<div class="cards-actions"><button class="cards-btn" onclick="Qa.runBatch()">${svgIcon('refresh')} Пересобрать кэш</button><button class="cards-btn" onclick="Qa.runRecheck()">${svgIcon('chart')} Перепроверить непроверенные</button></div>`}
       </div>`;
   }
 
@@ -151,7 +179,7 @@
       if (!isAdmin()) { showToast('Проверка словаря доступна только владельцу сайта'); return; }
       currentMode = 'dict'; applyModeUI('dict'); showState('qa'); render();
     },
-    render, runGolden, runBatch,
+    render, runGolden, runBatch, runRecheck,
     stop() { S.stop = true; showToast('Останавливаю после текущего слова'); },
     _golden: GOLDEN, _state: S
   };

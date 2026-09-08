@@ -556,8 +556,15 @@ const fastHeaders = () => ({ 'Content-Type': 'application/json', 'Authorization'
 async function fastError(response) {
   const data = await response.json().catch(() => ({}));
   const msg = data.error?.message || data.message || `HTTP ${response.status}`;
-  return new Error(`${FAST_PROVIDERS[getFastProvider()].name}: ${msg}`);
+  const err = new Error(`${FAST_PROVIDERS[getFastProvider()].name}: ${msg}`);
+  err.status = response.status;
+  // Groq присылает, сколько ждать; без заголовка ждём по своей лесенке
+  const ra = parseFloat(response.headers.get('retry-after') || '');
+  if (!isNaN(ra)) err.retryAfter = ra;
+  return err;
 }
+const isRateLimit = e => !!e && (e.status === 429 || /429|rate limit|quota|RESOURCE_EXHAUSTED|too many requests/i.test(e.message || ''));
+let _lastRateLimitAt = 0; // пакетные прогоны смотрят сюда и сбавляют темп
 
 async function callFast(prompt) {
   const response = await fetch(FAST_PROVIDERS[getFastProvider()].url, { method: 'POST', headers: fastHeaders(), body: fastBody(prompt, false) });
@@ -619,13 +626,20 @@ function pickModel(task) {
 }
 async function llmJson(prompt, task) {
   if (pickModel(task) === 'fast') {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    // Проверку статьи нельзя молча передавать Gemini: он же её и писал и подтвердит собственные ошибки.
+    // Лимит у бесплатного ключа минутный, поэтому ждём по-настоящему: retry-after или 5, 15, 30 секунд.
+    const CHECK_BACKOFF = [5000, 15000, 30000];
+    for (let attempt = 0; attempt < CHECK_BACKOFF.length + 1; attempt++) {
       try { const r = await callFast(prompt); _lastDictLlm = fastLabel(); return r; }
       catch(e) {
         if (isKeyError(e.message)) throw e;
-        // Проверку статьи нельзя молча передавать Gemini: он же её и писал и подтвердит собственные
-        // ошибки. Одна повторная попытка через паузу (лимиты), дальше честный отказ.
-        if (task === 'check') { if (attempt === 0) { await new Promise(r => setTimeout(r, 2500)); continue; } throw e; }
+        if (isRateLimit(e)) _lastRateLimitAt = Date.now();
+        if (task === 'check') {
+          if (attempt >= CHECK_BACKOFF.length) throw e;
+          const wait = isRateLimit(e) ? Math.max(CHECK_BACKOFF[attempt], (e.retryAfter || 0) * 1000 + 500) : 2500;
+          await new Promise(r => setTimeout(r, wait));
+          continue;
+        }
         noteFastFallback(e); break;
       }
     }
@@ -1489,11 +1503,33 @@ Return ONLY valid JSON: { "verdicts": [ { "n": 1, "genuine": true/false, "note":
 }
 
 async function verifyArticle(entry, base) {
-  const [s, f] = await Promise.allSettled([verifySenses(entry), verifyArticleFacts(entry, base)]);
-  if (f.status === 'rejected') throw f.reason; // без сверки фактов вердикта нет
-  const errors = [...(s.status === 'fulfilled' ? s.value.errors : []), ...f.value.errors].slice(0, 8);
-  const warnings = [...f.value.warnings, ...(s.status === 'rejected' ? ['проверка значений не удалась: ' + (s.reason && s.reason.message || '')] : [])];
-  return { ok: !errors.length, errors, warnings, by: f.value.by };
+  // Два вопроса по очереди, а не разом: два одновременных запроса к Groq на каждое слово упирались в лимит
+  const f = await verifyArticleFacts(entry, base); // без сверки фактов вердикта нет — ошибка уходит наверх
+  let sErrors = [], sWarn = [];
+  try { sErrors = (await verifySenses(entry)).errors; }
+  catch (e) { sWarn = ['проверка значений не удалась: ' + (e.message || '')]; }
+  const errors = [...sErrors, ...f.errors].slice(0, 8);
+  return { ok: !errors.length, errors, warnings: [...f.warnings, ...sWarn], by: f.by };
+}
+
+// Перепроверка без перегенерации: статья в кэше уже есть, не хватает только вердикта.
+// Факты Викисловаря добираем заново, это бесплатно и без моделей.
+async function recheckArticle(word) {
+  const entry = await sbGet('dictionary', String(word).toLowerCase());
+  if (!entry || !entry.word) return null;
+  let base = null;
+  if (entry.source === 'wiktionary') {
+    try { const fd = await fetchFreeDictionary(entry.word); const m = fd && mapFreeDictionary(fd); if (m && !m.lemma && !m.lemmas) base = m; } catch (e) {}
+  }
+  const v = await verifyArticle(entry, base);
+  entry.status = v.ok ? 'checked' : 'flagged'; entry.checkNotes = v.errors; entry.checkWarnings = v.warnings;
+  entry.sources = { ...(entry.sources || {}), check: v.by };
+  await sbSave('dictionary', 'word', entry.word.toLowerCase(), entry);
+  if (currentDictEntry && String(currentDictEntry.word || '').toLowerCase() === entry.word.toLowerCase()) {
+    Object.assign(currentDictEntry, { status: entry.status, checkNotes: entry.checkNotes, checkWarnings: entry.checkWarnings, sources: entry.sources });
+    renderSourceLine(currentDictEntry);
+  }
+  return entry;
 }
 
 async function verifyArticleFacts(entry, base) {
