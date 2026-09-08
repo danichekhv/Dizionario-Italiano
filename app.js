@@ -1015,6 +1015,25 @@ function fdLemmaOf(def) {
 const FD_FORM_RU = { plural: 'мн. ч.', participle: 'причастие', gerund: 'герундий', imperative: 'повелит. накл.', subjunctive: 'сослагат. накл.', past: 'прош. вр.', future: 'буд. вр.', conditional: 'условн. накл.' };
 const FD_SKIP_FORM_TAGS = ['alt of', 'obsolete', 'archaic', 'poetic', 'literary', 'dialectal', 'rare', 'Latinism'];
 
+// Какую из статей одного написания делать главной. Викисловарь идёт по этимологии, и у «sito»
+// первым стоит устаревшее прилагательное «situated», а существительное «место, сайт» — вторым.
+// Главной должна быть статья, которой пользуются сегодня: без ограничительных помет и с большим числом значений.
+const FD_RESTRICTED = ['obsolete', 'archaic', 'dated', 'rare', 'dialectal', 'regional', 'poetic', 'literary', 'historical'];
+function fdEntryScore(en) {
+  const senses = (en.senses || []).filter(s => !fdIsFormOf(s));
+  if (!senses.length) return -1;
+  const restricted = senses.every(s => {
+    const tags = (s.tags || []).map(t => String(t).toLowerCase());
+    const par = fdSenseLabel(s.definition).toLowerCase().split(/[,;]\s*/);
+    return FD_RESTRICTED.some(t => tags.includes(t) || par.includes(t));
+  });
+  return (restricted ? 0 : 100) + Math.min(senses.length, 10);
+}
+function fdPickPrimary(entries) {
+  return entries.map((en, i) => ({ en, i, score: fdEntryScore(en) })).filter(x => x.score >= 0)
+    .sort((a, b) => b.score - a.score || a.i - b.i).map(x => x.en)[0] || null;
+}
+
 // Все начальные формы, к которым отсылает слово: cerchi → cerchio (сущ.), cercare, cerchiare (гл.)
 function fdCollectLemmas(entries, skipEntry) {
   const out = [];
@@ -1202,7 +1221,7 @@ function usageLabel(tags, def) {
 // Возвращает { lemma } для словоформ, null — если данных недостаточно (тогда всё генерирует Gemini).
 function mapFreeDictionary(fd, opts = {}) {
   const entries = fd.entries;
-  const primary = entries.find(en => (en.senses || []).some(s => !fdIsFormOf(s)));
+  const primary = fdPickPrimary(entries);
   const word = fd.word;
   if (!primary) {
     // Все статьи — словоформы («sono» → essere, «case» → casa). Если начальных форм несколько
@@ -1384,7 +1403,7 @@ function fdCompletionPrompt(base, opts = {}) {
   // Викисловарь у некоторых слов не знает современного значения (у «sito» нет «сайта»),
   // а порядок у него исторический, поэтому устаревшее идёт первым. И то и другое чиним здесь.
   const meaningsRule = base.senses.length
-    ? `cover every known sense above, then add any frequent present-day sense that is missing from that list (for "sito" that would be "website"). Order by how common the sense is in Italian today: obsolete, dialectal and rare senses go last. Reuse a given example if it is a natural full sentence, otherwise write your own.`
+    ? `cover every known sense above, then add any frequent present-day sense of THIS word (same part of speech) that is missing from that list. Never add a sense that belongs to one of the homographs listed below — those are other words. Order by how common the sense is in Italian today: obsolete, dialectal and rare senses go last. Reuse a given example if it is a natural full sentence, otherwise write your own.`
     : `1-3 items ordered from most to least frequent usage.`;
   const LABELS = 'obsolete, archaic, dialectal, regional, vulgar, offensive, slang, colloquial, rare, literary, poetic, formal, figurative, humorous, technical, medicine, law, nautical, botany, zoology, military';
   return `You are an expert Italian linguist. Complete the dictionary entry for the Italian ${base.partOfSpeech} "${base.word}"${base.gender ? ` (${base.gender})` : ''}.
