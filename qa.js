@@ -66,7 +66,8 @@
         const e = await lookupWord(g.word, 0, { force: true, skipChooser: true, headless: true });
         if (!e || e.redirects) S.rows[g.word] = { state: 'error', note: e && e.redirects ? 'перенаправление на ' + e.redirects.join(', ') : 'нет статьи' };
         else S.rows[g.word] = { state: 'done', checks: check(g, e), status: e.status, notes: e.checkNotes || [], warnings: e.checkWarnings || [],
-          got: { pos: cleanPos(e.partOfSpeech), gender: e.gender || '', ru: (e.russian && e.russian.main) || '', llm: e.llm || '' } };
+          got: { pos: cleanPos(e.partOfSpeech), gender: e.gender || '', ru: (e.russian && e.russian.main) || '',
+                 llm: e.llm || '', checker: (e.sources && e.sources.check) || '' } };
       } catch (err) { S.rows[g.word] = { state: 'error', note: err.message || String(err) }; }
       render();
       await sleep(2000); // лимиты запросов в минуту у бесплатных ключей
@@ -116,7 +117,7 @@
       <td>${mark(c.ru)} <span class="qa-note">${esc(r.got.ru)}</span></td>
       <td>${mark(c.forms)}</td>
       <td>${mark(c.homos)}</td>
-      <td><span class="qa-status ${esc(r.status)}">${esc(r.status || '—')}</span>${r.notes.length ? `<div class="qa-note">${r.notes.map(esc).join('<br>')}</div>` : ''}${(r.warnings || []).length ? `<div class="qa-note" style="opacity:.7">замечания: ${r.warnings.map(esc).join('; ')}</div>` : ''}<div class="qa-note">${esc(r.got.llm)}</div></td>
+      <td><span class="qa-status ${esc(r.status)}">${esc(r.status || '—')}</span>${r.notes.length ? `<div class="qa-note">${r.notes.map(esc).join('<br>')}</div>` : ''}${(r.warnings || []).length ? `<div class="qa-note" style="opacity:.7">замечания: ${r.warnings.map(esc).join('; ')}</div>` : ''}<div class="qa-note">писал: ${esc(r.got.llm || '—')} · проверял: ${esc(r.got.checker || '—')}</div></td>
     </tr>`;
   }
   function render() {

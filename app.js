@@ -1471,7 +1471,32 @@ function validateArticle(entry, base) {
 
 // Проверка второй моделью по фактам Викисловаря: перевод того ли значения, есть ли пометы,
 // не выдумано ли. Другая модель, чем писала, иначе она подтвердит собственные ошибки.
+// Проверка в два вопроса разным контекстом. Вопрос «настоящее ли это значение» задаётся БЕЗ списка
+// Викисловаря: со списком перед глазами проверяющий браковал «vita = талия» и «andare = работать»
+// как «не из списка», даже когда именно эти примеры были вписаны в правила как разрешённые.
+async function verifySenses(entry) {
+  const ms = (entry.meanings || []).filter(m => m && m.definition);
+  if (!ms.length) return { errors: [] };
+  const prompt = `You know Italian at native level. For a learner's dictionary, the Italian ${cleanPos(entry.partOfSpeech) || 'word'} "${entry.word}" was given these definitions:
+${ms.map((m, i) => `${i + 1}. ${m.definition}`).join('\n')}
+
+For EACH definition say whether it describes a genuine sense of the word "${entry.word}" in Italian. Any register counts: standard, colloquial, figurative, technical, regional, dated. Judge from your own knowledge of Italian; there is no list to compare against. A definition is NOT genuine only if the word does not have that meaning at all, or the meaning belongs to a different word that merely looks the same.
+Return ONLY valid JSON: { "verdicts": [ { "n": 1, "genuine": true/false, "note": "short reason in Russian, only when genuine is false" } ] }`;
+  const r = await llmJson(prompt, 'check');
+  const verdicts = Array.isArray(r && r.verdicts) ? r.verdicts : [];
+  const errors = verdicts.filter(v => v && v.genuine === false).map(v => `значение ${v.n}${ms[v.n - 1] ? ` «${String(ms[v.n - 1].definition).slice(0, 60)}»` : ''} не является значением слова${v.note ? ': ' + String(v.note).trim() : ''}`);
+  return { errors: errors.slice(0, 6) };
+}
+
 async function verifyArticle(entry, base) {
+  const [s, f] = await Promise.allSettled([verifySenses(entry), verifyArticleFacts(entry, base)]);
+  if (f.status === 'rejected') throw f.reason; // без сверки фактов вердикта нет
+  const errors = [...(s.status === 'fulfilled' ? s.value.errors : []), ...f.value.errors].slice(0, 8);
+  const warnings = [...f.value.warnings, ...(s.status === 'rejected' ? ['проверка значений не удалась: ' + (s.reason && s.reason.message || '')] : [])];
+  return { ok: !errors.length, errors, warnings, by: f.value.by };
+}
+
+async function verifyArticleFacts(entry, base) {
   const senses = ((base && base.senses) || []).map((s, i) => `${i + 1}. ${s.label ? '(' + s.label + ') ' : ''}${s.gloss}`).join('\n');
   // Пометы Викисловаря передаём и для омографов: без них проверяющий решал, что «устар.» относится
   // к русскому слову «паром», а не к итальянскому значению, и браковал верную статью
@@ -1495,7 +1520,7 @@ Rules:
 - russian.main must translate the most common present-day sense of this word, consistent with the list. Wiktionary's first line is not automatically the most common.
 - Labels describe how the ITALIAN sense is used, never the Russian word. They are Russian abbreviations by design: ${labelMap}. A label is questionable only if it contradicts Wiktionary's mark for that sense or is clearly wrong for Italian; its spelling and language are never a problem.
 
-errors (make ok false): russian.main is a wrong translation; a meaning is invented or belongs to a homograph; a definition is an English gloss or not Italian; partOfSpeech or gender contradicts Wiktionary; a homograph's russian translates the wrong word.
+errors (make ok false): russian.main is a wrong translation; a meaning belongs to one of the homographs listed above; a definition is an English gloss or not Italian; partOfSpeech or gender contradicts Wiktionary; a homograph's russian translates the wrong word. Whether a meaning is a genuine sense of this word at all is checked separately — never report that here, and never report a meaning merely because it is absent from the Wiktionary list.
 warnings (ok stays true): doubtful labels, weak examples, missing common sense, style.
 Return ONLY valid JSON: { "ok": true/false, "errors": ["one short line each, in Russian"], "warnings": ["one short line each, in Russian"] }. When in doubt, it is a warning, not an error.`;
   const r = await llmJson(prompt, 'check');
