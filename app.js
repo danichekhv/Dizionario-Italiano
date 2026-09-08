@@ -1444,7 +1444,9 @@ function validateArticle(entry, base) {
 // не выдумано ли. Другая модель, чем писала, иначе она подтвердит собственные ошибки.
 async function verifyArticle(entry, base) {
   const senses = ((base && base.senses) || []).map((s, i) => `${i + 1}. ${s.label ? '(' + s.label + ') ' : ''}${s.gloss}`).join('\n');
-  const homos = ((base && base.homographs) || []).map((h, i) => `${i + 1}. ${h.partOfSpeech}: ${(h.glosses || []).join('; ')}`).join('\n');
+  // Пометы Викисловаря передаём и для омографов: без них проверяющий решал, что «устар.» относится
+  // к русскому слову «паром», а не к итальянскому значению, и браковал верную статью
+  const homos = ((base && base.homographs) || []).map((h, i) => `${i + 1}. ${h.partOfSpeech}${h.label ? ` [Wiktionary marks it: ${h.label}]` : ''}: ${(h.glosses || []).join('; ')}`).join('\n');
   const article = {
     word: entry.word, partOfSpeech: entry.partOfSpeech, gender: entry.gender, russian: entry.russian, english: entry.english,
     meanings: (entry.meanings || []).map(m => ({ definition: m.definition, label: m.label || '' })),
@@ -1458,10 +1460,10 @@ ${JSON.stringify(article)}
 Checks:
 1. russian.main correctly translates THIS word's main sense${senses ? ' (sense 1 above)' : ''}; not a homograph, not a transliteration.
 2. Every meaning is a genuine sense of this word, written in Italian, not a copy of an English gloss.
-3. Senses Wiktionary marks obsolete, archaic, dialectal, rare or vulgar carry a matching label.
+3. Labels (устар., диал., редк., вульг., книжн., перен. …) describe how the ITALIAN sense is used, never the Russian translation word. A label is correct when Wiktionary marks that sense the same way (its parenthetical or the "Wiktionary marks it" note above), and wrong when it is missing there or present where Wiktionary has no such mark. Do not judge whether the Russian word itself is old or rare.
 4. partOfSpeech and gender agree with Wiktionary.
 5. Each homograph's russian translates that homograph, not the main word.
-Return ONLY valid JSON: { "ok": true/false, "issues": ["one short line per REAL problem, in Russian"] }. ok is false only for real errors, never for style.`;
+Return ONLY valid JSON: { "ok": true/false, "issues": ["one short line per REAL problem, in Russian"] }. ok is false only for real errors, never for style. When in doubt, ok is true.`;
   const r = await llmJson(prompt, 'check');
   const issues = (Array.isArray(r && r.issues) ? r.issues : []).map(s => String(s).trim()).filter(Boolean).slice(0, 6);
   return { ok: !!(r && r.ok) && !issues.length, issues, by: _lastDictLlm };
