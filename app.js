@@ -3743,10 +3743,32 @@ if (_sheetAddBtn) _sheetAddBtn.addEventListener('click', () => addWordToDeck(_sh
 // Данные плиток из двух мест: сводка колод (Cards.homeSummary) и число избранных (favorites_dict). Сводка кэшируется и обновляется после ответа на карточке,
 // входа и выхода — см. refreshHomeDue. Без входа колод нет, и плитки про них заменяет приглашение.
 let _homeSummary = null, _homeFavCount = null;
+// Главная рисуется последней строкой этого файла, а auth.js подключён после него: в первом кадре
+// window.Auth ещё не существует, и вошедший успевал увидеть вспышку «Войдите». Про вход спрашиваем
+// localStorage напрямую — он читается мгновенно, ещё до того, как auth.js разберёт сессию.
+function sessionLikely() {
+  if (window.Auth) return !!Auth.user();
+  try { return !!(JSON.parse(localStorage.getItem('dizionario_session') || 'null') || {}).user; } catch (e) { return false; }
+}
+// Сводка с прошлого захода: показываем её сразу, пока считается свежая. Иначе первый кадр у вошедшего —
+// нули и «Считаю…», хотя числа меняются от силы раз в день.
+const HOME_CACHE_KEY = 'dizionario_home';
+function loadHomeCache() {
+  try {
+    const c = JSON.parse(localStorage.getItem(HOME_CACHE_KEY) || 'null');
+    if (c && c.s) { _homeSummary = c.s; _homeFavCount = typeof c.f === 'number' ? c.f : null; }
+  } catch (e) {}
+}
+function saveHomeCache() {
+  try {
+    if (_homeSummary) localStorage.setItem(HOME_CACHE_KEY, JSON.stringify({ s: _homeSummary, f: _homeFavCount }));
+    else localStorage.removeItem(HOME_CACHE_KEY);
+  } catch (e) {}
+}
 const homePlural = (n, one, few, many) => { const m = n % 10, h = n % 100; return (m === 1 && h !== 11) ? one : (m >= 2 && m <= 4 && (h < 10 || h >= 20)) ? few : many; };
 function renderHome() {
   const box = $('homeBento'); if (!box) return;
-  const loggedIn = !!(window.Auth && Auth.user());
+  const loggedIn = sessionLikely();
   const s = _homeSummary;
   const head = (icon, label) => `<div class="tile-head"><div class="tile-icon">${svgIcon(icon)}</div><span class="tile-label">${label}</span></div>`;
   const tiles = [];
@@ -3801,17 +3823,24 @@ function renderHome() {
 // Сводка колод для главной и бейдж на вкладке Le Carte; вызывается после ответа на карточке, входа и выхода
 async function refreshHomeDue() {
   const badge = $('navCardsBadge');
-  if (!(window.Auth && Auth.user() && window.Cards && Cards.homeSummary)) { _homeSummary = null; _homeFavCount = null; if (badge) badge.style.display = 'none'; renderHome(); return; }
+  if (!(window.Auth && Auth.user() && window.Cards && Cards.homeSummary)) {
+    _homeSummary = null; _homeFavCount = null;
+    if (window.Auth && !Auth.user()) saveHomeCache(); // вышли из аккаунта — прошлые числа больше не наши
+    if (badge) badge.style.display = 'none'; renderHome(); return;
+  }
   const [s, favs] = await Promise.all([
     Cards.homeSummary().catch(() => null),
     fetch(`${SB_URL}/rest/v1/favorites_dict?select=word`, { headers: SB_H }).then(r => r.ok ? r.json() : null).catch(() => null)
   ]);
-  _homeSummary = s; _homeFavCount = Array.isArray(favs) ? favs.length : null;
-  const total = s ? s.learn + s.due + s.newToday : 0;
+  // Не дозвонились — оставляем на экране прошлые числа, а не обнуляем их
+  if (s) { _homeSummary = s; _homeFavCount = Array.isArray(favs) ? favs.length : null; saveHomeCache(); }
+  else if (Array.isArray(favs)) _homeFavCount = favs.length;
+  const total = _homeSummary ? _homeSummary.learn + _homeSummary.due + _homeSummary.newToday : 0;
   if (badge) { badge.textContent = total; badge.style.display = total ? '' : 'none'; }
   renderHome();
 }
 window.addEventListener('load', () => refreshHomeDue());
+loadHomeCache();
 renderHome();
 renderHistory(); // «Недавние» на главной при первой загрузке: иначе список появлялся только после возврата на неё
 
