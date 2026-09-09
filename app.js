@@ -733,6 +733,10 @@ async function fetchFreeDictionary(word) {
 // в многословных выражениях она путает ударения. Собираем её из транскрипций отдельных слов
 // (Викисловарь, затем общий кэш); если хоть одного слова нет — оставляем пустой.
 const cleanQuery = w => String(w || '').replace(/["“”„«»‹›]/g, '').replace(/\s+/g, ' ').trim();
+// Перевод в базе — список вариантов через «;» и «,», иногда с пояснением в скобках:
+// «открывать (дверь, окно); обнаруживать». Искать и сравнивать надо по самим вариантам, без
+// пояснений: иначе на «дверь» приезжает scoprire, у которого дверь только в скобке.
+const trVariants = s => String(s || '').replace(/\([^)]*\)/g, ' ').split(/[;,]/).map(x => x.trim()).filter(Boolean);
 const isPhrase = w => /\s/.test(cleanQuery(w));
 async function wordIpa(w) {
   const fd = await fetchFreeDictionary(w).catch(() => null);
@@ -1909,10 +1913,29 @@ Find all meaningful Italian translations. Return ONLY a JSON array, no markdown.
 {"italian":"canonical form","partOfSpeech":"sostantivo/verbo/etc","gender":"m./f./null","shortDefinition":"краткое значение по-русски (4-8 слов)","register":"neutro/formale/colloquiale/letterario"}
 Return 1-8 items. If no translation exists, return [].`;
   const q = word.trim().toLowerCase();
+  // Ровно один вариант переведён именно этим словом и статья на него уже есть — открываем её сразу,
+  // а не показываем список из одного знакомого слова и нескольких соседей. Остальные варианты
+  // не теряются: они уходят строкой под заголовком статьи (см. _ruOthers в renderEntry).
+  // «замок» с castello и serratura списком и останется: там точных попаданий два.
+  const exactOnes = list => list.filter(i => i && i.source === 'кэш' && trVariants(i.shortDefinition).some(x => x.toLowerCase() === q));
+  const openOne = async (list, hit) => {
+    _ruOthers = { q: word.trim(), word: String(hit.italian || '').toLowerCase(), items: list.filter(i => i !== hit) };
+    await lookupWord(hit.italian);
+  };
+  // В кэше русских запросов осели варианты, найденные по слову внутри скобки («открывать (дверь,
+  // окно)»): пропускаем сохранённый список через то же правило, что и живой поиск
+  const atStart = (s, w) => { const i = String(s).toLowerCase().indexOf(w); return i === 0 || (i > 0 && !/[а-яёa-z]/i.test(s[i - 1])); };
+  const dropStale = list => {
+    const keep = list.filter(i => i && (i.source !== 'кэш' || trVariants(i.shortDefinition).some(x => atStart(x, q))));
+    return keep.length ? keep : list;
+  };
   const cachedRu = await sbGet('russian_search', q);
   if (cachedRu) {
-    if (cachedRu.length === 1) { await lookupWord(cachedRu[0].italian); return; }
-    renderRuResults(word, cachedRu); showState('rulist'); showCacheBadge(); return;
+    const list = dropStale(cachedRu);
+    const ex = exactOnes(list);
+    if (list.length === 1) { await openOne(list, list[0]); return; }
+    if (ex.length === 1) { await openOne(list, ex[0]); return; }
+    renderRuResults(word, list); showState('rulist'); showCacheBadge(); return;
   }
 
   // Слои, от бесплатного к дорогому: переводы уже открытых статей и колод → русский Викисловарь →
@@ -1936,7 +1959,9 @@ Return 1-8 items. If no translation exists, return [].`;
   }
   const results = await enrichRuItems(items.slice(0, 8));
   await sbSave('russian_search', 'word', q, results);
-  if (results.length === 1) { await lookupWord(results[0].italian); return; }
+  const exFresh = exactOnes(results);
+  if (results.length === 1) { await openOne(results, results[0]); return; }
+  if (exFresh.length === 1) { await openOne(results, exFresh[0]); return; }
   renderRuResults(word, results);
   showState('rulist');
 }
@@ -1945,12 +1970,11 @@ Return 1-8 items. If no translation exists, return [].`;
 async function searchOwnTranslations(q) {
   const out = [];
   const pat = `*${q.replace(/[*,()]/g, '')}*`;
-  const exactIn = s => String(s || '').toLowerCase().split(/[;,]/).map(x => x.trim()).includes(q);
+  const exactIn = s => trVariants(s).some(x => x.toLowerCase() === q);
   // База ищет подстроку где угодно, и на «порт» приезжает «заниматься спортом». Оставляем только
   // совпадения с начала слова: «порт», «порты», «портвейн» проходят, «спортом» нет.
   const atWordStart = new RegExp('(^|[^а-яёa-z])' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-  const pieces = s => String(s || '').split(/[;,]/).map(x => x.trim()).filter(Boolean);
-  const wordHit = (...fields) => fields.flatMap(pieces).find(x => atWordStart.test(x)) || '';
+  const wordHit = (...fields) => fields.flatMap(trVariants).find(x => atWordStart.test(x)) || '';
   const res = await fetch(`${SB_URL}/rest/v1/dictionary?select=${encodeURIComponent('word,w:data->>word,pos:data->>partOfSpeech,g:data->>gender,ru:data->russian->>main,alt:data->russian->>alternatives,unv:data->>unverified')}&or=(${encodeURIComponent(`data->russian->>main.ilike.${pat},data->russian->>alternatives.ilike.${pat}`)})&limit=30`, { headers: SB_H });
   if (res.ok) (await res.json()).forEach(r => {
     if (r.unv === 'true' || !(r.w || r.word)) return;
@@ -2320,6 +2344,14 @@ function highlightStress(phonetic) {
   return (phonetic || '').replace(/ˈ([^ˌ\s.]+)/g, (m, syl) => `ˈ<span class="stress">${syl}</span>`);
 }
 
+// Ссылки в строке под заголовком статьи («другие переводы») ведут в свою статью
+document.addEventListener('click', e => {
+  const b = e.target.closest('#wordAlso button[data-w]');
+  if (!b) return;
+  $('searchInput').value = b.dataset.w;
+  lookupWord(b.dataset.w);
+});
+
 function renderEntry(e) {
   // Повторный рендер того же слова (дозагрузка перевода/определений) не должен сбрасывать спряжения
   const sameWord = currentDictWord === (e.word || '').toLowerCase() && currentConjugations === e.conjugations;
@@ -2380,6 +2412,13 @@ function renderEntry(e) {
     const gloss = h.russian ? h.russian.split(';')[0].trim() : (h.glosses && h.glosses[0]) || '';
     alsoParts.push(`также ${escapeHtml(label)}: <button type="button" title="К разделу «Altre voci»" onclick="$('homographsSection').scrollIntoView({behavior:'smooth',block:'center'})">${escapeHtml(gloss)} ↓</button>`);
   });
+  // Пришли сюда прыжком из русского поиска: остальные варианты перевода не теряем. Слово держим
+  // в data-атрибуте, а не в onclick: у «po’» и «l’azienda» апостроф внутри строки всё бы сломал.
+  if (_ruOthers && _ruOthers.word === String(e.word || '').toLowerCase() && _ruOthers.items.length) {
+    alsoParts.push(`другие переводы «${escapeHtml(_ruOthers.q)}»: ` + _ruOthers.items
+      .map(i => `<button type="button" data-w="${escapeHtml(i.italian)}" title="${escapeHtml(i.shortDefinition || '')}">${escapeHtml(i.italian)}</button>`)
+      .join(', '));
+  }
   if (alsoParts.length) { alsoEl.innerHTML = alsoParts.join(' · '); alsoEl.style.display = 'block'; }
   else alsoEl.style.display = 'none';
   if (e._pending && !e.russian?.main) {
@@ -2825,6 +2864,9 @@ let currentGramEntry = null;
 let currentDictWord = '';
 let currentGramTopic = '';
 let currentRuQuery = '';
+// Прыгнули из русского поиска прямо в статью — остальные варианты перевода показываем строкой
+// под заголовком, чтобы выбор не пропал вместе со списком
+let _ruOthers = null;
 let currentRuResults = [];
 let currentRuTitle = '';
 
