@@ -215,9 +215,13 @@ alter table reviews add column if not exists typed text;`;
   // ── Сессия ───────────────────────────────────────────────────────────────────
   function load() { try { session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { session = null; } }
   function save() { try { if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session)); else localStorage.removeItem(SESSION_KEY); } catch (e) {} }
+  // Токен живёт час, и после долгого перерыва в localStorage лежит просроченный. В заголовок он
+  // попасть не должен: на мёртвый токен Supabase отвечает 401 на всё, включая общий кэш, который
+  // прекрасно читается анонимным ключом. Пока идёт обновление, работаем анонимом.
+  const liveToken = () => (session && session.access_token && session.expires_at > Date.now()) ? session.access_token : SB_KEY;
   function apply() {
     // Все запросы к Supabase берут заголовки из SB_H: с токеном пользователя работают правила доступа
-    SB_H['Authorization'] = 'Bearer ' + (session ? session.access_token : SB_KEY);
+    SB_H['Authorization'] = 'Bearer ' + liveToken();
     document.body.classList.toggle('logged-in', !!session);
     renderUi();
   }
@@ -509,10 +513,25 @@ alter table reviews add column if not exists typed text;`;
   }
 
   // Запуск: восстановить сессию, обработать ссылку из письма, подтянуть профиль и теги
+  const fromLink = /access_token=/.test(location.hash); // по ссылке из письма сессию ставит handleHash
   load();
-  if (session && session.expires_at < Date.now()) { apply(); refresh(); } else { apply(); scheduleRefresh(); }
+  apply();
   handleHash();
-  if (session) pullProfile().then(() => { if (window.Cards && Cards.processPendingShare) Cards.processPendingShare(); });
+  (async () => {
+    if (fromLink) return;
+    // Просроченный токен обновляем прежде, чем трогать личные таблицы: иначе первые запросы страницы
+    // уходят с мёртвым токеном и возвращают 401 «JWT expired»
+    const stale = !!(session && session.expires_at < Date.now());
+    if (stale) await refresh(); else scheduleRefresh();
+    if (!session) return;
+    await pullProfile();
+    if (window.Cards && Cards.processPendingShare) Cards.processPendingShare();
+    // Пока токен обновлялся, главная и колоды успели загрузиться анонимом — перечитываем
+    if (stale) {
+      if (window.Cards && Cards.reload) await Cards.reload().catch(() => {});
+      if (window.refreshHomeDue) refreshHomeDue();
+    }
+  })();
   // Ссылка на чужую колоду (?share=токен): запоминаем и обрабатываем после входа
   try {
     const shareToken = new URLSearchParams(location.search).get('share');
