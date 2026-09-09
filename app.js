@@ -1933,7 +1933,7 @@ Return 1-8 items. If no translation exists, return [].`;
   };
   const cachedRu = await sbGet('russian_search', q);
   if (cachedRu) {
-    const list = dropStale(cachedRu);
+    const list = await freshenRuGlosses(dropStale(cachedRu));
     const ex = exactOnes(list);
     if (list.length === 1) { await openOne(list, list[0]); return; }
     if (ex.length === 1) { await openOne(list, ex[0]); return; }
@@ -1959,7 +1959,7 @@ Return 1-8 items. If no translation exists, return [].`;
     if (llmError) { handleApiError(llmError.message || ''); return; }
     $('errorText').textContent = `"${word}" — перевод не найден`; showState('error'); return;
   }
-  const results = await enrichRuItems(items.slice(0, 8));
+  const results = await freshenRuGlosses(await enrichRuItems(items.slice(0, 8)));
   await sbSave('russian_search', 'word', q, results);
   const exFresh = exactOnes(results);
   if (results.length === 1) { await openOne(results, results[0]); return; }
@@ -2009,6 +2009,22 @@ async function fetchRuWiktItalian(q) {
     }
   }
   return words.slice(0, 8);
+}
+// Пояснение под словом в списке модель придумывает сама, и выходит «большая ворота». Если у слова
+// уже есть статья, её перевод и точнее, и написан по-русски: одним запросом подменяем. Варианты из
+// нашего же кэша не трогаем — там стоит ровно тот кусок перевода, по которому слово и нашлось.
+async function freshenRuGlosses(list) {
+  const words = [...new Set(list.filter(i => i && i.source !== 'кэш').map(i => String(i.italian || '').toLowerCase()).filter(Boolean))];
+  if (!words.length) return list;
+  const inList = words.map(w => '"' + w.replace(/"/g, '') + '"').join(',');
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/dictionary?word=in.(${encodeURIComponent(inList)})&select=${encodeURIComponent('word,ru:data->russian->>main')}`, { headers: SB_H });
+    if (!res.ok) return list;
+    const byWord = new Map();
+    (await res.json()).forEach(r => { if (r.ru) byWord.set(String(r.word).toLowerCase(), r.ru); });
+    list.forEach(i => { const ru = i && byWord.get(String(i.italian || '').toLowerCase()); if (ru) i.shortDefinition = ru; });
+  } catch (e) { console.warn('freshen ru glosses:', e); }
+  return list;
 }
 // Часть речи, род и короткое значение для найденного без модели: английский Викисловарь + русский
 async function enrichRuItems(items) {
