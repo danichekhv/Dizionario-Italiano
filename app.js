@@ -1036,6 +1036,11 @@ function fdLemmaOf(def) {
 }
 const FD_FORM_RU = { plural: 'мн. ч.', participle: 'причастие', gerund: 'герундий', imperative: 'повелит. накл.', subjunctive: 'сослагат. накл.', past: 'прош. вр.', future: 'буд. вр.', conditional: 'условн. накл.' };
 const FD_SKIP_FORM_TAGS = ['alt of', 'obsolete', 'archaic', 'poetic', 'literary', 'dialectal', 'rare', 'Latinism'];
+// Форма формы: «porta» — женский род причастия «porto», а «porto» само причастие (от porgere).
+// Такая сноска ведёт не на лемму, а на другую словоформу, и по ссылке человек попадает в статью
+// про порт и вино. Отличаем по тегам: у полезной сноски (volto → volgere) стоит participle с past,
+// у бесполезной — participle вместе с родом или числом.
+const fdFormOfForm = tags => tags.includes('participle') && tags.some(t => ['feminine', 'masculine', 'plural'].includes(t));
 
 // Какую из статей одного написания делать главной. Викисловарь идёт по этимологии, и у «sito»
 // первым стоит устаревшее прилагательное «situated», а существительное «место, сайт» — вторым.
@@ -1065,7 +1070,7 @@ function fdCollectLemmas(entries, skipEntry) {
     const pos = FD_POS[en.partOfSpeech] || en.partOfSpeech || '';
     (en.senses || []).forEach(s => {
       const tags = s.tags || [];
-      if (!fdIsFormOf(s) || tags.some(t => FD_SKIP_FORM_TAGS.includes(t))) return;
+      if (!fdIsFormOf(s) || fdFormOfForm(tags) || tags.some(t => FD_SKIP_FORM_TAGS.includes(t))) return;
       const lemma = fdLemmaOf(s.definition);
       if (!lemma || out.some(l => l.lemma === lemma)) return;
       const tag = tags.find(t => FD_FORM_RU[t]);
@@ -1640,15 +1645,16 @@ function fdMergeCompletion(base, extra, fastRu) {
 }
 
 // Гибридный путь: сразу показываем факты из Викисловаря, Gemini дописывает остальное
-// Одно написание — два разных слова: существительное «puzza» и форма глагола puzzare.
-// Показываем выбор, а не запихиваем чужую лемму со спряжениями в чужую же статью.
+// Одно написание — два разных слова: существительное «puzza» и форма глагола puzzare. Показываем
+// выбор, а не запихиваем чужую лемму со спряжениями в чужую же статью. Спрашиваем только при ручном
+// вводе: по ссылке слово уже выбрано, а в самой статье развилка и так стоит строкой «также форма слова».
 function offerFormsChooser(entry, typed) {
   const self = String(entry.word || typed || '').toLowerCase();
   const forms = (entry.alsoForms || []).filter(l => l && l.lemma && l.lemma.toLowerCase() !== self);
   if (!forms.length) return false;
   const items = [
     { italian: entry.word || typed, partOfSpeech: cleanPos(entry.partOfSpeech), gender: entry.gender || '',
-      shortDefinition: (entry.russian && entry.russian.main) || '', direct: true },
+      shortDefinition: (entry.russian && entry.russian.main) || '' },
     ...forms.map(l => ({ italian: l.lemma, partOfSpeech: l.pos || '', shortDefinition: l.desc || '' }))
   ];
   renderRuResults(typed || entry.word, items, `«${typed || entry.word}» — это несколько разных слов`);
@@ -1658,9 +1664,9 @@ function offerFormsChooser(entry, typed) {
 
 async function lookupWordHybrid(query, base, opts = {}) {
   const key = base.word.toLowerCase();
-  // force — кнопка обновления на самой статье: человек уже выбрал слово, список не показываем,
-  // иначе перегенерация и не начнётся, а выбор из списка снова вернёт старый кэш
-  if (!opts.skipChooser && !opts.force && offerFormsChooser(base, query)) return;
+  // Развилку показываем, только если её попросили: это делает единственное место, где слово
+  // вводят руками (doSearch). По ссылке человек уже выбрал слово — открываем статью.
+  if (opts.chooser && offerFormsChooser(base, query)) return;
   // На экран сразу всё, что известно без модели: слово, часть речи, род, транскрипция, формы, английский.
   // Русский и определения дописываются по мере ответа, статья не висит пустой.
   if (!opts.headless) {
@@ -1761,7 +1767,7 @@ alsoForms: this article is about one word only. If the very same spelling is ALS
   // 1. Кэш Supabase — мгновенно
   const cachedWord = opts.force ? null : await sbGet('dictionary', word.toLowerCase());
   if (cachedWord) {
-    if (!opts.skipChooser && offerFormsChooser(cachedWord, word)) return;
+    if (opts.chooser && offerFormsChooser(cachedWord, word)) return;
     try {
       renderEntry(cachedWord); showState('result'); showCacheBadge(); addToHistory(cachedWord.word || word, 'dict'); pruneRelated(cachedWord); fillPhonetic(cachedWord);
       // сохранённый перевод-транслитерация чинится при открытии и, если пользователь вошёл, пересохраняется
@@ -1820,7 +1826,7 @@ alsoForms: this article is about one word only. If the very same spelling is ALS
     entry.sources = { structure: 'model', text: entry.llm, ruHint: !!ruHint };
     validateArticle(entry, null); // неполную статью не сохраняем
     if (opts.headless) { await finalizeArticle(entry, word, null, { silent: true }); return entry; }
-    if (!opts.skipChooser && !opts.force && offerFormsChooser(entry, word)) { await finalizeArticle(entry, word, null, { silent: true }); return entry; }
+    if (opts.chooser && offerFormsChooser(entry, word)) { await finalizeArticle(entry, word, null, { silent: true }); return entry; }
     renderEntry(entry);
     showState('result');
     addToHistory(entry.word || word, 'dict');
@@ -2302,8 +2308,8 @@ function renderRuResults(query, results, titleText) {
       $('btnIT').classList.add('active'); $('btnRU').classList.remove('active');
       $('searchInput').placeholder = 'Cerca una parola italiana…';
       $('searchInput').value = item.italian;
-      // direct — сама статья из списка выбора: заходим сразу в неё, иначе список покажется снова
-      lookupWord(item.italian, 0, item.direct ? { skipChooser: true } : {});
+      // Человек уже выбрал слово в списке — открываем статью, а не спрашиваем ещё раз
+      lookupWord(item.italian);
     };
     container.appendChild(card);
   });
@@ -3389,7 +3395,7 @@ function doSearch() {
   if (!val) return;
   if (currentMode === 'grammar') lookupGrammar(val);
   else if (currentLang === 'ru') lookupRussian(val);
-  else lookupWord(val);
+  else lookupWord(val, 0, { chooser: true }); // руками введённое слово может оказаться и формой другого — предлагаем выбор
 }
 
 $('searchBtn').addEventListener('click', doSearch);

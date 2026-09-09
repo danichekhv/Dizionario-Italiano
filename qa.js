@@ -65,7 +65,7 @@
       if (S.stop) break;
       S.rows[g.word] = { state: 'running' }; render();
       try {
-        const e = await lookupWord(g.word, 0, { force: true, skipChooser: true, headless: true });
+        const e = await lookupWord(g.word, 0, { force: true, headless: true });
         if (!e || e.redirects) S.rows[g.word] = { state: 'error', note: e && e.redirects ? 'перенаправление на ' + e.redirects.join(', ') : 'нет статьи' };
         else S.rows[g.word] = { state: 'done', checks: check(g, e), status: e.status, notes: e.checkNotes || [], warnings: e.checkWarnings || [],
           got: { pos: cleanPos(e.partOfSpeech), gender: e.gender || '', ru: (e.russian && e.russian.main) || '',
@@ -118,7 +118,7 @@
     for (const w of words) {
       if (S.stop) break;
       try {
-        const e = await lookupWord(w, 0, { force: true, skipChooser: true, headless: true });
+        const e = await lookupWord(w, 0, { force: true, headless: true });
         const st = e && !e.redirects ? (e.status || 'draft') : 'error';
         B.counts[st] = (B.counts[st] || 0) + 1;
         B.log.unshift(`${w} — ${st}${e && e.checkNotes && e.checkNotes.length ? ': ' + e.checkNotes.join('; ') : ''}`);
