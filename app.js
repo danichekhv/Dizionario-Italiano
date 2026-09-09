@@ -3750,6 +3750,9 @@ function sessionLikely() {
   if (window.Auth) return !!Auth.user();
   try { return !!(JSON.parse(localStorage.getItem('dizionario_session') || 'null') || {}).user; } catch (e) { return false; }
 }
+function sessionStale() {
+  try { const s = JSON.parse(localStorage.getItem('dizionario_session') || 'null'); return !!(s && s.expires_at && s.expires_at < Date.now()); } catch (e) { return false; }
+}
 // Сводка с прошлого захода: показываем её сразу, пока считается свежая. Иначе первый кадр у вошедшего —
 // нули и «Считаю…», хотя числа меняются от силы раз в день.
 const HOME_CACHE_KEY = 'dizionario_home';
@@ -3823,6 +3826,9 @@ function renderHome() {
 // Сводка колод для главной и бейдж на вкладке Le Carte; вызывается после ответа на карточке, входа и выхода
 async function refreshHomeDue() {
   const badge = $('navCardsBadge');
+  // Пока токен просрочен, запросы уходят анонимным ключом и возвращают пустые колоды. Такую «сводку»
+  // нельзя ни показывать, ни запоминать: auth.js позовёт нас ещё раз, когда обновит токен.
+  if (sessionStale()) { renderHome(); return; }
   if (!(window.Auth && Auth.user() && window.Cards && Cards.homeSummary)) {
     _homeSummary = null; _homeFavCount = null;
     if (window.Auth && !Auth.user()) saveHomeCache(); // вышли из аккаунта — прошлые числа больше не наши
