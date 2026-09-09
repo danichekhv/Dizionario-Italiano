@@ -736,7 +736,9 @@ const cleanQuery = w => String(w || '').replace(/["“”„«»‹›]/g, '').r
 // Перевод в базе — список вариантов через «;» и «,», иногда с пояснением в скобках:
 // «открывать (дверь, окно); обнаруживать». Искать и сравнивать надо по самим вариантам, без
 // пояснений: иначе на «дверь» приезжает scoprire, у которого дверь только в скобке.
-const trVariants = s => String(s || '').replace(/\([^)]*\)/g, ' ').split(/[;,]/).map(x => x.trim()).filter(Boolean);
+// В кэше пояснение бывает и оборванным: старый разбор резал строку по запятой прямо внутри скобки
+// и сохранял «открывать (дверь» как готовый вариант. Незакрытую скобку отбрасываем так же.
+const trVariants = s => String(s || '').replace(/\([^)]*\)/g, ' ').replace(/\([^)]*$/, ' ').split(/[;,]/).map(x => x.trim()).filter(Boolean);
 const isPhrase = w => /\s/.test(cleanQuery(w));
 async function wordIpa(w) {
   const fd = await fetchFreeDictionary(w).catch(() => null);
