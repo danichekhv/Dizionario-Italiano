@@ -15,7 +15,7 @@
     queue: [], current: null, revealed: false, undo: null,
     loaded: false, missingTables: false,
     build: null, browseSelected: new Set(), browseQuery: '',
-    reviews: [], reviewsMissing: false, shownAt: 0, statsDeckId: null
+    reviews: [], reviewsMissing: false, shownAt: 0, statsDeckId: null, hasAlt: true
   };
 
   // ── Supabase REST ────────────────────────────────────────────────────────────
@@ -33,6 +33,21 @@
     return data;
   }
   const isMissingTable = e => e && (e.code === 'PGRST205' || e.code === '42P01' || /Could not find the table|does not exist/i.test(e.message || ''));
+
+  // ── Слово карточки и его варианты ────────────────────────────────────────────
+  // «imprenditore, uomo d'affari» — одно значение с синонимами, а не выражение. Главное слово
+  // остаётся в word (по нему ищется статья, транскрипция и пропуск в примере), остальные — в alt.
+  // Режем, только если каждый кусок короткий: у пословицы «Chi dorme, non piglia pesci» запятая
+  // внутри самой фразы, и разваливать её нельзя.
+  function splitWord(raw) {
+    const s = cleanQuery(raw);
+    const parts = s.split(/[,;/]/).map(x => x.trim()).filter(Boolean);
+    if (parts.length < 2 || parts.some(p => p.split(/\s+/).length > 2)) return { word: s, alt: [] };
+    return { word: parts[0], alt: parts.slice(1) };
+  }
+  const wordVariants = n => [n.word, ...(n.alt || [])].map(w => String(w || '').trim()).filter(Boolean);
+  // Колонки alt может ещё не быть: её добавляют разовым SQL, а до этого запись с ней отобьётся
+  const noteBody = o => { if (S.hasAlt) return o; const { alt, ...rest } = o; return rest; };
 
   const SETUP_SQL = `-- Выполните один раз в Supabase: SQL Editor → New query → Run
 create table if not exists decks (
@@ -92,6 +107,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         sb('cards?select=*')
       ]);
       S.decks = decks || []; S.notes = notes || [];
+      if (S.notes.length) S.hasAlt = 'alt' in S.notes[0]; // колонку добавляют разовым SQL, до него пишем без неё
       S.cards = (cards || []).map(c => ({ ...c, dueMs: Date.parse(c.due) || 0 }));
       S.loaded = true; S.missingTables = false;
     } catch (e) {
@@ -109,6 +125,25 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         S.reviewsMissing = false;
       } catch (e) { if (isMissingTable(e)) S.reviewsMissing = true; else console.warn('reviews load:', e); }
     }
+    await migrateAltOnce();
+  }
+
+  // Разовый перенос старых карточек: там, где синонимы записаны в само слово через запятую,
+  // раскладываем их по колонкам. Иначе такая карточка ищется в словаре как выражение целиком,
+  // и модель дописывает ей пример на несуществующую идиому.
+  async function migrateAltOnce() {
+    if (!S.hasAlt || S.missingTables) return;
+    const stale = S.notes.filter(n => !(n.alt || []).length && splitWord(n.word).alt.length);
+    if (!stale.length) return;
+    let done = 0;
+    for (const n of stale) {
+      const { word, alt } = splitWord(n.word);
+      try { await sb(`notes?id=eq.${n.id}`, { method: 'PATCH', body: { word, alt } }); n.word = word; n.alt = alt; done++; }
+      catch (e) { console.warn('alt migrate:', e); break; }
+    }
+    if (!done) return;
+    showToast(`Разложил ${done} ${pluralRu(done, 'карточку', 'карточки', 'карточек')} с несколькими вариантами`);
+    if (_currentState === 'cards') render();
   }
 
   // ── Дерево колод ─────────────────────────────────────────────────────────────
@@ -496,8 +531,11 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     if (card.direction === 'it') {
       (n.translation || '').replace(/\([^)]*\)/g, '').split(/[;,\/]/).map(s => s.trim()).filter(Boolean).forEach(s => out.push(s));
     } else {
-      const w = (n.word || '').replace(/["“”„«»]/g, '').trim();
-      if (w) { out.push(w); const bare = w.replace(IT_ARTICLE, ''); if (bare !== w) out.push(bare); }
+      // Верен любой из синонимов карточки: «предприниматель» — это и imprenditore, и uomo d'affari
+      wordVariants(n).forEach(v => {
+        const w = v.replace(/["“”„«»]/g, '').trim(); if (!w) return;
+        out.push(w); const bare = w.replace(IT_ARTICLE, ''); if (bare !== w) out.push(bare);
+      });
       if (tokens) { const form = tokens.filter(x => x.hit).map(x => x.t).join(' '); if (form && !out.includes(form)) out.push(form); }
     }
     return out;
@@ -621,6 +659,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         <div class="study-rule"></div>
         ${typedBlock}
         <div class="study-answer">${esc(answer)}</div>
+        ${!isIt && (n.alt || []).length ? `<div class="study-alt">ещё: ${n.alt.map(a => `<button type="button" data-alt-w="${esc(a)}">${esc(a)}</button>`).join(', ')}</div>` : ''}
         ${n.phonetic ? `<div class="study-ipa">${esc(n.phonetic)}</div>` : ''}
         ${sentence}
         ${n.meaning ? `<div class="study-box"><div class="study-box-label">Significato</div><div class="study-box-text">${makeClickable(n.meaning)}</div></div>` : ''}
@@ -696,7 +735,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       return `
         <div class="browse-row">
           <input type="checkbox" ${S.browseSelected.has(n.id) ? 'checked' : ''} onchange="Cards.selectNote('${n.id}', this.checked)">
-          <button class="browse-word" onclick="Cards.editNote('${n.id}')">${highlight(n.word, q)}</button>
+          <button class="browse-word" onclick="Cards.editNote('${n.id}')">${highlight(n.word, q)}${(n.alt || []).length ? ` <span class="browse-alt">· ${n.alt.map(a => highlight(a, q)).join(' · ')}</span>` : ''}</button>
           <button class="browse-open" onclick="Cards.openArticle('${esc(n.word).replace(/'/g, '&#39;')}')" title="Открыть статью в словаре">${svgIcon('external')}</button>
           <div class="browse-ru">${highlight(n.translation, q)}</div>
           <div class="browse-tags">${(n.tags || []).map(t => `<span class="tag-chip" onclick="Cards.setTagFilter('${esc(t)}')">#${esc(t)}</span>`).join('')}</div>
@@ -835,8 +874,8 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       const delim = line.includes('\t') ? '\t' : (line.includes(';') ? ';' : (line.split(',').length > 1 ? ',' : null));
       const parts = delim ? line.split(delim).map(p => p.trim().replace(/^"|"$/g, '')) : [line];
       if (!parts[0] || /^(word|parola|слово)$/i.test(parts[0])) return; // заголовок CSV
-      const word = cleanQuery(parts[0]); if (!word) return; // кавычки внутри (fare "bella figura") убираем
-      items.push({ word, translation: parts[1] || '', example: parts[2] || '', meaning: parts[3] || '', tags: parts[4] ? parts[4].split(/[,\s]+/).filter(Boolean) : [] });
+      const { word, alt } = splitWord(parts[0]); if (!word) return; // кавычки убираем, «a, b» — варианты
+      items.push({ word, alt, translation: parts[1] || '', example: parts[2] || '', meaning: parts[3] || '', tags: parts[4] ? parts[4].split(/[,\s]+/).filter(Boolean) : [] });
     });
     return items;
   }
@@ -912,8 +951,15 @@ ${JSON.stringify(list)}`;
     const worker = async () => { while (idx < items.length) { const i = idx++; try { out[i] = await lookupOne(items[i]); } catch (e) { out[i] = { ...items[i], phonetic: '', pos: '', glosses: [], include: true, warn: 'ошибка поиска: ' + e.message }; } S.build.done++; S.build.status = `Ищем в словарях: ${S.build.done} из ${items.length}…`; render(); } };
     await Promise.all([worker(), worker(), worker()]);
     // дубли (два одинаковых слова или уже есть в колоде)
-    const existing = new Set(notesInDeck(S.deckId).map(n => n.word.toLowerCase())); const seen = new Set();
-    out.forEach(it => { const k = it.word.toLowerCase(); if (existing.has(k)) { it.include = false; it.warn = 'уже есть в колоде'; } else if (seen.has(k)) { it.include = false; it.warn = 'дубль в списке'; } seen.add(k); it.tags = [...new Set([...(it.tags || []), ...tags])]; });
+    const existing = new Set(notesInDeck(S.deckId).flatMap(n => wordVariants(n).map(w => w.toLowerCase()))); const seen = new Set();
+    out.forEach(it => {
+      const ks = wordVariants(it).map(w => w.toLowerCase());
+      if (ks.some(x => existing.has(x))) { it.include = false; it.warn = 'уже есть в колоде'; }
+      else if (ks.some(x => seen.has(x))) { it.include = false; it.warn = 'дубль в списке'; }
+      else if ((it.alt || []).length) it.warn = 'ещё варианты: ' + it.alt.join(', '); // разбор строки виден до сохранения
+      ks.forEach(x => seen.add(x));
+      it.tags = [...new Set([...(it.tags || []), ...tags])];
+    });
     S.build.items = out;
     S.build.llmUsed = await completeWithLlm(out.filter(i => i.include));
     S.build.phase = 'preview'; render();
@@ -932,7 +978,7 @@ ${JSON.stringify(list)}`;
   async function saveBuild() {
     const items = S.build.items.filter(i => i.include); if (!items.length) return;
     try {
-      const notes = await sb('notes', { method: 'POST', body: items.map(i => ({ deck_id: S.deckId, word: i.word, translation: i.translation || '', phonetic: i.phonetic || '', example: i.example || '', meaning: i.meaning || '', pos: i.pos || '', tags: i.tags || [] })) });
+      const notes = await sb('notes', { method: 'POST', body: items.map(i => noteBody({ deck_id: S.deckId, word: i.word, alt: i.alt || [], translation: i.translation || '', phonetic: i.phonetic || '', example: i.example || '', meaning: i.meaning || '', pos: i.pos || '', tags: i.tags || [] })) });
       const cards = await sb('cards', { method: 'POST', body: notes.flatMap(n => [{ note_id: n.id, direction: 'it' }, { note_id: n.id, direction: 'ru' }]) });
       S.notes.push(...notes); S.cards.push(...cards.map(c => ({ ...c, dueMs: Date.parse(c.due) || 0 })));
       showToast(`✓ Добавлено ${notes.length} слов, ${cards.length} карточек`);
@@ -1025,12 +1071,16 @@ ${JSON.stringify(list)}`;
       <div class="cards-modal-box">
         <div class="cards-title small">Редактировать</div>
         ${['word:Слово', 'translation:Перевод', 'phonetic:Транскрипция', 'example:Пример', 'meaning:Значение'].map(f => { const [k, l] = f.split(':'); return `<label class="cards-field"><span>${l}</span>${k === 'example' || k === 'meaning' ? `<textarea id="edit_${k}">${esc(n[k])}</textarea>` : `<input id="edit_${k}" value="${esc(n[k])}">`}</label>`; }).join('')}
+        <label class="cards-field"><span>Синонимы</span><input id="edit_alt" value="${esc((n.alt || []).join(', '))}" placeholder="через запятую, то же значение другими словами"></label>
         <label class="cards-field"><span>Теги</span><input id="edit_tags" value="${esc((n.tags || []).join(', '))}"></label>
         <div class="cards-actions"><button class="cards-btn primary" onclick="Cards.saveNote('${id}')">Сохранить</button><button class="cards-btn" onclick="Cards.closeModal()">Отмена</button></div>
       </div>`;
   }
   async function saveNote(id) {
-    const body = { word: $('edit_word').value.trim(), translation: $('edit_translation').value.trim(), phonetic: $('edit_phonetic').value.trim(), example: $('edit_example').value.trim(), meaning: $('edit_meaning').value.trim(), tags: $('edit_tags').value.split(/[,\s]+/).map(t => t.trim().replace(/^#/, '')).filter(Boolean) };
+    // Запятая в поле слова разбирается так же, как при добавлении списком: главное слово и синонимы
+    const split = splitWord($('edit_word').value);
+    const alt = [...new Set([...split.alt, ...$('edit_alt').value.split(/[,;/]/).map(x => x.trim()).filter(Boolean)])];
+    const body = noteBody({ word: split.word, alt, translation: $('edit_translation').value.trim(), phonetic: $('edit_phonetic').value.trim(), example: $('edit_example').value.trim(), meaning: $('edit_meaning').value.trim(), tags: $('edit_tags').value.split(/[,\s]+/).map(t => t.trim().replace(/^#/, '')).filter(Boolean) });
     if (!body.word) return;
     try {
       await sb(`notes?id=eq.${id}`, { method: 'PATCH', body }); Object.assign(noteById(id), body); closeModal();
@@ -1048,7 +1098,7 @@ ${JSON.stringify(list)}`;
     const m0 = (e.meanings || [])[0] || {};
     const ru = e.russian || {};
     return {
-      word: e.word || '', pos: e.partOfSpeech || '',
+      word: e.word || '', alt: [], pos: e.partOfSpeech || '',
       translation: [ru.main, ru.alternatives].filter(Boolean).join('; '),
       phonetic: e.phonetic || '',
       example: m0.example || e.example || '',
@@ -1092,8 +1142,8 @@ ${JSON.stringify(list)}`;
   async function pickDeck(deckId) {
     if (!_pendingNotes) return;
     const tags = (($('deckPickTags') || {}).value || '').split(/[,\s]+/).map(t => t.trim().replace(/^#/, '')).filter(Boolean);
-    const existing = new Set(notesInDeck(deckId).map(n => n.word.toLowerCase()));
-    const fresh = _pendingNotes.filter(n => !existing.has(n.word.toLowerCase()));
+    const existing = new Set(notesInDeck(deckId).flatMap(n => wordVariants(n).map(w => w.toLowerCase())));
+    const fresh = _pendingNotes.filter(n => !wordVariants(n).some(w => existing.has(w.toLowerCase())));
     const skipped = _pendingNotes.length - fresh.length;
     if (!fresh.length) { showToast('Эти слова уже есть в колоде'); closePicker(); return; }
     try {
@@ -1101,7 +1151,7 @@ ${JSON.stringify(list)}`;
       // тем же путём, что при добавлении списком (кэш → Викисловарь → модель)
       const thin = fresh.filter(n => !n.example || !n.meaning || !n.translation || !n.phonetic);
       if (thin.length) { showToast('Дополняю карточки…'); await enrichNotes(thin); }
-      const notes = await sb('notes', { method: 'POST', body: fresh.map(n => ({ deck_id: deckId, ...n, tags })) });
+      const notes = await sb('notes', { method: 'POST', body: fresh.map(n => noteBody({ deck_id: deckId, ...n, tags })) });
       const cards = await sb('cards', { method: 'POST', body: notes.flatMap(n => [{ note_id: n.id, direction: 'it' }, { note_id: n.id, direction: 'ru' }]) });
       S.notes.push(...notes); S.cards.push(...cards.map(c => ({ ...c, dueMs: Date.parse(c.due) || 0 })));
       showToast(`✓ ${notes.length} слов → ${deckPath(deckId)}${skipped ? ` (${skipped} уже были)` : ''}`);
@@ -1203,6 +1253,15 @@ ${JSON.stringify(list)}`;
     if (!el) return;
     e.preventDefault(); e.stopPropagation();
     window.Cards.openArticle(el.textContent.trim());
+  }, true);
+
+  // Синоним под ответом ведёт в свою статью. Слово держим в data-атрибуте, а не в onclick:
+  // у «po’» и «l’azienda» апостроф внутри строки обработчик бы сломал
+  document.addEventListener('click', e => {
+    const b = e.target.closest('button[data-alt-w]');
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    window.Cards.openArticle(b.dataset.altW);
   }, true);
 
   // ── Публичный интерфейс ──────────────────────────────────────────────────────

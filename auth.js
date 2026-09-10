@@ -67,6 +67,9 @@ create table if not exists reviews (
 );
 alter table decks add column if not exists user_id uuid default auth.uid();
 alter table notes add column if not exists user_id uuid default auth.uid();
+-- Синонимы на той же карточке: «imprenditore, uomo d'affari» — одно значение с вариантами.
+-- В word остаётся главное слово (по нему ищется статья и транскрипция), остальные живут здесь.
+alter table notes add column if not exists alt text[] default '{}';
 alter table cards add column if not exists user_id uuid default auth.uid();
 alter table reviews add column if not exists user_id uuid default auth.uid();
 create index if not exists cards_note_idx on cards(note_id);
@@ -181,8 +184,8 @@ begin
     if r.id = v_src then v_root := v_new; end if;
   end loop;
   for r in select n.*, m.new_id as new_deck from notes n join deck_map m on m.old_id = n.deck_id loop
-    insert into notes (deck_id, word, translation, phonetic, example, meaning, pos, tags, user_id)
-      values (r.new_deck, r.word, r.translation, r.phonetic, r.example, r.meaning, r.pos, r.tags, v_me) returning id into v_new;
+    insert into notes (deck_id, word, alt, translation, phonetic, example, meaning, pos, tags, user_id)
+      values (r.new_deck, r.word, r.alt, r.translation, r.phonetic, r.example, r.meaning, r.pos, r.tags, v_me) returning id into v_new;
     insert into cards (note_id, direction, user_id) values (v_new, 'it', v_me), (v_new, 'ru', v_me);
   end loop;
   return v_root;
