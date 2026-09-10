@@ -98,6 +98,9 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       if (isMissingTable(e)) { S.missingTables = true; S.loaded = true; }
       else { console.error('cards load:', e); showToast('⚠ Не удалось загрузить колоды: ' + e.message); }
     }
+    // Колоды и слова уже есть — показываем их, не дожидаясь истории ответов: она нужна только
+    // для серии и статистики, а растёт с каждым повторением и грузится дольше всего
+    if (_currentState === 'cards' && S.view !== 'study') render();
     // История ответов отдельно: её таблица могла появиться позже остальных
     if (!S.missingTables) {
       try {
@@ -749,11 +752,18 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const tb = $('browseToolbar'); if (tb) tb.innerHTML = browseToolbarHtml(filtered, tags);
   }
 
+  // Спуск в колоду (null — корень): та же сетка плиток, только для её подколод
+  function openDeck(id) {
+    id = id || null;
+    if (S.view === 'decks' && S.folder === id) return;
+    pushView('decks', id); S.folder = id; S.view = 'decks'; render();
+  }
   // ── Действия: колоды ─────────────────────────────────────────────────────────
   async function newDeck(parentId) {
     const name = prompt(parentId ? `Название подколоды в «${deckById(parentId).name}»:` : 'Название колоды:');
     if (!name || !name.trim()) return;
-    try { const [d] = await sb('decks', { method: 'POST', body: { name: name.trim(), parent_id: parentId || null } }); S.decks.push(d); render(); }
+    // Колоду создают, чтобы что-то в неё положить, — сразу заходим внутрь, а не показываем список
+    try { const [d] = await sb('decks', { method: 'POST', body: { name: name.trim(), parent_id: parentId || null } }); S.decks.push(d); openDeck(d.id); }
     catch (e) { showToast('⚠ ' + e.message); }
   }
   async function renameDeck(id) {
@@ -926,7 +936,10 @@ ${JSON.stringify(list)}`;
       const cards = await sb('cards', { method: 'POST', body: notes.flatMap(n => [{ note_id: n.id, direction: 'it' }, { note_id: n.id, direction: 'ru' }]) });
       S.notes.push(...notes); S.cards.push(...cards.map(c => ({ ...c, dueMs: Date.parse(c.due) || 0 })));
       showToast(`✓ Добавлено ${notes.length} слов, ${cards.length} карточек`);
-      S.build = null; S.view = 'decks'; render();
+      // Возвращаемся к колоде через «Назад», а не подменой вида: запись, которую положил openAdd,
+      // иначе остаётся в истории, и первое нажатие «Назад» не делает ничего видимого
+      S.build = null;
+      if (typeof navHistory !== 'undefined' && navHistory.length) goBack(); else { S.view = 'decks'; render(); }
     } catch (e) { showToast('⚠ ' + e.message); }
   }
 
@@ -1206,8 +1219,7 @@ ${JSON.stringify(list)}`;
     },
     async reload() { S.loaded = false; if (_currentState === 'cards') render(); await loadAll(); if (_currentState === 'cards') render(); },
     copySql() { const t = window.DIZ_SETUP_SQL || SETUP_SQL; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => showToast('✓ SQL скопирован'), () => { const el = $('cardsSql'); const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); showToast('Выделено — скопируйте вручную'); }); },
-    // Спуск в колоду (null — корень): та же сетка плиток, только для её подколод
-    openDeck(id) { id = id || null; if (S.view === 'decks' && S.folder === id) return; pushView('decks', id); S.folder = id; S.view = 'decks'; render(); },
+    openDeck,
     newDeck, renameDeck, deleteDeck,
     setNewPerDay(v) { try { localStorage.setItem(NEW_PER_DAY_KEY, String(Math.max(0, parseInt(v) || 0))); } catch (e) {} render(); },
     study(id) { study(id, S.view === 'browse' ? S.tagFilter : ''); },
