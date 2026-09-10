@@ -2200,6 +2200,9 @@
   .conjugation-section.has-related {
     border-radius: 0;
   }
+  /* Вид связи перед группой слов: синонимы, антонимы, просто близкие */
+  .related-kind { align-self: center; font-family: var(--font-text); font-style: italic; font-size: var(--fs-small); color: var(--muted); letter-spacing: .04em; }
+  .related-kind:not(:first-child) { margin-left: 8px; }
   .related-words {
     display: flex;
     flex-wrap: wrap;

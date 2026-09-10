@@ -1281,10 +1281,20 @@ function mapFreeDictionary(fd, opts = {}) {
   const englishMain = (glosses[0] || '').split(/[;,]/)[0].trim();
   const englishAlts = glosses.slice(1, 4).map(g => g.split(';')[0].trim()).filter(Boolean).join('; ');
 
-  const related = [];
-  senses.forEach(s => (s.synonyms || []).concat(s.antonyms || []).forEach(w => {
-    if (w && w !== word && !related.includes(w) && related.length < 6) related.push(w);
-  }));
+  // Синонимы и антонимы Викисловарь даёт по каждому значению отдельно, и вид связи в них есть.
+  // Раньше всё это сваливалось в общий relatedWords и вид терялся: у «bello» рядом с «buono»
+  // оказывались «grande, grosso, forte» — синонимы значения «изрядный», и выглядело это ошибкой.
+  // Держим их с видом и номером значения; relatedWords остаётся ради старых статей и модели.
+  const related = [], links = [];
+  const addLink = (w, kind, sense) => {
+    if (!w || w === word || links.length >= 12 || links.some(l => l.word === w)) return; // потолок, чтобы список не разрастался
+    links.push({ word: w, kind, sense });
+    if (!related.includes(w) && related.length < 6) related.push(w);
+  };
+  senses.forEach((s, i) => {
+    (s.synonyms || []).forEach(w => addLink(w, 'sin', i));
+    (s.antonyms || []).forEach(w => addLink(w, 'ant', i));
+  });
 
   let singular = null, plural = null;
   if (isNoun) {
@@ -1327,7 +1337,7 @@ function mapFreeDictionary(fd, opts = {}) {
     phonetic: ipa ? ipa.text : '',
     singular, plural, conjugations, auxiliary,
     english: { main: englishMain, alternatives: englishAlts },
-    relatedWords: related,
+    relatedWords: related, links,
     senses: senses.map(s => ({
       gloss: fdCleanGloss(s.definition),
       label: fdSenseLabel(s.definition),
@@ -2541,14 +2551,28 @@ function renderEntry(e) {
   // Related words
   const relSec = $('relatedWordsSection');
   const relList = $('relatedWordsList');
-  if (e.relatedWords && e.relatedWords.length > 0) {
+  const relLinks = Array.isArray(e.links) ? e.links.filter(l => l && l.word) : [];
+  if ((e.relatedWords && e.relatedWords.length) || relLinks.length) {
     relList.innerHTML = '';
-    e.relatedWords.forEach(w => {
-      const btn = document.createElement('button');
-      btn.className = 'related-word-btn';
-      btn.textContent = w;
-      btn.onclick = () => { $('searchInput').value = w; lookupWord(w); };
-      relList.appendChild(btn);
+    // Викисловарь знает вид связи, модель — нет. Что знаем, то и подписываем: иначе рядом с «buono»
+    // у «bello» стоят «grande, grosso, forte» и читаются как ошибка, хотя это синонимы значения «изрядный»
+    const known = new Set(relLinks.map(l => String(l.word).toLowerCase()));
+    const rest = (e.relatedWords || []).filter(w => w && !known.has(String(w).toLowerCase()));
+    const groups = [
+      ['Sinonimi', relLinks.filter(l => l.kind === 'sin').map(l => l.word)],
+      ['Contrari', relLinks.filter(l => l.kind === 'ant').map(l => l.word)],
+      [relLinks.length ? 'Vicine' : '', rest]
+    ];
+    groups.forEach(([label, words]) => {
+      if (!words.length) return;
+      if (label) { const t = document.createElement('span'); t.className = 'related-kind'; t.textContent = label; relList.appendChild(t); }
+      words.forEach(w => {
+        const btn = document.createElement('button');
+        btn.className = 'related-word-btn';
+        btn.textContent = w;
+        btn.onclick = () => { $('searchInput').value = w; lookupWord(w); };
+        relList.appendChild(btn);
+      });
     });
     // rounded bottom only if no conjugation
     relSec.className = 'related-words-section' + (e.isVerb ? ' has-conj' : '');
