@@ -2200,15 +2200,18 @@
   .conjugation-section.has-related {
     border-radius: 0;
   }
-  /* Вид связи перед группой слов: синонимы, антонимы, просто близкие */
-  .related-kind { align-self: center; font-family: var(--font-text); font-style: italic; font-size: var(--fs-small); color: var(--muted); letter-spacing: .04em; }
-  .related-kind:not(:first-child) { margin-left: 8px; }
+  /* Виды связи идут строками: подпись слева, слова справа переносятся сами.
+     В одну строку всё вместе не читается — синонимы и соседи слипаются в кашу. */
   .related-words {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    flex-direction: column;
+    gap: 10px;
     margin-top: 4px;
   }
+  .related-group { display: grid; grid-template-columns: minmax(64px, auto) 1fr; gap: 4px 14px; align-items: baseline; }
+  .related-group.no-kind { grid-template-columns: 1fr; }
+  .related-group-words { display: flex; flex-wrap: wrap; gap: 8px; }
+  .related-kind { font-family: var(--font-text); font-style: italic; font-size: var(--fs-small); color: var(--muted); letter-spacing: .04em; text-align: right; }
   .related-word-btn {
     padding: 4px 16px;
     background: rgba(var(--terracotta-rgb),0.07);
@@ -2225,6 +2228,8 @@
 
   @media (max-width: 640px) {
     .related-words-section { padding: 16px; }
+    .related-group { grid-template-columns: 1fr; gap: 2px; }
+    .related-kind { text-align: left; }
   }
 
   /* ── Clickable words in example/definition ───────────────── */

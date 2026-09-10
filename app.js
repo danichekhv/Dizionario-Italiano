@@ -2568,14 +2568,20 @@ function renderEntry(e) {
     ];
     groups.forEach(([label, words]) => {
       if (!words.length) return;
-      if (label) { const t = document.createElement('span'); t.className = 'related-kind'; t.textContent = label; relList.appendChild(t); }
+      const row = document.createElement('div');
+      row.className = 'related-group' + (label ? '' : ' no-kind');
+      if (label) { const t = document.createElement('span'); t.className = 'related-kind'; t.textContent = label; row.appendChild(t); }
+      const box = document.createElement('div');
+      box.className = 'related-group-words';
       words.forEach(w => {
         const btn = document.createElement('button');
         btn.className = 'related-word-btn';
         btn.textContent = w;
         btn.onclick = () => { $('searchInput').value = w; lookupWord(w); };
-        relList.appendChild(btn);
+        box.appendChild(btn);
       });
+      row.appendChild(box);
+      relList.appendChild(row);
     });
     // rounded bottom only if no conjugation
     relSec.className = 'related-words-section' + (e.isVerb ? ' has-conj' : '');
