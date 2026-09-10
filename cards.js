@@ -715,15 +715,15 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       const rows = b.items.map((it, i) => `
         <div class="build-row ${it.include ? '' : 'off'}">
           <input type="checkbox" ${it.include ? 'checked' : ''} onchange="Cards.toggleItem(${i}, this.checked)">
-          <div class="build-main">
-            <div class="build-word">${esc(it.word)} <span class="build-ipa">${esc(it.phonetic)}</span> <span class="build-ru">${esc(it.translation) || '<em>нет перевода</em>'}</span></div>
+          <div class="build-main" role="button" tabindex="0" title="Изменить" onclick="Cards.editItem(${i})" onkeydown="if(event.key==='Enter')Cards.editItem(${i})">
+            <div class="build-word">${esc(it.word)}${(it.alt || []).length ? ` <span class="build-alt">· ${esc(it.alt.join(' · '))}</span>` : ''} <span class="build-ipa">${esc(it.phonetic)}</span> <span class="build-ru">${esc(it.translation) || '<em>нет перевода</em>'}</span></div>
             ${it.example ? `<div class="build-ex">${esc(it.example)}</div>` : ''}
             ${it.meaning ? `<div class="build-mean">${esc(it.meaning)}</div>` : ''}
             ${it.warn ? `<div class="build-warn">${esc(it.warn)}</div>` : ''}
           </div>
+          <button class="build-drop" title="Убрать из списка" onclick="Cards.dropItem(${i})">&times;</button>
         </div>`).join('');
-      body = `
-        <div class="cards-p">Найдено ${b.items.length} слов${b.llmUsed ? `, модель дописала недостающее (${esc(b.llmUsed)})` : ''}. Снимите галочку с лишних и сохраните.</div>
+        <div class="cards-p">Найдено ${b.items.length} слов${b.llmUsed ? `, модель дописала недостающее (${esc(b.llmUsed)})` : ''}. Нажмите на строку, чтобы поправить, × — убрать из списка.</div>
         <div class="build-list">${rows}</div>
         <div class="cards-actions">
           <button class="cards-btn primary" onclick="Cards.saveBuild()">Сохранить ${b.items.filter(i => i.include).length} слов → ${b.items.filter(i => i.include).length * 2} карточек</button>
@@ -1072,23 +1072,40 @@ ${JSON.stringify(list)}`;
     const first = document.getElementById('edit_word');
     if (first && !(typeof isTouchDevice === 'function' && isTouchDevice())) first.focus();
   }
+  // Окно правки одно на два случая: сохранённая карточка в колоде и строка в предпросмотре сборки.
+  // Отличаются они только тем, откуда берутся поля и куда уходят.
+  function editorHtml(n, saveCall, extraBtn = '') {
+    const fields = ['word:Слово', 'translation:Перевод', 'phonetic:Транскрипция', 'example:Пример', 'meaning:Значение'];
+    return `
+      <div class="cards-modal-box">
+        <div class="cards-title small">Редактировать</div>
+        ${fields.map(f => { const [k, l] = f.split(':'); return `<label class="cards-field"><span>${l}</span>${k === 'example' || k === 'meaning' ? `<textarea id="edit_${k}">${esc(n[k])}</textarea>` : `<input id="edit_${k}" value="${esc(n[k])}">`}</label>`; }).join('')}
+        <label class="cards-field"><span>Синонимы</span><input id="edit_alt" value="${esc((n.alt || []).join(', '))}" placeholder="через запятую, то же значение другими словами"></label>
+        <label class="cards-field"><span>Теги</span><input id="edit_tags" value="${esc((n.tags || []).join(', '))}"></label>
+        <div class="cards-actions"><button class="cards-btn primary" onclick="${saveCall}">Сохранить</button>${extraBtn}<button class="cards-btn" onclick="Cards.closeModal()">Отмена</button></div>
+      </div>`;
+  }
+  // Что набрано в окне: слово с запятой разбирается так же, как при добавлении списком
+  function readEditor() {
+    const split = splitWord($('edit_word').value);
+    const alt = [...new Set([...split.alt, ...$('edit_alt').value.split(/[,;/]/).map(x => x.trim()).filter(Boolean)])];
+    return { word: split.word, alt, translation: $('edit_translation').value.trim(), phonetic: $('edit_phonetic').value.trim(),
+      example: $('edit_example').value.trim(), meaning: $('edit_meaning').value.trim(),
+      tags: $('edit_tags').value.split(/[,\s]+/).map(t => t.trim().replace(/^#/, '')).filter(Boolean) };
+  }
   function editNote(id) {
     const n = noteById(id); if (!n) return; const m = cardsModal();
     m.style.display = 'flex';
-    m.innerHTML = `
-      <div class="cards-modal-box">
-        <div class="cards-title small">Редактировать</div>
-        ${['word:Слово', 'translation:Перевод', 'phonetic:Транскрипция', 'example:Пример', 'meaning:Значение'].map(f => { const [k, l] = f.split(':'); return `<label class="cards-field"><span>${l}</span>${k === 'example' || k === 'meaning' ? `<textarea id="edit_${k}">${esc(n[k])}</textarea>` : `<input id="edit_${k}" value="${esc(n[k])}">`}</label>`; }).join('')}
-        <label class="cards-field"><span>Синонимы</span><input id="edit_alt" value="${esc((n.alt || []).join(', '))}" placeholder="через запятую, то же значение другими словами"></label>
-        <label class="cards-field"><span>Теги</span><input id="edit_tags" value="${esc((n.tags || []).join(', '))}"></label>
-        <div class="cards-actions"><button class="cards-btn primary" onclick="Cards.saveNote('${id}')">Сохранить</button><button class="cards-btn" onclick="Cards.closeModal()">Отмена</button></div>
-      </div>`;
+    m.innerHTML = editorHtml(n, `Cards.saveNote('${id}')`, `<button class="cards-btn" onclick="Cards.rebuildNote('${id}')" title="Заново собрать перевод, пример, значение и транскрипцию">Пересобрать</button>`);
+  }
+  // Строка предпросмотра: то же окно, но правки живут в памяти до сохранения колоды
+  function editItem(i) {
+    const it = S.build && S.build.items[i]; if (!it) return; const m = cardsModal();
+    m.style.display = 'flex';
+    m.innerHTML = editorHtml(it, `Cards.saveItem(${i})`);
   }
   async function saveNote(id) {
-    // Запятая в поле слова разбирается так же, как при добавлении списком: главное слово и синонимы
-    const split = splitWord($('edit_word').value);
-    const alt = [...new Set([...split.alt, ...$('edit_alt').value.split(/[,;/]/).map(x => x.trim()).filter(Boolean)])];
-    const body = noteBody({ word: split.word, alt, translation: $('edit_translation').value.trim(), phonetic: $('edit_phonetic').value.trim(), example: $('edit_example').value.trim(), meaning: $('edit_meaning').value.trim(), tags: $('edit_tags').value.split(/[,\s]+/).map(t => t.trim().replace(/^#/, '')).filter(Boolean) });
+    const body = noteBody(readEditor());
     if (!body.word) return;
     try {
       await sb(`notes?id=eq.${id}`, { method: 'PATCH', body }); Object.assign(noteById(id), body); closeModal();
@@ -1096,6 +1113,39 @@ ${JSON.stringify(list)}`;
       const inp = document.getElementById('studyInput'); const typed = inp ? inp.value : null;
       render();
       const inp2 = document.getElementById('studyInput'); if (inp2 && typed) inp2.value = typed;
+    } catch (e) { showToast('⚠ ' + e.message); }
+  }
+  // Строка предпросмотра правится в памяти. Сменили слово — прежние транскрипция, пример и значение
+  // относились к другому слову: строку пересобираем, не трогая того, что человек вписал руками.
+  async function saveItem(i) {
+    const it = S.build && S.build.items[i]; if (!it) return;
+    const v = readEditor(); if (!v.word) return;
+    const changed = v.word.toLowerCase() !== String(it.word || '').toLowerCase();
+    Object.assign(it, v);
+    closeModal(); render();
+    if (!changed) return;
+    it.phonetic = ''; it.warn = 'пересобираю…'; render();
+    try {
+      const keep = it.include;
+      const d = await lookupOne({ ...it, warn: '' });
+      Object.assign(it, d); it.include = keep;
+    } catch (e) { it.warn = 'ошибка поиска: ' + (e.message || e); }
+    render();
+  }
+  function dropItem(i) { if (!S.build) return; S.build.items.splice(i, 1); if (!S.build.items.length) S.build = null; render(); } // выкинули всё — возвращаемся к вводу
+  // Пересобрать сохранённую карточку: перевод, пример, значение и транскрипцию берём заново для
+  // текущего слова. Нужно, когда карточка досталась от старого разбора и описывает не то слово.
+  async function rebuildNote(id) {
+    const n = noteById(id); if (!n) return;
+    if (!confirm(`Пересобрать «${n.word}»? Перевод, пример, значение и транскрипция будут написаны заново.`)) return;
+    closeModal(); showToast('Пересобираю…');
+    try {
+      const d = await lookupOne({ word: n.word, alt: n.alt || [], translation: '', example: '', meaning: '', tags: n.tags || [] });
+      await completeWithLlm([d]);
+      const body = noteBody({ word: d.word || n.word, alt: n.alt || [], translation: d.translation || '', phonetic: d.phonetic || '',
+        example: d.example || '', meaning: d.meaning || '', pos: d.pos || n.pos || '', tags: n.tags || [] });
+      await sb(`notes?id=eq.${id}`, { method: 'PATCH', body });
+      Object.assign(n, body); render(); showToast('✓ Карточка пересобрана');
     } catch (e) { showToast('⚠ ' + e.message); }
   }
   const closeModal = () => { const m = $('cardsModal'); if (m) m.style.display = 'none'; };
@@ -1342,7 +1392,7 @@ ${JSON.stringify(list)}`;
     setTagFilter(t) { S.tagFilter = t; S.browseSelected.clear(); render(); },
     selectNote(id, v) { if (v) S.browseSelected.add(id); else S.browseSelected.delete(id); render(); },
     selectAll(v) { S.browseSelected.clear(); if (v) currentNotes().forEach(n => S.browseSelected.add(n.id)); render(); },
-    tagSelected, untagSelected, moveSelected, deleteSelected, editNote, editCurrent, saveNote, closeModal,
+    tagSelected, untagSelected, moveSelected, deleteSelected, editNote, editCurrent, saveNote, closeModal, editItem, saveItem, dropItem, rebuildNote,
     addEntries, pickDeck, pickNewDeck, closePicker,
     _state: S, _schedule: schedule, _parseLines: parseLines, _fmt: fmtInterval
   };

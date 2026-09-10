@@ -634,6 +634,12 @@
   .build-row { display: flex; gap: 12px; align-items: flex-start; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--cream); }
   .build-row.off { opacity: .45; }
   .build-row input { margin-top: 4px; }
+  /* Строку можно открыть на правку и выкинуть из списка, не сохраняя её в колоду */
+  .build-main { flex: 1; cursor: pointer; min-width: 0; }
+  .build-main:hover .build-word { color: var(--terracotta); }
+  .build-alt { font-family: var(--font-text); font-style: italic; font-size: var(--fs-small); color: var(--muted); }
+  .build-drop { flex: none; background: none; border: none; cursor: pointer; padding: 0 2px; font-size: var(--fs-h3); line-height: 1; color: var(--stone); }
+  .build-drop:hover { color: var(--terracotta); }
   .build-word { font-family: var(--font-display); font-size: var(--fs-lead); }
   .build-ipa { font-family: var(--font-ipa); color: var(--stone); font-size: var(--fs-body); margin: 0 8px; }
   .build-ru { color: var(--sage); font-style: italic; font-size: var(--fs-body); font-family: var(--font-text); }
