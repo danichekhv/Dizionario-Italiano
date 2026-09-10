@@ -46,8 +46,14 @@
     return { word: parts[0], alt: parts.slice(1) };
   }
   const wordVariants = n => [n.word, ...(n.alt || [])].map(w => String(w || '').trim()).filter(Boolean);
-  // Колонки alt может ещё не быть: её добавляют разовым SQL, а до этого запись с ней отобьётся
-  const noteBody = o => { if (S.hasAlt) return o; const { alt, ...rest } = o; return rest; };
+  // Колонки alt может ещё не быть: её добавляют разовым SQL. Молча выбросить синонимы нельзя —
+  // человек их только что напечатал, пусть знает, почему они не сохранились
+  const noteBody = o => {
+    if (S.hasAlt) return o;
+    const { alt, ...rest } = o;
+    if ((alt || []).length) showToast('⚠ Синонимы не сохранятся: выполните SQL из настроек');
+    return rest;
+  };
 
   const SETUP_SQL = `-- Выполните один раз в Supabase: SQL Editor → New query → Run
 create table if not exists decks (
@@ -107,13 +113,15 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         sb('cards?select=*')
       ]);
       S.decks = decks || []; S.notes = notes || [];
-      if (S.notes.length) S.hasAlt = 'alt' in S.notes[0]; // колонку добавляют разовым SQL, до него пишем без неё
       S.cards = (cards || []).map(c => ({ ...c, dueMs: Date.parse(c.due) || 0 }));
       S.loaded = true; S.missingTables = false;
     } catch (e) {
       if (isMissingTable(e)) { S.missingTables = true; S.loaded = true; }
       else { console.error('cards load:', e); showToast('⚠ Не удалось загрузить колоды: ' + e.message); }
     }
+    // Есть ли колонка синонимов — спрашиваем базу прямо. По первой заметке гадать нельзя: при пустой
+    // колоде гадать не по чему, а в открытой до прогона SQL вкладке ответ устареет и синонимы пропадут
+    if (!S.missingTables) { try { await sb('notes?select=alt&limit=1'); S.hasAlt = true; } catch (e) { S.hasAlt = false; } }
     // Колоды и слова уже есть — показываем их, не дожидаясь истории ответов: она нужна только
     // для серии и статистики, а растёт с каждым повторением и грузится дольше всего
     if (_currentState === 'cards' && S.view !== 'study') render();
