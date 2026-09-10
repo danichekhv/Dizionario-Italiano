@@ -45,11 +45,26 @@
   const rowToInfo = r => ({ id: norm(r.w || r.word), label: r.w || r.word, cat: catKey(r.cat), pos: posKey(r.pos), rel: Array.isArray(r.rel) ? r.rel.map(norm).filter(Boolean) : [], ru: r.ru || '' });
   const entryToInfo = e => ({ id: norm(e.word), label: e.word || '', cat: catKey(e.category), pos: posKey(e.partOfSpeech), rel: (e.relatedWords || []).map(norm).filter(Boolean), ru: (e.russian && e.russian.main) || '' });
 
-  async function loadAllWords() {
-    const rows = await fetchRows('limit=5000');
+  // Своя карта: пересечение просмотренных слов с кэшем статей считает база одним запросом.
+  // Тянуть весь словарь и отбрасывать чужое в браузере нельзя — при росте базы это мегабайты
+  // ради сотни своих слов. Функция my_map_words появляется вместе с остальным SQL из настроек.
+  async function loadMyWords() {
+    const res = await fetch(`${SB_URL}/rest/v1/rpc/my_map_words`, { method: 'POST', headers: { ...SB_H, 'Content-Type': 'application/json' }, body: '{}' });
+    if (!res.ok) throw new Error('Supabase HTTP ' + res.status);
     const map = new Map();
-    rows.map(rowToInfo).forEach(i => { if (i.id && !map.has(i.id)) map.set(i.id, i); }); // строки-псевдонимы схлопываем
+    (await res.json()).filter(r => r.unv !== 'true').map(rowToInfo).forEach(i => { if (i.id && !map.has(i.id)) map.set(i.id, i); });
     return map;
+  }
+  // Вся база — вид для владельца. Возвращаем и то, сколько строк всего: показывать часть под
+  // видом целого нельзя, а рисовать десятки тысяч узлов раскладка всё равно не умеет.
+  async function loadAllWords(limit = 3000) {
+    const res = await fetch(`${SB_URL}/rest/v1/dictionary?${SELECT}&limit=${limit}`, { headers: { ...SB_H, Prefer: 'count=exact' } });
+    if (!res.ok) throw new Error('Supabase HTTP ' + res.status);
+    const total = parseInt(String(res.headers.get('content-range') || '').split('/')[1]) || 0;
+    const rows = (await res.json()).filter(r => r.unv !== 'true');
+    const infos = new Map();
+    rows.map(rowToInfo).forEach(i => { if (i.id && !infos.has(i.id)) infos.set(i.id, i); }); // строки-псевдонимы схлопываем
+    return { infos, total };
   }
   async function fetchWords(ids) {
     const out = new Map(); const list = [...new Set(ids.map(norm).filter(Boolean))];
@@ -79,7 +94,7 @@
   function buildGraph(infos, opts = {}) {
     const nodes = new Map(); const edges = new Set();
     const add = (id, info, depth) => {
-      if (!nodes.has(id)) nodes.set(id, { id, label: info ? info.label : id, cat: info ? info.cat : '?', pos: info ? info.pos : '?', ru: info ? info.ru : '', depth, known: !!info });
+      if (!nodes.has(id)) nodes.set(id, { id, label: info ? info.label : id, cat: info ? info.cat : '?', pos: info ? info.pos : '?', ru: info ? info.ru : '', depth, known: !!info, mine: opts.mineOf ? opts.mineOf(id) : '' });
       else if (depth < nodes.get(id).depth) nodes.get(id).depth = depth;
     };
     infos.forEach((info, id) => add(id, info, opts.depthOf ? (opts.depthOf.get(id) ?? 0) : 0));
@@ -157,6 +172,8 @@
     const pointers = new Map(); let drag = null, pan = null, pinch = null, hoverTimer = 0;
 
     const colorOf = n => (G.mode === 'cat' ? CAT_COLORS[n.cat] : POS_COLORS[n.pos]) || '#8b7355';
+    // Слово в колоде и слово в избранном — не просто открытые: обводим, чтобы своё было видно сразу
+    const MINE_RING = { deck: '#1a1208', fav: '#c9a227' };
     const keyOf = n => G.mode === 'cat' ? n.cat : n.pos;
     const visible = n => !G.hidden.has(keyOf(n));
     const depthAlpha = d => d <= 1 ? 1 : d === 2 ? 0.8 : d === 3 ? 0.6 : 0.45;
@@ -216,7 +233,7 @@
       ctx.lineWidth = 1.2 / G.scale;
       G.edges.forEach(([a, b]) => { if (!visible(a) || !visible(b)) return; const strong = hl && (a === hl || b === hl); ctx.strokeStyle = strong ? 'rgba(196,82,42,0.9)' : `rgba(139,115,85,${dim ? 0.12 : 0.28 * depthAlpha(Math.max(a.depth || 0, b.depth || 0))})`; ctx.lineWidth = (strong ? 2.2 : 1.2) / G.scale; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); });
       // узлы
-      G.nodes.forEach(n => { if (!visible(n)) return; const r = radius(n); const hot = hlSet.has(n) || G.matches.has(n) || n.id === G.center; ctx.globalAlpha = dim && !hot ? 0.25 : depthAlpha(n.depth || 0); ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fillStyle = colorOf(n); ctx.fill(); ctx.lineWidth = (hot ? 3 : 1.5) / G.scale; ctx.strokeStyle = hot ? '#1a1208' : 'rgba(255,255,255,0.9)'; ctx.stroke(); if (!n.known) { ctx.beginPath(); ctx.arc(n.x, n.y, Math.max(1.5, r * 0.4), 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill(); } });
+      G.nodes.forEach(n => { if (!visible(n)) return; const r = radius(n); const hot = hlSet.has(n) || G.matches.has(n) || n.id === G.center; ctx.globalAlpha = dim && !hot ? 0.25 : depthAlpha(n.depth || 0); ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fillStyle = colorOf(n); ctx.fill(); ctx.lineWidth = (hot ? 3 : n.mine ? 2.5 : 1.5) / G.scale; ctx.strokeStyle = hot ? '#1a1208' : (MINE_RING[n.mine] || 'rgba(255,255,255,0.9)'); ctx.stroke(); if (!n.known) { ctx.beginPath(); ctx.arc(n.x, n.y, Math.max(1.5, r * 0.4), 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill(); } });
       // подписи — постоянного размера на экране
       const showAll = G.scale >= 0.55; const fs = 12.5 / G.scale;
       ctx.font = `${fs}px "Crimson Pro", Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
@@ -224,7 +241,7 @@
       ctx.globalAlpha = 1;
     }
     // Слова одинаково маленькие, выделяется текущее слово в центре; тема растёт с числом слов
-    const radius = n => n.hub ? Math.min(30, 9 + 2.4 * Math.sqrt(n.count || 1)) : (n.id === G.center ? 13 : 5);
+    const radius = n => n.hub ? Math.min(30, 9 + 2.4 * Math.sqrt(n.count || 1)) : (n.id === G.center ? 13 : (n.mine ? 7 : 5));
     // Клик по теме подсвечивает её слова, второй клик снимает подсветку
     function focusHub(n) {
       if (G.focusHub === n) { G.focusHub = null; G.matches = new Set(); }
@@ -313,5 +330,5 @@
     return { setData, fit, destroy, setLoading, get nodes() { return G.nodes; }, get view() { return { tx: G.tx, ty: G.ty, scale: G.scale, w: G.w, h: G.h, alpha: G.alpha }; } };
   }
 
-  window.WordGraph = { create, loadAllWords, fetchWords, buildGraph, buildFromEntries, buildAround, catKey, posKey, CAT_COLORS, CAT_LABELS };
+  window.WordGraph = { create, loadAllWords, loadMyWords, fetchWords, buildGraph, buildFromEntries, buildAround, catKey, posKey, CAT_COLORS, CAT_LABELS };
 })();

@@ -212,6 +212,21 @@ alter table production_log enable row level security;
 drop policy if exists dz_own on production_log;
 create policy dz_own on production_log for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 
+
+-- 7. Карта слов строится из своих просмотров. Пересечение word_views с кэшем статей считает база:
+-- иначе браузер тянет весь словарь и выбрасывает чужое, а это мегабайты ради сотни своих слов.
+-- security definer нужен, чтобы соединение прошло одним запросом; чужого не отдаст — фильтр по auth.uid().
+create or replace function my_map_words()
+returns table (word text, w text, cat text, pos text, rel jsonb, ru text, unv text)
+language sql stable security definer set search_path = public as $$
+  select d.word,
+         d.data->>'word', d.data->>'category', d.data->>'partOfSpeech',
+         d.data->'relatedWords', d.data->'russian'->>'main', d.data->>'unverified'
+  from word_views v join dictionary d on d.word = v.word
+  where v.user_id = auth.uid()
+$$;
+grant execute on function my_map_words() to authenticated;
+
 -- набранный на карточке ответ: пока просто сохраняем, потом неверные пойдут в тот же журнал
 alter table reviews add column if not exists typed text;`;
 
@@ -331,6 +346,7 @@ alter table reviews add column if not exists typed text;`;
   function logView(word) {
     if (!session || !word || viewed.has(word)) return;
     viewed.add(word);
+    if (typeof _myMapInfos !== 'undefined') _myMapInfos = null; // своя карта подтянет новое слово при следующем открытии
     fetch(`${SB_URL}/rest/v1/word_views`, { method: 'POST', headers: { ...SB_H, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ word, viewed_at: new Date().toISOString() }) }).catch(() => {});
   }
   async function myWords() {

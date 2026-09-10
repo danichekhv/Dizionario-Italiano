@@ -1342,7 +1342,7 @@ ${JSON.stringify(list)}`;
     setNewPerDay(v) { try { localStorage.setItem(NEW_PER_DAY_KEY, String(Math.max(0, parseInt(v) || 0))); } catch (e) {} render(); },
     study(id) { study(id, S.view === 'browse' ? S.tagFilter : ''); },
     // Все колоды разом: deckId = null, notesInDeck(null) обходит дерево от корня
-    allWords() { return S.notes.map(n => String(n.word || '').toLowerCase()); }, // для подсказок в поиске
+    allWords() { return S.notes.flatMap(n => wordVariants(n).map(w => w.toLowerCase())); }, // для подсказок в поиске и подсветки на карте
     studyAll() { if (window.Auth && !Auth.require('Войдите, чтобы учить карточки')) return; if (currentMode !== 'cards') { currentMode = 'cards'; applyModeUI('cards'); showState('cards'); } (S.loaded ? Promise.resolve() : loadAll()).then(() => study(null, '')); },
     // Сводка для плиток главной: к повторению и новых (в пределах дневного лимита), серия, слова
     async homeSummary() {

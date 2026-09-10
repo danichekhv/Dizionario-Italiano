@@ -172,7 +172,7 @@ async function sbGet(table, key) {
 async function sbGetTopic(table, key) { return sbGet(table, key); }
 
 async function sbSave(table, keyCol, keyVal, data) {
-  if (table === 'dictionary' && typeof _mapInfos !== 'undefined') _mapInfos = null; // карта слов подтянет новое слово при следующем открытии
+  if (table === 'dictionary' && typeof _mapInfos !== 'undefined') { _mapInfos = null; _myMapInfos = null; } // карта слов подтянет новое слово при следующем открытии
   try {
     const res = await fetch(`${SB_URL}/rest/v1/${table}`, {
       method: "POST",
@@ -1003,7 +1003,7 @@ async function cleanupRelatedCache() {
       }
     }
   } catch (e) { console.warn('notes cleanup:', e); }
-  _mapInfos = null;
+  _mapInfos = null; _myMapInfos = null;
   console.log('cleanupRelatedCache: убраны связи', [...removed], '· помечены выдуманными', fake, '· ошибок сохранения', failed);
   showToast(`Проверено статей: ${rows.length}. Исправлено: ${fixed}, связей убрано: ${removed.size}, скрыто статей: ${fake.length}, слов в колодах: ${notesFixed}${failed ? `, не сохранилось: ${failed}` : ''}${_wordCheckFailed ? `, словарь не ответил по ${_wordCheckFailed} словам — повторите позже` : ''}`);
 }
@@ -3100,13 +3100,15 @@ function openWordMap() {
   showState('graph');
   if (_mapGraph) { _mapGraph.destroy(); _mapGraph = null; }
   const box = $('graphScreen');
-  const loggedIn = !!(window.Auth && Auth.user());
-  box.innerHTML = `<div class="graph-screen-head"><div class="cards-title">Карта слов</div><div class="cards-head-deck">${loggedIn ? 'слова, которые вы открывали' : 'все открытые слова и связи между ними'}</div></div><div id="mapGraphBox"></div>`;
+  // «Вся база» — вид для владельца: карта всех статей ни на один вопрос читателя не отвечает
+  // и перестаёт читаться, как только словарь вырастает. Читателю — его собственные слова.
+  const admin = !!(window.Auth && Auth.isAdmin && Auth.isAdmin());
+  box.innerHTML = `<div class="graph-screen-head"><div class="cards-title">Карта слов</div><div class="cards-head-deck" id="mapSub">слова, которые вы открывали</div></div><div id="mapGraphBox"></div>`;
   _mapGraph = WordGraph.create($('mapGraphBox'), {
     height: window.innerWidth < 640 ? '65vh' : '70vh', neighborsToggle: true, neighbors: false, wordLinksToggle: true, wordLinks: false,
     onNeighbors: v => { _mapNeighbors = v; loadWordMap(); }, onWordLinks: v => { _mapLinks = v; loadWordMap(); },
-    extraButtons: loggedIn ? '<button class="wg-toggle wg-all" title="Не только мои слова, а все статьи в общей базе">вся база</button>' : '',
-    hint: 'Крупные узлы — темы и ваши теги, вокруг них ваши слова. Клик по теме подсвечивает её слова, клик по слову открывает статью. «Связи слов» добавляет связи между словами из статей.',
+    extraButtons: admin ? '<button class="wg-toggle wg-all" title="Все статьи в общей базе — вид для владельца">вся база</button>' : '',
+    hint: 'Крупные узлы — темы и ваши теги, вокруг них ваши слова. Слова из колод обведены тёмным, из избранного — золотым, полые — те, что вам ещё не встречались. Клик по теме подсвечивает её слова, клик по слову открывает статью.',
     ...graphHandlers()
   });
   const all = $('mapGraphBox').querySelector('.wg-all');
@@ -3114,20 +3116,54 @@ function openWordMap() {
   _mapNeighbors = false; _mapShowAll = false;
   loadWordMap();
 }
-let _mapNeighbors = false, _mapShowAll = false, _mapLinks = false;
+let _mapNeighbors = false, _mapShowAll = false, _mapLinks = false, _myMapInfos = null, _mapTotal = 0;
+
+// Кто на карте: свои открытые слова. У вошедшего их считает база одним запросом (my_map_words),
+// у гостя они берутся из локальной истории просмотров. Раньше сюда приезжал весь словарь, из
+// которого 95% тут же выбрасывалось, — при росте базы это мегабайты ради сотни своих слов.
+async function mapPopulation() {
+  if (_mapShowAll) {
+    if (!_mapInfos) { const r = await WordGraph.loadAllWords(); _mapInfos = r.infos; _mapTotal = r.total; }
+    return _mapInfos;
+  }
+  if (window.Auth && Auth.user()) {
+    if (!_myMapInfos) {
+      try { _myMapInfos = await WordGraph.loadMyWords(); }
+      catch (e) {
+        // Функции my_map_words ещё нет — SQL из настроек не прогнан. Идём прежним путём, через весь
+        // словарь: медленно, зато карта не пустая до тех пор, пока владелец не выполнит скрипт.
+        console.warn('my_map_words:', e.message);
+        if (!_mapInfos) { const r = await WordGraph.loadAllWords(); _mapInfos = r.infos; _mapTotal = r.total; }
+        const mine = await Auth.myWords();
+        if (!mine) return _mapInfos;
+        _myMapInfos = new Map();
+        _mapInfos.forEach((info, id) => { if (mine.has(id)) _myMapInfos.set(id, info); });
+      }
+    }
+    return _myMapInfos;
+  }
+  const ids = [...new Set(getHistory().filter(i => i.mode === 'dict').map(i => String(i.word || '').toLowerCase()).filter(Boolean))];
+  return ids.length ? WordGraph.fetchWords(ids) : new Map();
+}
+
 async function loadWordMap() {
   const g = _mapGraph; if (!g) return;
   try {
-    if (!_mapInfos) _mapInfos = await WordGraph.loadAllWords();
-    let infos = _mapInfos;
-    // Вошедший пользователь видит свои слова; общая база — по галочке
-    if (window.Auth && Auth.user() && !_mapShowAll) {
-      const mine = await Auth.myWords();
-      if (mine) { infos = new Map(); _mapInfos.forEach((info, id) => { if (mine.has(id)) infos.set(id, info); }); }
-    }
-    const data = WordGraph.buildGraph(infos, { neighbors: _mapNeighbors && _mapLinks, wordLinks: _mapLinks, tagsOf: tagsOfInfo });
+    const infos = await mapPopulation();
+    // Своё видно сразу: слово из колоды обводится тёмным, из избранного — золотым
+    const deck = new Set(window.Cards && Cards.allWords ? Cards.allWords() : []);
+    const fav = new Set((typeof cachedFavRows !== 'undefined' && cachedFavRows || []).map(r => String(r.word || '').toLowerCase()));
+    const mineOf = id => deck.has(id) ? 'deck' : fav.has(id) ? 'fav' : '';
+    const data = WordGraph.buildGraph(infos, { neighbors: _mapNeighbors && _mapLinks, wordLinks: _mapLinks, tagsOf: tagsOfInfo, mineOf });
     if (window.Auth) Auth.applyTagsToNodes(data.nodes);
-    if (g === _mapGraph) { g.setData(data.nodes, data.edges); if (!data.nodes.length) g.setLoading('Пока пусто: откройте несколько слов, и они появятся здесь'); }
+    const sub = $('mapSub');
+    if (sub) sub.textContent = _mapShowAll
+      ? (_mapTotal > infos.size ? `вся база · показаны ${infos.size} из ${_mapTotal}` : `вся база · ${infos.size}`)
+      : `слова, которые вы открывали · ${infos.size}`;
+    if (g === _mapGraph) {
+      g.setData(data.nodes, data.edges);
+      if (!data.nodes.length) g.setLoading('Пока пусто: откройте несколько слов, и они появятся здесь');
+    }
   } catch(err) { if (g === _mapGraph) g.setLoading('Не удалось загрузить: ' + err.message); }
 }
 
