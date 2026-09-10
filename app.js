@@ -739,6 +739,57 @@ const cleanQuery = w => String(w || '').replace(/["“”„«»‹›]/g, '').r
 // В кэше пояснение бывает и оборванным: старый разбор резал строку по запятой прямо внутри скобки
 // и сохранял «открывать (дверь» как готовый вариант. Незакрытую скобку отбрасываем так же.
 const trVariants = s => String(s || '').replace(/\([^)]*\)/g, ' ').replace(/\([^)]*$/, ' ').split(/[;,]/).map(x => x.trim()).filter(Boolean);
+
+// ── Слова, которые легко перепутать ──────────────────────────────────────────
+// «foglio» и «figlio», «fava» и «fama» — разница в одну букву внутри слова. Сравниваем только
+// со словами нашего же словаря: по частотному списку на 30 000 половина находок — мусор и рифмы,
+// а среди уже открытых слов на 187 слов набирается дюжина пар и почти все по делу.
+let _wordList = null, _wordListJob = null;
+function fetchWordList() {
+  if (_wordList) return Promise.resolve(_wordList);
+  return _wordListJob || (_wordListJob = fetch(`${SB_URL}/rest/v1/dictionary?select=word&limit=20000`, { headers: SB_H })
+    .then(r => r.ok ? r.json() : [])
+    .then(rows => (_wordList = rows.map(r => String(r.word || '').toLowerCase()).filter(w => w && !/[\s'’]/.test(w))))
+    .catch(() => (_wordList = [])));
+}
+// Расстояние Дамерау—Левенштейна ровно в единицу: замена, вставка или удаление одной буквы
+function oneEdit(a, b) {
+  if (Math.abs(a.length - b.length) > 1 || a === b) return false;
+  let i = 0, j = 0, diff = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++diff > 1) return false;
+    if (a.length > b.length) i++; else if (a.length < b.length) j++; else { i++; j++; }
+  }
+  return diff + (a.length - i) + (b.length - j) <= 1;
+}
+// Строка одного вида связи: подпись и слова, каждое ведёт в свою статью
+function relatedRow(label, words) {
+  const row = document.createElement('div');
+  row.className = 'related-group' + (label ? '' : ' no-kind');
+  if (label) { const t = document.createElement('span'); t.className = 'related-kind'; t.textContent = label; row.appendChild(t); }
+  const box = document.createElement('div');
+  box.className = 'related-group-words';
+  words.forEach(w => {
+    const btn = document.createElement('button');
+    btn.className = 'related-word-btn';
+    btn.textContent = w;
+    btn.onclick = () => { $('searchInput').value = w; lookupWord(w); };
+    box.appendChild(btn);
+  });
+  row.appendChild(box);
+  return row;
+}
+
+async function similarWords(e) {
+  const w = String(e.word || '').toLowerCase();
+  if (w.length < 4 || /\s/.test(w)) return [];
+  // Свои же формы ловушкой не считаются: множественное число и то, формой чего это слово является
+  const own = new Set([w, ...[e.singular, e.plural].map(f => String((f && f.form) || '').toLowerCase()),
+    ...(e.alsoForms || []).map(l => String(l.lemma || '').toLowerCase())].filter(Boolean));
+  const list = await fetchWordList();
+  return list.filter(x => x.length >= 4 && !own.has(x) && oneEdit(w, x)).slice(0, 4);
+}
 const isPhrase = w => /\s/.test(cleanQuery(w));
 async function wordIpa(w) {
   const fd = await fetchFreeDictionary(w).catch(() => null);
@@ -2555,42 +2606,28 @@ function renderEntry(e) {
   const relSec = $('relatedWordsSection');
   const relList = $('relatedWordsList');
   const relLinks = Array.isArray(e.links) ? e.links.filter(l => l && l.word) : [];
-  if ((e.relatedWords && e.relatedWords.length) || relLinks.length) {
-    relList.innerHTML = '';
-    // Викисловарь знает вид связи, модель — нет. Что знаем, то и подписываем: иначе рядом с «buono»
-    // у «bello» стоят «grande, grosso, forte» и читаются как ошибка, хотя это синонимы значения «изрядный»
-    const known = new Set(relLinks.map(l => String(l.word).toLowerCase()));
-    const rest = (e.relatedWords || []).filter(w => w && !known.has(String(w).toLowerCase()));
-    const groups = [
-      ['Sinonimi', relLinks.filter(l => l.kind === 'sin').map(l => l.word)],
-      ['Contrari', relLinks.filter(l => l.kind === 'ant').map(l => l.word)],
-      [relLinks.length ? 'Vicine' : '', rest]
-    ];
-    groups.forEach(([label, words]) => {
-      if (!words.length) return;
-      const row = document.createElement('div');
-      row.className = 'related-group' + (label ? '' : ' no-kind');
-      if (label) { const t = document.createElement('span'); t.className = 'related-kind'; t.textContent = label; row.appendChild(t); }
-      const box = document.createElement('div');
-      box.className = 'related-group-words';
-      words.forEach(w => {
-        const btn = document.createElement('button');
-        btn.className = 'related-word-btn';
-        btn.textContent = w;
-        btn.onclick = () => { $('searchInput').value = w; lookupWord(w); };
-        box.appendChild(btn);
-      });
-      row.appendChild(box);
-      relList.appendChild(row);
-    });
-    // rounded bottom only if no conjugation
-    relSec.className = 'related-words-section' + (e.isVerb ? ' has-conj' : '');
+  relList.innerHTML = '';
+  // Викисловарь знает вид связи, модель — нет. Что знаем, то и подписываем: иначе рядом с «buono»
+  // у «bello» стоят «grande, grosso, forte» и читаются как ошибка, хотя это синонимы значения «изрядный»
+  const known = new Set(relLinks.map(l => String(l.word).toLowerCase()));
+  const rest = (e.relatedWords || []).filter(w => w && !known.has(String(w).toLowerCase()));
+  [
+    ['Sinonimi', relLinks.filter(l => l.kind === 'sin').map(l => l.word)],
+    ['Contrari', relLinks.filter(l => l.kind === 'ant').map(l => l.word)],
+    [relLinks.length ? 'Vicine' : '', rest]
+  ].forEach(([label, words]) => { if (words.length) relList.appendChild(relatedRow(label, words)); });
+  const hadRelated = !!relList.children.length;
+  relSec.className = 'related-words-section' + (e.isVerb ? ' has-conj' : '');
+  relSec.style.display = hadRelated ? 'block' : 'none';
+  if (hadRelated) applyRelatedView(e); else destroyRelatedGraph();
+  // Похожие по написанию считаются на лету по списку слов словаря, поэтому дорисовываются, когда
+  // ответит база. Если за это время открыли другую статью — чужой экран не трогаем.
+  similarWords(e).then(sim => {
+    if (!sim.length || currentDictWord !== String(e.word || '').toLowerCase()) return;
+    relList.appendChild(relatedRow('Non confondere', sim));
     relSec.style.display = 'block';
-    applyRelatedView(e);
-  } else {
-    relSec.style.display = 'none';
-    destroyRelatedGraph();
-  }
+    if (!hadRelated) applyRelatedView(e);
+  });
 
   const conjSection = $('conjugationSection');
   if (e.isVerb && e.conjugations) {
