@@ -251,14 +251,23 @@
 
     // Легенда — переключатели видимости
     function buildLegend() {
-      const counts = {}; G.nodes.forEach(n => { if (n.hub) return; const k = keyOf(n); counts[k] = (counts[k] || 0) + 1; });
+      // Слово с двумя тегами висит между двумя темами, но в счётчик попадал только первый его тег:
+      // вторая тема пропадала из легенды, а её узел оставался на холсте и не слушался «nessuna».
+      // Поэтому считаем по самим темам — у каждой уже есть count, — а отдельно только те слова,
+      // у которых темы нет вовсе (неоткрытые соседи).
+      const hubs = G.mode === 'cat' ? G.nodes.filter(n => n.hub) : [];
+      const hubKeys = new Set(hubs.map(h => h.cat));
+      const counts = {};
+      hubs.forEach(h => { counts[h.cat] = (counts[h.cat] || 0) + (h.count || 0); });
+      G.nodes.forEach(n => { if (n.hub) return; const k = keyOf(n); if (hubKeys.has(k)) return; counts[k] = (counts[k] || 0) + 1; });
       const colors = G.mode === 'cat' ? CAT_COLORS : POS_COLORS, labels = G.mode === 'cat' ? CAT_LABELS : POS_LABELS;
-      // Самые крупные темы первыми; сверх восьми — по кнопке «ещё», иначе легенда съедает экран
-      const keys = Object.keys(colors).filter(k => counts[k]).sort((a, b) => counts[b] - counts[a]);
+      // Самые крупные темы первыми; сверх восьми — по кнопке «ещё», иначе легенда съедает экран.
+      // Ключи берём из самих узлов, а не из палитры: свой тег без записанного цвета иначе выпал бы
+      const keys = Object.keys(counts).filter(k => counts[k]).sort((a, b) => counts[b] - counts[a]);
       const LIMIT = 8, shown = G.legendOpen || keys.length <= LIMIT ? keys : keys.slice(0, LIMIT);
       // Подписи по-итальянски (это и есть тег слова), русский перевод во всплывающей подсказке
       const it = k => k === '?' ? 'non aperte' : k;
-      legendEl.innerHTML = shown.map(k => `<button class="wg-chip ${G.hidden.has(k) ? 'off' : ''}" data-k="${k}" title="${labels[k] || k}"><i style="background:${colors[k]}"></i>${it(k)}<span>${counts[k]}</span></button>`).join('')
+      legendEl.innerHTML = shown.map(k => `<button class="wg-chip ${G.hidden.has(k) ? 'off' : ''}" data-k="${k}" title="${labels[k] || k}"><i style="background:${colors[k] || '#8b7355'}"></i>${it(k)}<span>${counts[k]}</span></button>`).join('')
         + (keys.length > LIMIT ? `<button class="wg-chip-all wg-more">${G.legendOpen ? 'свернуть' : `ещё ${keys.length - LIMIT}`}</button>` : '')
         + (keys.length > 1 ? `<button class="wg-chip-all" data-all="1">tutte</button><button class="wg-chip-all" data-all="0">nessuna</button>` : '');
       const more = legendEl.querySelector('.wg-more'); if (more) more.onclick = () => { G.legendOpen = !G.legendOpen; buildLegend(); };
