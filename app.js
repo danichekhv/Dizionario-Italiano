@@ -1591,6 +1591,22 @@ async function verifyArticle(entry, base) {
 
 // Перепроверка без перегенерации: статья в кэше уже есть, не хватает только вердикта.
 // Факты Викисловаря добираем заново, это бесплатно и без моделей.
+// Проверяющий не просто ругается, а называет более частый перевод. Раньше эта подсказка оставалась
+// строчкой замечания и никто её не применял: сорок статей хранили «упражнять» с припиской «следует
+// использовать „тренировать“». Теперь заменяем сразу, прежний перевод уходит в варианты.
+function applyRuFix(entry, v) {
+  if (!v || !v.fixRu) return v;
+  const ru = entry.russian || (entry.russian = { main: '', alternatives: '' });
+  const old = String(ru.main || '').trim();
+  if (!old || old.toLowerCase() === v.fixRu.toLowerCase()) return v;
+  const alts = trVariants(ru.alternatives).filter(a => a.toLowerCase() !== v.fixRu.toLowerCase());
+  if (!alts.some(a => a.toLowerCase() === old.toLowerCase())) alts.unshift(old);
+  ru.main = v.fixRu; ru.alternatives = alts.join('; ');
+  // Снимаем только то замечание, которое этой заменой и закрыто; остальные остаются ошибками
+  const kept = v.errors.filter(t => !/\brussian\.main\b/i.test(t));
+  return { ...v, errors: kept, ok: !kept.length, warnings: [...v.warnings, `главный перевод заменён на «${v.fixRu}» по замечанию проверки, прежний — в вариантах`] };
+}
+
 async function recheckArticle(word) {
   const entry = await sbGet('dictionary', String(word).toLowerCase());
   if (!entry || !entry.word) return null;
@@ -1598,7 +1614,7 @@ async function recheckArticle(word) {
   if (entry.source === 'wiktionary') {
     try { const fd = await fetchFreeDictionary(entry.word); const m = fd && mapFreeDictionary(fd); if (m && !m.lemma && !m.lemmas) base = m; } catch (e) {}
   }
-  const v = await verifyArticle(entry, base);
+  const v = applyRuFix(entry, await verifyArticle(entry, base));
   entry.status = v.ok ? 'checked' : 'flagged'; entry.checkNotes = v.errors; entry.checkWarnings = v.warnings;
   entry.sources = { ...(entry.sources || {}), check: v.by };
   await sbSave('dictionary', 'word', entry.word.toLowerCase(), entry);
@@ -1635,11 +1651,16 @@ Rules:
 
 errors (make ok false): russian.main is a wrong translation; a meaning belongs to one of the homographs listed above; a definition is an English gloss or not Italian; partOfSpeech or gender contradicts Wiktionary; a homograph's russian translates the wrong word. Whether a meaning is a genuine sense of this word at all is checked separately — never report that here, and never report a meaning merely because it is absent from the Wiktionary list.
 warnings (ok stays true): doubtful labels, weak examples, missing common sense, style.
-Return ONLY valid JSON: { "ok": true/false, "errors": ["one short line each, in Russian"], "warnings": ["one short line each, in Russian"] }. When in doubt, it is a warning, not an error.`;
+Return ONLY valid JSON: { "ok": true/false, "errors": ["one short line each, in Russian"], "warnings": ["one short line each, in Russian"], "russianMain": "" }. When in doubt, it is a warning, not an error.
+russianMain: fill it ONLY when russian.main should be replaced — with the Russian word to use instead, 1-3 words, nothing else. Leave it empty otherwise.`;
   const r = await llmJson(prompt, 'check');
   const clean = a => (Array.isArray(a) ? a : []).map(s => String(s).trim()).filter(Boolean).slice(0, 6);
   const errors = clean(r && (r.errors || r.issues)), warnings = clean(r && r.warnings);
-  return { ok: !errors.length && (r ? r.ok !== false || !errors.length : false), errors, warnings, by: _lastDictLlm };
+  // Проверяющий не просто жалуется, а называет замену. Берём её: короткая русская строка, старый
+  // перевод уезжает в варианты — ничего не теряется, а статья перестаёт хранить менее частый смысл.
+  const fix = String((r && r.russianMain) || '').trim();
+  const fixRu = fix && fix.length <= 40 && /^[а-яёА-ЯЁ][а-яёА-ЯЁ\s-]*$/.test(fix) ? fix : '';
+  return { ok: !errors.length && (r ? r.ok !== false || !errors.length : false), errors, warnings, fixRu, by: _lastDictLlm };
 }
 
 // Сохранить, показать, проверить второй моделью, сохранить статус. Проверка идёт после первого
@@ -1651,7 +1672,7 @@ async function finalizeArticle(entry, query, base, opts = {}) {
   await save();
   if (!opts.silent && currentDictWord === key) renderEntry(entry);
   try {
-    const v = await verifyArticle(entry, base);
+    const v = applyRuFix(entry, await verifyArticle(entry, base));
     entry.status = v.ok ? 'checked' : 'flagged'; entry.checkNotes = v.errors; entry.checkWarnings = v.warnings;
     entry.sources = { ...(entry.sources || {}), check: v.by };
   } catch (e) { entry.checkNotes = ['проверка не удалась: ' + (e.message || '')]; entry.checkWarnings = []; }
