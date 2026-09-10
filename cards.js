@@ -723,6 +723,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
           </div>
           <button class="build-drop" title="Убрать из списка" onclick="Cards.dropItem(${i})">&times;</button>
         </div>`).join('');
+      body = `
         <div class="cards-p">Найдено ${b.items.length} слов${b.llmUsed ? `, модель дописала недостающее (${esc(b.llmUsed)})` : ''}. Нажмите на строку, чтобы поправить, × — убрать из списка.</div>
         <div class="build-list">${rows}</div>
         <div class="cards-actions">
