@@ -487,7 +487,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
 
   function cardFaces(card) {
     const n = noteById(card.note_id) || {};
-    const mainRu = (n.translation || '').split(/[;,]/)[0].trim();
+    const mainRu = trVariants(n.translation)[0] || ''; // скобку с пояснением на лицо карточки не выносим
     const front = card.direction === 'it' ? n.word : (mainRu || n.word);
     const answer = card.direction === 'it' ? (n.translation || '—') : n.word;
     return { n, front, answer };

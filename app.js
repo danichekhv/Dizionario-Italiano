@@ -940,9 +940,9 @@ function strSimilarity(a, b) {
 }
 function looksTransliterated(word, ru, en) {
   const w = cleanQuery(word).toLowerCase().replace(/[^a-z]/g, '');
-  const r = translitRu(String(ru || '').split(/[;,]/)[0]);
+  const r = translitRu(trVariants(ru)[0] || '');
   if (!w || !r || w.length < 4) return false;
-  const e = String(en || '').toLowerCase().split(/[;,]/)[0].replace(/[^a-z]/g, '');
+  const e = String(trVariants(en)[0] || '').toLowerCase().replace(/[^a-z]/g, '');
   return strSimilarity(w, r) >= 0.6 && (!e || strSimilarity(w, e) < 0.5);
 }
 async function fixTransliteratedRussian(entry) {
@@ -1329,7 +1329,9 @@ function mapFreeDictionary(fd, opts = {}) {
 
   const glosses = [];
   senses.forEach(s => { const g = fdCleanGloss(s.definition); if (g && !glosses.includes(g)) glosses.push(g); });
-  const englishMain = (glosses[0] || '').split(/[;,]/)[0].trim();
+  // Главный перевод — первый вариант глоссы, но резать по запятой напрямую нельзя: у «to train
+  // (students, athletes)» запятая стоит внутри скобки, и на экран уезжало «to train (students»
+  const englishMain = trVariants(glosses[0])[0] || String(glosses[0] || '').trim();
   const englishAlts = glosses.slice(1, 4).map(g => g.split(';')[0].trim()).filter(Boolean).join('; ');
 
   // Синонимы и антонимы Викисловарь даёт по каждому значению отдельно, и вид связи в них есть.
