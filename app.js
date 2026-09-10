@@ -1441,7 +1441,10 @@ function parseRuWiktionaryMeanings(text) {
 function fdCompletionPrompt(base, opts = {}) {
   const senseLines = base.senses.map((s, i) =>
     `${i + 1}. ${s.label ? '(' + s.label + ') ' : ''}${s.gloss}${s.example ? ` — e.g. "${s.example}"` : ''}`).join('\n');
-  const needRelated = (base.relatedWords || []).length < 3;
+  // Синонимы и антонимы уже есть от Викисловаря, и вид связи у них известен. У модели просим другое —
+  // тематических соседей и однокоренные, — и всегда: раньше её не звали, если Викисловарь дал три слова,
+  // и статья оставалась вообще без тематических связей, а именно они и наполняют карту.
+  const haveRelated = (base.relatedWords || []).slice(0, 8);
   const homos = base.homographs || [];
   const homoLines = homos.map((h, i) => `${i + 1}. ${h.partOfSpeech}${h.gender ? ` (${h.gender})` : ''}${h.phonetic ? ` ${h.phonetic}` : ''}: ${h.glosses.join('; ')}`).join('\n');
   // Викисловарь у некоторых слов не знает современного значения (у «sito» нет «сайта»),
@@ -1462,8 +1465,8 @@ Return ONLY valid JSON, no markdown:
   "russian": { "main": "primary Russian translation", "alternatives": "2-3 alternatives semicolon-separated or empty" },`}
   "category": "${CATEGORY_PROMPT}",${!base.gender && /^sostantivo/.test(base.partOfSpeech || '') ? `
   "gender": "m. or f. or m./f. — Wiktionary did not record it",` : ''}
-  "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian", "label": "usage label or empty string" } ]${needRelated ? `,
-  "relatedWords": ["3-5 semantically related Italian words (synonyms, antonyms, thematic)"]` : ''}${homos.length ? `,
+  "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian", "label": "usage label or empty string" } ],
+  "relatedWords": ["3-4 Italian words tied to this one by topic or by word family (same root), NOT synonyms or antonyms${haveRelated.length ? `, and none of these: ${haveRelated.join(', ')}` : ''}"]${homos.length ? `,
   "homographs": [ { "russian": "primary Russian translation; alternatives after ;", "label": "usage label or empty string", "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian", "label": "usage label or empty string" } ] } ]` : ''}
 }
 meanings: ${meaningsRule}
@@ -1635,7 +1638,7 @@ function fdMergeCompletion(base, extra, fastRu) {
     : base.senses.map(s => ({ definition: s.gloss, example: s.example, label: usageLabel([], s.label) }));
   const related = (base.relatedWords || []).slice();
   (Array.isArray(extra.relatedWords) ? extra.relatedWords : []).forEach(w => {
-    if (typeof w === 'string' && w && !related.includes(w) && related.length < 6) related.push(w);
+    if (typeof w === 'string' && w && !related.includes(w) && related.length < 10) related.push(w); // синонимы Викисловаря и тематические соседи не делят один потолок
   });
   const homographs = (base.homographs || []).map((h, i) => {
     const x = (Array.isArray(extra.homographs) ? extra.homographs[i] : null) || {};
