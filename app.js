@@ -456,6 +456,8 @@ function showState(state) {
     }
   }
 
+  // Подсказка про опечатку живёт ровно один экран ошибки и не должна всплыть над следующим
+  const _es = $('errorSuggest'); if (_es) _es.innerHTML = '';
   _currentState = state;
   ['initialMsg','loadingMsg','errorMsg','resultCard','ruResults','grammarCard','favScreen','cardsScreen','graphScreen','praticaScreen','gramIndexScreen','qaScreen']
     .forEach(id => { const el = $(id); if (el) el.classList.remove('active'); });
@@ -2047,7 +2049,7 @@ Return 1-8 items. If no translation exists, return [].`;
   }
   if (!items.length) {
     if (llmError) { handleApiError(llmError.message || ''); return; }
-    $('errorText').textContent = `"${word}" — перевод не найден`; showState('error'); return;
+    $('errorText').textContent = `"${word}" — перевод не найден`; showState('error'); showErrorSuggest(await nearRuWords(q)); return;
   }
   const results = await freshenRuGlosses(await enrichRuItems(items.slice(0, 8)));
   await sbSave('russian_search', 'word', q, results);
@@ -3518,6 +3520,44 @@ async function mostFrequent(items, key = i => i) {
   const ranked = await Promise.all(items.map(async i => [i, await freqRank(key(i))]));
   return ranked.reduce((best, cur) => cur[1] < best[1] ? cur : best)[0];
 }
+// Частотный список русского: те же 30 000 слов из того же источника. Нужен подсказкам в русском
+// поиске и ловле опечаток: на своём языке человек ошибается не в словах, а в пальцах.
+let _ruFreq = null, _ruFreqLoading = null, _ruFreqSet = null;
+function loadRuFreq() {
+  if (_ruFreq) return Promise.resolve(_ruFreq);
+  return _ruFreqLoading || (_ruFreqLoading = fetch('ru-words.txt').then(r => r.text())
+    .then(t => { _ruFreq = t.split('\n').map(l => l.trim()).filter(l => l && l[0] !== '#'); return _ruFreq; })
+    .catch(() => (_ruFreq = [])));
+}
+// Опечатка: то же слово с одной правкой, самое частое из найденных — список идёт по убыванию
+// частоты, поэтому берём первые совпадения. Короткие слова не трогаем: «бой» и «мой» отличаются
+// одной буквой, и оба настоящие. Слово, которое есть в списке, опечаткой не считаем вовсе.
+async function nearRuWords(q) {
+  if (!q || q.length < 5) return [];
+  const list = await loadRuFreq();
+  if (!_ruFreqSet) _ruFreqSet = new Set(list);
+  if (_ruFreqSet.has(q)) return [];
+  const out = [];
+  for (const w of list) { if (oneEdit(q, w)) { out.push(w); if (out.length >= 2) break; } }
+  return out;
+}
+// «может быть, „сапог“?» под сообщением об ошибке. Показывается после showState: тот стирает
+// подсказку на каждом переходе, чтобы она не всплыла над чужой ошибкой
+function showErrorSuggest(words) {
+  const el = $('errorSuggest'); if (!el) return;
+  el.innerHTML = (words || []).length
+    ? 'может быть, ' + words.map(w => `<button type="button" onclick="pickSuggest('${w}')">${escapeHtml(w)}</button>`).join(' или ') + '?'
+    : '';
+}
+// «Свои» слова для русского поиска — это переводы из колод. В карточке стоит «дом; жильё», а
+// ищут по одному слову, поэтому режем перевод на варианты тем же правилом, что и везде.
+function myTranslationsForSuggest() {
+  const out = new Map();
+  if (window.Cards && Cards.allTranslations) Cards.allTranslations().forEach(t => trVariants(t).forEach(v => {
+    const w = v.toLowerCase(); if (w && !out.has(w)) out.set(w, 'в колоде');
+  }));
+  return out;
+}
 function myWordsForSuggest() {
   const out = new Map(); // слово → откуда
   getHistory().filter(i => i.mode === 'dict').forEach(i => out.set(i.word.toLowerCase(), 'недавнее'));
@@ -3528,11 +3568,14 @@ function myWordsForSuggest() {
 async function renderSuggest() {
   const inp = $('searchInput'), sec = $('searchRecent');
   const q = inp.value.trim().toLowerCase();
-  if (currentMode !== 'dict' || currentLang !== 'it' || q.length < 2) { hideRecent(); return; }
+  if (currentMode !== 'dict' || q.length < 2) { hideRecent(); return; }
+  // В русском поиске подсказываем так же, как в итальянском, только источники свои: переводы
+  // из колод вместо своих слов и русский частотный список вместо итальянского
+  const ru = currentLang === 'ru';
   const items = [];
-  for (const [w, src] of myWordsForSuggest()) if (w.startsWith(q) && w !== q) items.push({ w, src });
+  for (const [w, src] of (ru ? myTranslationsForSuggest() : myWordsForSuggest())) if (w.startsWith(q) && w !== q) items.push({ w, src });
   items.sort((a, b) => a.w.length - b.w.length);
-  const freq = await loadFreq();
+  const freq = await (ru ? loadRuFreq() : loadFreq());
   if (inp.value.trim().toLowerCase() !== q) return; // пока грузили, ввод изменился
   for (const w of freq) { if (items.length >= 40) break; /* потолок только чтобы не рисовать сотни строк на «co» */ if (w.startsWith(q) && w !== q && !items.some(i => i.w === w)) items.push({ w, src: '' }); }
   if (!items.length) { hideRecent(); return; }
@@ -3541,7 +3584,7 @@ async function renderSuggest() {
     `<button class="suggest-item" onmousedown="event.preventDefault()" onclick="pickSuggest('${i.w.replace(/'/g, "\\'")}')"><span><b>${escapeHtml(q)}</b>${escapeHtml(i.w.slice(q.length))}</span>${i.src ? `<span class="suggest-src">${i.src}</span>` : ''}</button>`).join('')}</div>`;
   showRecentBox(sec);
 }
-function pickSuggest(w) { hideRecent(); const inp = $('searchInput'); inp.value = w; inp.blur(); lookupWord(w); } // blur прячет клавиатуру на телефоне
+function pickSuggest(w) { hideRecent(); const inp = $('searchInput'); inp.value = w; inp.blur(); if (currentLang === 'ru' && currentMode === 'dict') lookupRussian(w); else lookupWord(w); } // blur прячет клавиатуру на телефоне
 function onSearchInput() {
   clearTimeout(_sugTimer);
   // В грамматике то же поле фильтрует справочник: второго поля поиска на экране быть не должно

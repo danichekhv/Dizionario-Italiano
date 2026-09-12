@@ -1377,6 +1377,7 @@ ${JSON.stringify(list)}`;
     study(id) { study(id, S.view === 'browse' ? S.tagFilter : ''); },
     // Все колоды разом: deckId = null, notesInDeck(null) обходит дерево от корня
     allWords() { return S.notes.flatMap(n => wordVariants(n).map(w => w.toLowerCase())); }, // для подсказок в поиске и подсветки на карте
+    allTranslations() { return S.notes.map(n => n.translation || '').filter(Boolean); }, // для подсказок в русском поиске
     studyAll() { if (window.Auth && !Auth.require('Войдите, чтобы учить карточки')) return; if (currentMode !== 'cards') { currentMode = 'cards'; applyModeUI('cards'); showState('cards'); } (S.loaded ? Promise.resolve() : loadAll()).then(() => study(null, '')); },
     // Сводка для плиток главной: к повторению и новых (в пределах дневного лимита), серия, слова
     async homeSummary() {
