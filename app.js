@@ -173,6 +173,9 @@ async function sbGetTopic(table, key) { return sbGet(table, key); }
 
 async function sbSave(table, keyCol, keyVal, data) {
   if (table === 'dictionary' && typeof _mapInfos !== 'undefined') { _mapInfos = null; _myMapInfos = null; } // карта слов подтянет новое слово при следующем открытии
+  // Лёгкие данные шторки для этого слова устарели: статья теперь есть, и её перевод точнее того,
+  // что удалось собрать по кусочкам. Иначе шторка до конца сессии показывает своё, а статья своё
+  if (table === 'dictionary') { try { delete _previewCache['d:' + String(keyVal).toLowerCase()]; } catch (e) {} } // объявлен ниже в файле — до загрузки его ещё нет
   try {
     const res = await fetch(`${SB_URL}/rest/v1/${table}`, {
       method: "POST",
@@ -741,6 +744,9 @@ const cleanQuery = w => String(w || '').replace(/["“”„«»‹›]/g, '').r
 // В кэше пояснение бывает и оборванным: старый разбор резал строку по запятой прямо внутри скобки
 // и сохранял «открывать (дверь» как готовый вариант. Незакрытую скобку отбрасываем так же.
 const trVariants = s => String(s || '').replace(/\([^)]*\)/g, ' ').replace(/\([^)]*$/, ' ').split(/[;,]/).map(x => x.trim()).filter(Boolean);
+
+// Названия частей речи по-русски: подпись «также существительное» под словом и в превью
+const POS_RU = { sostantivo: 'существительное', verbo: 'глагол', aggettivo: 'прилагательное', avverbio: 'наречие', preposizione: 'предлог', congiunzione: 'союз', pronome: 'местоимение', interiezione: 'междометие', articolo: 'артикль', numerale: 'числительное', locuzione: 'выражение' };
 
 // ── Слова, которые легко перепутать ──────────────────────────────────────────
 // «foglio» и «figlio», «fava» и «fama» — разница в одну букву внутри слова. Сравниваем только
@@ -1407,6 +1413,22 @@ function mapFreeDictionary(fd, opts = {}) {
 
 // Короткий промпт только на то, чего в Викисловаре нет: русский, категория, итальянские определения
 // ── Русский перевод без LLM: раздел «Значение» итальянской статьи на ru.wiktionary ─
+// Итальянский раздел — это несколько блоков, по одному на слово: у «ancora» наречие «ещё» и
+// существительное «якорь», у «mangiare» глагол и существительное. Часть речи блока стоит в шаблоне
+// «Морфологических свойств», и пишут его то по-русски, то латиницей: {{сущ it m}}, {{adv it}}.
+const RU_WIKT_POS = {
+  'сущ': 'sostantivo', 'noun': 'sostantivo',
+  'прил': 'aggettivo', 'adj': 'aggettivo',
+  'гл': 'verbo', 'verb': 'verbo',
+  'нар': 'avverbio', 'adv': 'avverbio',
+  'мест': 'pronome', 'pron': 'pronome',
+  'числ': 'numerale', 'num': 'numerale',
+  'предл': 'preposizione', 'prep': 'preposizione',
+  'союз': 'congiunzione', 'conj': 'congiunzione',
+  'межд': 'interiezione', 'interj': 'interiezione',
+  'част': 'particella', 'part': 'particella',
+  'прич': 'participio', 'артикль': 'articolo', 'art': 'articolo'
+};
 const _ruWiktCache = {};
 const _ruWiktInflight = {};
 // Не больше двух одновременных запросов к Wikimedia; устаревшие (мышь уже ушла) отбрасываются
@@ -1420,18 +1442,19 @@ function _ruWiktRelease() {
   const next = _ruWiktLimit.waiting.shift();
   if (next) next();
 }
-// skipIf — функция; если к моменту запуска она вернёт true, запрос не делается (превью уже закрыто)
-async function fetchRuWiktionary(word, skipIf) {
+// Все блоки статьи, как они есть: [{ pos, main, alternatives }]. skipIf — функция; если к моменту
+// запуска она вернёт true, запрос не делается (превью уже закрыто)
+async function fetchRuWiktBlocks(word, skipIf) {
   const w = (word || '').toLowerCase();
-  if (!w) return null;
+  if (!w) return [];
   if (_ruWiktCache[w] !== undefined) return _ruWiktCache[w];
   if (_ruWiktInflight[w]) return _ruWiktInflight[w];
   const run = (async () => {
-    if (skipIf && skipIf()) return null;
+    if (skipIf && skipIf()) return [];
     await _ruWiktAcquire();
     if (_ruWiktCache[w] !== undefined) { _ruWiktRelease(); return _ruWiktCache[w]; }
-    if (skipIf && skipIf()) { _ruWiktRelease(); return null; }
-    let out = null, cacheable = true;
+    if (skipIf && skipIf()) { _ruWiktRelease(); return []; }
+    let out = [], cacheable = true;
     try {
       const url = `https://ru.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(w)}&prop=wikitext&format=json&formatversion=2&redirects=1&origin=*`;
       const res = await fetch(url);
@@ -1443,7 +1466,7 @@ async function fetchRuWiktionary(word, skipIf) {
           if (data.error.code !== 'missingtitle') { cacheable = false; console.warn('ru.wiktionary:', data.error.code); }
         } else {
           const text = data.parse && data.parse.wikitext;
-          if (text) out = parseRuWiktionaryMeanings(text);
+          if (text) out = parseRuWiktionaryBlocks(text);
         }
       } else {
         cacheable = false; // 429 и прочие сбои не считаем за «статьи нет»
@@ -1458,18 +1481,42 @@ async function fetchRuWiktionary(word, skipIf) {
   run.finally(() => { delete _ruWiktInflight[w]; });
   return run;
 }
+// Перевод для слова известной части речи. У прилагательного «fisico» на ru.wiktionary описано
+// только существительное, и его «телосложение» уезжало в шторку и в карточку — при том, что в
+// статье стоит «физический». Блока нужной части речи нет, а у блоков она известна — не гадаем:
+// пусть переводит модель, которая видит, о каком значении речь.
+function pickRuWiktBlock(blocks, wantPos) {
+  if (!blocks || !blocks.length) return null;
+  const lemmas = blocks.filter(b => b.pos !== 'forma');
+  if (!lemmas.length) return null;
+  if (wantPos) {
+    // Два блока одной части речи — как у «porto», где и «переноска», и «порт» существительные:
+    // сами по себе они правильные, но какой из них про нашу статью, ru.wiktionary не говорит
+    const hits = lemmas.filter(b => b.pos === String(wantPos).toLowerCase());
+    if (hits.length === 1) return hits[0];
+    if (hits.length > 1) return null;
+    if (lemmas.some(b => b.pos)) return null;
+  } else if (lemmas.length > 1) return null; // несколько слов этого написания, а какое нужно — неизвестно
+  return lemmas[0];
+}
+async function fetchRuWiktionary(word, skipIf, wantPos) {
+  const b = pickRuWiktBlock(await fetchRuWiktBlocks(word, skipIf), wantPos);
+  return b ? { main: b.main, alternatives: b.alternatives } : null;
+}
 
-function parseRuWiktionaryMeanings(text) {
-  // Берём только итальянский раздел: от «= {{-it-}} =» до следующего языкового заголовка
-  const start = text.search(/=\s*\{\{-it-\}\}\s*=/);
-  if (start === -1) return null;
-  let section = text.slice(start + 1);
-  const next = section.search(/\n=\s*\{\{-[a-z-]+-\}\}\s*=/);
-  if (next !== -1) section = section.slice(0, next);
-  const m = section.match(/==+\s*Значение\s*==+[^\n]*\n([\s\S]*?)(?=\n=|$)/);
-  if (!m) return null;
+// Часть речи блока: первый шаблон до «Значения». «Форма-…» — не лемма, а словоформа
+function ruWiktBlockPos(block) {
+  const head = block.split(/==+\s*Значение/)[0];
+  const m = head.match(/\{\{\s*([A-Za-zА-Яа-яЁё.-]+)[^}]*\bit\b/);
+  if (!m) return '';
+  const name = m[1].toLowerCase().replace(/\.$/, '');
+  if (name.startsWith('форма') || name.startsWith('forma')) return 'forma';
+  return RU_WIKT_POS[name] || '';
+}
+// Список «Значение» одного блока → главный перевод и варианты
+function ruWiktMeanings(body) {
   const items = [];
-  m[1].split('\n').forEach(line => {
+  body.split('\n').forEach(line => {
     if (!/^#\s*[^#*:]/.test(line)) return; // только строки значений, без примеров (#*) и пояснений (#:)
     let s = line.replace(/^#\s*/, '');
     for (let i = 0; i < 6 && /\{\{/.test(s); i++) s = s.replace(/\{\{[^{}]*\}\}/g, ''); // {{пример|…}}, {{помета|…}}
@@ -1491,6 +1538,26 @@ function parseRuWiktionaryMeanings(text) {
   parts.slice(1).concat(items.slice(1).map(x => splitTop(x)[0] || ''))
     .forEach(a => { if (a && a !== main && a.length <= 60 && !alts.includes(a) && alts.length < 4) alts.push(a); });
   return { main, alternatives: alts.join('; ') };
+}
+function parseRuWiktionaryBlocks(text) {
+  // Берём только итальянский раздел: от «= {{-it-}} =» до следующего языкового заголовка
+  const start = text.search(/=\s*\{\{-it-\}\}\s*=/);
+  if (start === -1) return [];
+  let section = text.slice(start + 1);
+  const next = section.search(/\n=\s*\{\{-[a-z-]+-\}\}\s*=/);
+  if (next !== -1) section = section.slice(0, next);
+  // У каждого слова свой блок «Морфологические и синтаксические свойства»; до первого заголовка идёт
+  // шапка раздела. Заголовка может не быть вовсе — тогда весь раздел считаем одним блоком
+  const parts = section.split(/=+\s*Морфологические и синтаксические свойства\s*=+/);
+  const blocks = parts.length > 1 ? parts.slice(1) : parts;
+  const out = [];
+  blocks.forEach(b => {
+    const m = b.match(/==+\s*Значение\s*==+[^\n]*\n([\s\S]*?)(?=\n=|$)/);
+    if (!m) return;
+    const got = ruWiktMeanings(m[1]);
+    if (got) out.push({ pos: ruWiktBlockPos(b), main: got.main, alternatives: got.alternatives });
+  });
+  return out;
 }
 
 function fdCompletionPrompt(base, opts = {}) {
@@ -1535,14 +1602,21 @@ russian.main MUST translate sense 1 of THIS word (the most common sense), never 
 // слова этого написания, поэтому что из него подходит, решает модель, которая видит глосс.
 async function ruHintFor(word) {
   try {
-    const r = await Promise.race([fetchRuWiktionary(word), new Promise(res => setTimeout(() => res(null), 800))]);
-    if (!r || !r.main) return null;
-    return [r.main, ...String(r.alternatives || '').split(';')].map(s => s.trim()).filter(Boolean).slice(0, 6);
+    const blocks = await Promise.race([fetchRuWiktBlocks(word), new Promise(res => setTimeout(() => res([]), 800))]);
+    if (!blocks || !blocks.length) return null;
+    // Часть речи блока идёт в подсказке рядом со словами: у «fisico» весь список ru.wiktionary
+    // относится к существительному, и статье о прилагательном он не годится вовсе
+    const out = [];
+    blocks.filter(b => b.pos !== 'forma').forEach(b => {
+      const words = [b.main, ...String(b.alternatives || '').split(';')].map(x => x.trim()).filter(Boolean).slice(0, 4);
+      if (words.length) out.push((b.pos ? b.pos + ': ' : '') + words.join(', '));
+    });
+    return out.length ? out.slice(0, 4) : null;
   } catch (e) { return null; }
 }
 function ruHintRule(hint) {
   if (!hint || !hint.length) return '';
-  return `\nRussian Wiktionary lists these Russian words for this spelling (they may belong to OTHER words spelled the same): ${hint.join('; ')}. Use one only if it translates the sense described above; otherwise ignore it.`;
+  return `\nRussian Wiktionary lists these Russian words for this spelling, grouped by the part of speech it gives them (a group may belong to a DIFFERENT word spelled the same): ${hint.join(' | ')}. Use a word only if its part of speech is the one above and it translates the sense described above; otherwise ignore the whole list.`;
 }
 
 // Полнота статьи проверяется механически до сохранения. Раньше кривой ответ модели молча
@@ -2144,7 +2218,7 @@ async function enrichRuItems(items) {
       const fd = await fetchFreeDictionary(i.italian);
       const m = fd ? mapFreeDictionary(fd, { light: true }) : null;
       if (m && !m.lemma && !m.lemmas) { i.partOfSpeech = i.partOfSpeech || m.partOfSpeech || ''; i.gender = i.gender || m.gender || null; if (!i.shortDefinition) i.shortDefinition = (m.english && m.english.main) || ''; }
-      if (!i.shortDefinition || /^[a-z ,;()-]+$/i.test(i.shortDefinition)) { const ru = await fetchRuWiktionary(i.italian).catch(() => null); if (ru && ru.main) i.shortDefinition = ru.main; }
+      if (!i.shortDefinition || /^[a-z ,;()-]+$/i.test(i.shortDefinition)) { const ru = await fetchRuWiktionary(i.italian, null, i.partOfSpeech).catch(() => null); if (ru && ru.main) i.shortDefinition = ru.main; }
     } catch (e) {}
     i.partOfSpeech = i.partOfSpeech || ''; i.shortDefinition = i.shortDefinition || '';
   }));
@@ -2527,7 +2601,7 @@ function renderEntry(e) {
   else genderEl.textContent = '';
   const alsoEl = $('wordAlso');
   // Под словом: формы других слов (ссылки на их статьи) и омографы (ссылка вниз, к разделу «Altre voci»)
-  const POS_RU = { sostantivo: 'существительное', verbo: 'глагол', aggettivo: 'прилагательное', avverbio: 'наречие', preposizione: 'предлог', congiunzione: 'союз', pronome: 'местоимение', interiezione: 'междометие', articolo: 'артикль', numerale: 'числительное', locuzione: 'выражение' };
+  // POS_RU объявлен выше: подпись «также существительное» нужна и статье, и превью
   const alsoParts = [];
   if (e.alsoForms && e.alsoForms.length) {
     alsoParts.push('также форма слова: ' + e.alsoForms.map(l => {
@@ -3779,8 +3853,10 @@ function previewHeaderHtml(d, p) {
   const alsoHtml = d.alsoForms && d.alsoForms.length
     ? `<div class="${p}-formof">также: ${d.alsoForms.map(l => `${l.lemma}${l.pos ? ` (${l.pos})` : ''}`).join(', ')}</div>` : '';
   // Омографы в подсказке одной строкой: «также sostantivo: anchor»
+  // Подпись как в статье — по-русски. Русского перевода у омографа в лёгких данных нет, и тогда
+  // английский глосс идёт курсивом: иначе «physicist (male)» читается как перевод на русский
   const homoHtml = d.homographs && d.homographs.length
-    ? `<div class="${p}-formof">также ${d.homographs.map(h => `${h.partOfSpeech}${h.russian ? ': ' + h.russian.split(';')[0] : h.glosses && h.glosses[0] ? ': ' + h.glosses[0] : ''}`).join('; ')}</div>` : '';
+    ? `<div class="${p}-formof">также ${d.homographs.map(h => `${POS_RU[(h.partOfSpeech || '').split(' ')[0]] || h.partOfSpeech || 'другое слово'}${h.russian ? ': ' + h.russian.split(';')[0] : h.glosses && h.glosses[0] ? ': <em>' + h.glosses[0] + '</em>' : ''}`).join('; ')}</div>` : '';
   return `<div class="${p}-word">${head}</div>
     ${formOfHtml}
     ${d.phonetic ? `<div class="${p}-phonetic">${highlightStressPreview(d.phonetic)}</div>` : ''}
@@ -3808,10 +3884,21 @@ function renderPreviewDict(popup, d) {
 
 // Быстрые данные для превью: кэш Supabase и Викисловарь запрашиваем параллельно.
 // Возвращает { data, complete }: complete=false значит, что русский перевод ещё надо получить у Gemini.
+// Перевод из ru.wiktionary для данных превью. Часть речи уже известна, и блок берётся её; а если
+// то же написание делят несколько слов одной части речи (Викисловарь держит их омографами),
+// выбирать не из чего — перевод напишет модель, которая видит английский глосс нужного значения.
+async function quickRuWikt(d, skipIf) {
+  if (!d || !d.word) return null;
+  if ((d.homographs || []).some(h => h.partOfSpeech === d.partOfSpeech)) return null;
+  const blocks = await fetchRuWiktBlocks(d.word, skipIf).catch(() => []);
+  const b = pickRuWiktBlock(blocks, d.partOfSpeech);
+  return b ? { main: b.main, alternatives: b.alternatives } : null; // часть речи блока дальше не нужна
+}
 async function fetchQuickDict(word, skipIf) {
   const w = word.toLowerCase();
-  // Русский из ru.wiktionary запрашиваем сразу, параллельно с кэшем и Викисловарём
-  let ruPromise = fetchRuWiktionary(w, skipIf).catch(() => null);
+  // Блоки ru.wiktionary греем сразу, параллельно с кэшем и Викисловарём: какой из них подходит,
+  // выяснится ниже, когда станет известна часть речи
+  const ruWarm = fetchRuWiktBlocks(w, skipIf).catch(() => []);
   const [cached, fd] = await Promise.all([sbGet('dictionary', w).catch(() => null), fetchFreeDictionary(w)]);
   if (cached) return { data: cached, complete: true };
   let m = fd ? mapFreeDictionary(fd, { light: true }) : null;
@@ -3819,9 +3906,10 @@ async function fetchQuickDict(word, skipIf) {
   if (m.lemmas) {
     // Форма нескольких слов: для каждого варианта подтягиваем перевод (ru.wiktionary, иначе английская глосса)
     const details = await Promise.all(m.lemmas.slice(0, 3).map(async l => {
-      const [fdL, ru] = await Promise.all([fetchFreeDictionary(l.lemma), fetchRuWiktionary(l.lemma, skipIf).catch(() => null)]);
+      const [fdL, blocksL] = await Promise.all([fetchFreeDictionary(l.lemma), fetchRuWiktBlocks(l.lemma, skipIf).catch(() => [])]);
       const mL = fdL ? mapFreeDictionary(fdL, { light: true }) : null;
       const en = mL && !mL.lemma && !mL.lemmas ? (mL.english?.main || '') : '';
+      const ru = pickRuWiktBlock(blocksL, mL && !mL.lemma && !mL.lemmas ? mL.partOfSpeech : '');
       return { lemma: l.lemma, pos: l.pos, desc: l.desc, ru: (ru && ru.main) || '', en };
     }));
     return { data: { formWord: w, formOf: m.lemmas.map(l => l.lemma), formOfDetails: details }, complete: true };
@@ -3829,14 +3917,14 @@ async function fetchQuickDict(word, skipIf) {
   if (m.lemma) {
     // Словоформа: показываем начальную форму
     const lemma = m.lemma.toLowerCase();
-    ruPromise = fetchRuWiktionary(lemma, skipIf).catch(() => null);
+    fetchRuWiktBlocks(lemma, skipIf).catch(() => []); // греем: выбор блока будет по части речи начальной формы
     const [cached2, fd2] = await Promise.all([sbGet('dictionary', lemma).catch(() => null), fetchFreeDictionary(lemma)]);
     if (cached2) return { data: { ...cached2, formWord: w }, complete: true };
     const m2 = fd2 ? mapFreeDictionary(fd2, { light: true }) : null;
     if (!m2 || m2.lemma || m2.lemmas) return { data: { formWord: w, word: m.lemma, formOf: [m.lemma] }, complete: true };
     m = { ...m2, formWord: w };
   }
-  return { data: m, complete: false, ruPromise };
+  return { data: m, complete: false, ruPromise: ruWarm.then(() => quickRuWikt(m, skipIf)) };
 }
 
 async function fetchPreviewData(word, isGrammar, skipIf) {
@@ -3869,7 +3957,7 @@ async function fetchQuickRussian(q) {
   // Запрос к ru.wiktionary уже мог стартовать в fetchQuickDict — ждём его, а не запускаем новый
   let fast = q.ruPromise ? await q.ruPromise : null;
   q.ruPromise = null;
-  if (!fast) fast = await fetchRuWiktionary(d.word).catch(() => null); // если прежний был отброшен как устаревший
+  if (!fast) fast = await quickRuWikt(d).catch(() => null); // если прежний был отброшен как устаревший
   if (fast && fast.main) return fast;
   const ru = await fetchGeminiRussian(d);
   if (!ru) throw new Error('no translation');

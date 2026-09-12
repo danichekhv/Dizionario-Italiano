@@ -929,11 +929,12 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const phrase = isPhrase(lw);
     // Выражение из нескольких слов словари не знают: берём кэш статьи, транскрипцию собираем из слов,
     // остальное (перевод, пример, значение) допишет модель — но уже без транскрипции
-    const [cached, fd, ru] = await Promise.all([
+    const [cached, fd, ruBlocks] = await Promise.all([
       sbGet('dictionary', lw).catch(() => null),
       phrase ? null : fetchFreeDictionary(lw),
-      phrase ? null : fetchRuWiktionary(lw).catch(() => null)
+      phrase ? [] : fetchRuWiktBlocks(lw).catch(() => [])
     ]);
+    let light = null; // разбор Викисловаря: нужен и ниже, когда выбираем блок ru.wiktionary
     if (cached) {
       d.word = cached.word || d.word; d.pos = cached.partOfSpeech || '';
       d.translation = d.translation || (cached.russian && cached.russian.main) || '';
@@ -949,11 +950,16 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       return d;
     }
     if (fd) {
-      const m = mapFreeDictionary(fd, { light: true });
+      const m = light = mapFreeDictionary(fd, { light: true });
       if (m && m.lemma) { d.warn = `форма слова ${m.lemma}, карточка будет на неё`; d.word = m.lemma; return lookupOne({ ...it, word: m.lemma, _redirected: true }).then(x => ({ ...x, warn: d.warn })); }
       if (m && m.lemmas) d.warn = `форма нескольких слов: ${m.lemmas.map(l => l.lemma).join(', ')}`;
       else if (m) { d.phonetic = d.phonetic || m.phonetic || ''; d.pos = d.pos || m.partOfSpeech || ''; d.glosses = (m.senses || []).map(s => s.gloss).filter(Boolean).slice(0, 3); d.example = d.example || (m.senses || []).map(s => s.example).find(Boolean) || ''; }
     }
+    // Перевод из ru.wiktionary — только для той части речи, о которой карточка: у прилагательного
+    // «fisico» там описано существительное, и в карточку уезжало «телосложение» вместо «физический».
+    // Если написание делят несколько слов одной части речи, выбирать не из чего — оставляем модели.
+    const ru = light && (light.homographs || []).some(h => h.partOfSpeech === light.partOfSpeech)
+      ? null : pickRuWiktBlock(ruBlocks || [], d.pos);
     if (ru && ru.main) d.translation = d.translation || ru.main;
     if (!cached && !fd) d.warn = d.warn || 'слова нет в словарях, всё допишет модель';
     if (!d.phonetic) { const r = await resolveIpa(d.word).catch(() => ({ ipa: '' })); d.phonetic = r.ipa || ''; }
