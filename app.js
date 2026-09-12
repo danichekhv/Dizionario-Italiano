@@ -2005,7 +2005,9 @@ Return 1-8 items. If no translation exists, return [].`;
   // Ровно один вариант переведён именно этим словом и статья на него уже есть — открываем её сразу,
   // а не показываем список из одного знакомого слова и нескольких соседей. Остальные варианты
   // не теряются: они уходят строкой под заголовком статьи (см. _ruOthers в renderEntry).
-  // «замок» с castello и serratura списком и останется: там точных попаданий два.
+  // Точных попаданий два — смотрим, одним ли словом переведены оба: casa и abitazione оба «дом»,
+  // и выбирать между ними не по чему — открываем более частое. «замок» с castello и serratura
+  // остаётся списком: в статьях там разные переводы, «замок (здание)» и «замок (на двери)».
   const exactOnes = list => list.filter(i => i && i.source === 'кэш' && trVariants(i.shortDefinition).some(x => x.toLowerCase() === q));
   const openOne = async (list, hit) => {
     _ruOthers = { q: word.trim(), word: String(hit.italian || '').toLowerCase(), items: list.filter(i => i !== hit) };
@@ -2024,6 +2026,7 @@ Return 1-8 items. If no translation exists, return [].`;
     const ex = exactOnes(list);
     if (list.length === 1) { await openOne(list, list[0]); return; }
     if (ex.length === 1) { await openOne(list, ex[0]); return; }
+    if (ex.length > 1 && await sameMainTranslation(ex)) { await openOne(list, await mostFrequent(ex, i => i.italian)); return; }
     renderRuResults(word, list); showState('rulist'); showCacheBadge(); return;
   }
 
@@ -2051,6 +2054,7 @@ Return 1-8 items. If no translation exists, return [].`;
   const exFresh = exactOnes(results);
   if (results.length === 1) { await openOne(results, results[0]); return; }
   if (exFresh.length === 1) { await openOne(results, exFresh[0]); return; }
+  if (exFresh.length > 1 && await sameMainTranslation(exFresh)) { await openOne(results, await mostFrequent(exFresh, i => i.italian)); return; }
   renderRuResults(word, results);
   showState('rulist');
 }
@@ -2112,6 +2116,23 @@ async function freshenRuGlosses(list) {
     list.forEach(i => { const ru = i && byWord.get(String(i.italian || '').toLowerCase()); if (ru) i.shortDefinition = ru; });
   } catch (e) { console.warn('freshen ru glosses:', e); }
   return list;
+}
+// Два слова с одним и тем же переводом (casa и abitazione — «дом») — синонимы, и выбрать между
+// ними в списке не по чему: строки совпадают целиком. Сравниваем полные переводы статей, а не
+// найденный кусок: у «замка» кусок один и тот же, а в статьях стоит «замок (здание)» и «замок
+// (на двери)» — это разные значения русского слова, и список для них остаётся списком.
+async function sameMainTranslation(items) {
+  const words = [...new Set(items.map(i => String(i.italian || '').toLowerCase()).filter(Boolean))];
+  if (words.length < 2) return false;
+  const inList = words.map(w => '"' + w.replace(/"/g, '') + '"').join(',');
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/dictionary?word=in.(${encodeURIComponent(inList)})&select=${encodeURIComponent('word,ru:data->russian->>main')}`, { headers: SB_H });
+    if (!res.ok) return false;
+    const mains = new Map();
+    (await res.json()).forEach(r => mains.set(String(r.word).toLowerCase(), String(r.ru || '').toLowerCase().replace(/\s+/g, ' ').trim()));
+    if (words.some(w => !mains.get(w))) return false; // на какое-то слово статьи ещё нет — не нам решать за человека
+    return new Set(words.map(w => mains.get(w))).size === 1;
+  } catch (e) { return false; }
 }
 // Часть речи, род и короткое значение для найденного без модели: английский Викисловарь + русский
 async function enrichRuItems(items) {
@@ -2799,8 +2820,11 @@ function renderSourceLine(e) {
   }
   const admin = !!(window.Auth && Auth.isAdmin && Auth.isAdmin());
   const by = e.sources && e.sources.check ? ` (${escapeHtml(e.sources.check)})` : '';
+  // «Проверено ✓» видят все: это знак, что статью сверяли с Викисловарём. Расхождения — нет.
+  // Читателю с ними делать нечего, статью он починить не может, а плашка и внутренние
+  // формулировки проверяющей модели в title только подрывают доверие к тому, что на экране.
   if (e.status === 'checked') parts.push(`<span class="src-ok">проверено${by} ✓</span>${admin && (e.checkWarnings || []).length ? `<ul class="src-notes">${e.checkWarnings.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : ''}`);
-  else if (e.status === 'flagged') parts.push(`<span class="src-warn" title="${escapeHtml((e.checkNotes || []).join('\n'))}">⚠ проверка нашла расхождения${by}</span>${admin && (e.checkNotes || []).length ? `<ul class="src-notes">${e.checkNotes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : ''}`);
+  else if (admin && e.status === 'flagged') parts.push(`<span class="src-warn" title="${escapeHtml((e.checkNotes || []).join('\n'))}">⚠ проверка нашла расхождения${by}</span>${(e.checkNotes || []).length ? `<ul class="src-notes">${e.checkNotes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : ''}`);
   else if (admin && e.pipeline === 2) parts.push('<span class="src-muted">не проверено</span>');
   else if (admin && !e._pending) parts.push('<span class="src-muted">старый конвейер</span>');
   srcEl.innerHTML = parts.join(' · ');
@@ -3479,6 +3503,20 @@ function loadFreq() {
   return _freqLoading || (_freqLoading = fetch('it-words.txt').then(r => r.text())
     .then(t => { _freq = t.split('\n').filter(l => l && l[0] !== '#'); return _freq; })
     .catch(() => (_freq = [])));
+}
+// Частотный ранг слова: его номер в it-words.txt, у незнакомого списку — конец списка. Нужен там,
+// где выбирать приходится между словами, которые больше нечем различить.
+let _freqRank = null;
+async function freqRank(word) {
+  const list = await loadFreq();
+  if (!_freqRank) { _freqRank = new Map(); list.forEach((w, i) => { if (!_freqRank.has(w)) _freqRank.set(w, i); }); }
+  const r = _freqRank.get(String(word || '').toLowerCase());
+  return r === undefined ? Infinity : r;
+}
+// Самое частое из нескольких слов; при равном ранге — то, что стояло раньше
+async function mostFrequent(items, key = i => i) {
+  const ranked = await Promise.all(items.map(async i => [i, await freqRank(key(i))]));
+  return ranked.reduce((best, cur) => cur[1] < best[1] ? cur : best)[0];
 }
 function myWordsForSuggest() {
   const out = new Map(); // слово → откуда

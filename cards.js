@@ -237,6 +237,40 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
 
   // ── Рендер ───────────────────────────────────────────────────────────────────
   const esc = s => escapeHtml(s == null ? '' : String(s));
+  // ── Фраза на карточке ────────────────────────────────────────────────────────
+  // Карточка «fare la spesa» про всю фразу, но слова внутри учат по отдельности, и каждое значимое
+  // слово ведёт в свою статью. Служебные не даём: у артикля и предлога статьи нет, а попадание
+  // пальцем по «la» вместо «spesa» — всегда промах. Апостроф разделяет: в «l'azienda» кликается
+  // azienda, а не вся слипшаяся форма.
+  const IT_FUNCTION_WORDS = new Set(('il lo la l i gli le un uno una ' +
+    'di a da in con su per tra fra ' +
+    'del dello della dell dei degli delle al allo alla all ai agli alle ' +
+    'dal dallo dalla dall dai dagli dalle nel nello nella nell nei negli nelle ' +
+    'col coi collo colla cogli colle sul sullo sulla sull sui sugli sulle ' +
+    'e ed o od ma se che come anche ne né ci vi mi ti si non').split(' '));
+  const isFunctionWord = w => IT_FUNCTION_WORDS.has(String(w || '').toLowerCase());
+  const isPhraseWord = w => w.length >= 3 && !isFunctionWord(w); // короче трёх букв шторка не открывает
+  // Разметка через split с захватом: на чётных местах разделители, на нечётных — слова,
+  // и экранируется то и другое, иначе кавычка в примере разнесла бы вёрстку
+  function phraseHtml(text) {
+    return String(text == null ? '' : text).split(/([A-Za-zÀ-öø-ÿ]+)/).map((part, i) =>
+      i % 2 && isPhraseWord(part)
+        ? `<span class="clickable-word" data-word="${esc(part)}">${esc(part)}</span>`
+        : esc(part)).join('');
+  }
+  // Кнопка «открыть статью» у фразы. Статья про саму фразу есть — открываем её. Нет — уходим в
+  // самое редкое значимое слово: в «fare la spesa» смысл несёт spesa, а fare стоит в первой сотне
+  // частотного списка и своей статьёй фразу не объяснит. Слово, которого в списке 30 000 нет,
+  // берём только если других нет вовсе: это не «редкое», а незнакомое списку.
+  async function phraseTarget(phrase) {
+    const key = String(phrase || '').trim().toLowerCase();
+    try { const have = await sbGet('dictionary', key); if (have && have.word) return phrase; } catch (e) {}
+    const words = String(phrase || '').split(/[^A-Za-zÀ-öø-ÿ]+/).filter(isPhraseWord);
+    if (!words.length || typeof freqRank !== 'function') return words[words.length - 1] || phrase;
+    const ranked = await Promise.all(words.map(async w => [w, await freqRank(w)]));
+    const known = ranked.filter(r => isFinite(r[1]));
+    return (known.length ? known : ranked).reduce((best, cur) => cur[1] > best[1] ? cur : best)[0];
+  }
   const root = () => $('cardsScreen');
   // Экран учёбы живёт в отдельном слое поверх страницы (как в Anki), остальное — внутри вкладки
   function overlay() {
@@ -666,13 +700,13 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const back = S.revealed ? `
         <div class="study-rule"></div>
         ${typedBlock}
-        <div class="study-answer">${esc(answer)}</div>
+        <div class="study-answer">${!isIt && isPhrase(answer) ? phraseHtml(answer) : esc(answer)}</div>
         ${!isIt && (n.alt || []).length ? `<div class="study-alt">ещё: ${n.alt.map(a => `<button type="button" data-alt-w="${esc(a)}">${esc(a)}</button>`).join(', ')}</div>` : ''}
         ${n.phonetic ? `<div class="study-ipa">${esc(n.phonetic)}</div>` : ''}
         ${sentence}
         ${n.meaning ? `<div class="study-box"><div class="study-box-label">Significato</div><div class="study-box-text">${makeClickable(n.meaning)}</div></div>` : ''}
         ${(n.tags || []).length ? `<div class="study-tags">${n.tags.map(t => `<span class="tag-chip">#${esc(t)}</span>`).join('')}</div>` : ''}
-        <button class="study-article" onclick="Cards.openArticle('${esc(n.word || '').replace(/'/g, '&#39;')}')">открыть статью ${svgIcon('external')}</button>` : `${sentence}${input}`;
+        <button class="study-article" onclick="Cards.openNoteArticle('${esc(n.word || '').replace(/'/g, '&#39;')}')">открыть статью ${svgIcon('external')}</button>` : `${sentence}${input}`;
     const suggested = chk ? (chk.ok ? 3 : chk.near ? 2 : 1) : 0;
     const buttons = S.revealed ? `
       <div class="study-buttons">
@@ -685,7 +719,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       <div class="study-body">
         <div class="study-card ${S.current.direction}">
           <div class="study-dir">${isIt ? 'IT → RU' : 'RU → IT'}${S.current.state === 'new' ? ' · новая' : ''}</div>
-          <div class="study-front">${esc(front)}</div>
+          <div class="study-front">${isIt && isPhrase(front) ? phraseHtml(front) : esc(front)}</div>
           ${back}
         </div>
       </div>
@@ -745,7 +779,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         <div class="browse-row">
           <input type="checkbox" ${S.browseSelected.has(n.id) ? 'checked' : ''} onchange="Cards.selectNote('${n.id}', this.checked)">
           <button class="browse-word" onclick="Cards.editNote('${n.id}')">${highlight(n.word, q)}${(n.alt || []).length ? ` <span class="browse-alt">· ${n.alt.map(a => highlight(a, q)).join(' · ')}</span>` : ''}</button>
-          <button class="browse-open" onclick="Cards.openArticle('${esc(n.word).replace(/'/g, '&#39;')}')" title="Открыть статью в словаре">${svgIcon('external')}</button>
+          <button class="browse-open" onclick="Cards.openNoteArticle('${esc(n.word).replace(/'/g, '&#39;')}')" title="Открыть статью в словаре">${svgIcon('external')}</button>
           <div class="browse-ru">${highlight(n.translation, q)}</div>
           <div class="browse-tags">${(n.tags || []).map(t => `<span class="tag-chip" onclick="Cards.setTagFilter('${esc(t)}')">#${esc(t)}</span>`).join('')}</div>
           <div class="browse-state" title="состояние карточек: н новая, з заучивается, п повторение">${st}</div>
@@ -1370,6 +1404,8 @@ ${JSON.stringify(list)}`;
       $('searchInput').value = word;
       lookupWord(word);
     },
+    // Статья карточки: у одиночного слова своя, у фразы — та, которую выберет phraseTarget
+    async openNoteArticle(word) { window.Cards.openArticle(isPhrase(word) ? await phraseTarget(word) : word); },
     submitTyped(v) { if (!S.current) return; reveal(v); },
     // Снимок для истории: из учёбы «Назад» возвращает ту же карточку в том же состоянии
     snapshot() {
