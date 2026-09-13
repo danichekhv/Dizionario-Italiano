@@ -745,6 +745,67 @@ const cleanQuery = w => String(w || '').replace(/["“”„«»‹›]/g, '').r
 // и сохранял «открывать (дверь» как готовый вариант. Незакрытую скобку отбрасываем так же.
 const trVariants = s => String(s || '').replace(/\([^)]*\)/g, ' ').replace(/\([^)]*$/, ' ').split(/[;,]/).map(x => x.trim()).filter(Boolean);
 
+// ── Ключ статьи и алиасы ─────────────────────────────────────────────────────
+// Статья лежит в dictionary одной строкой, под своим заголовком. Написание, которым её искали, —
+// «benche» при статье «benché», «mi piaceva» при «piacere», «steriotipo» при «stereotipo», —
+// живёт строкой в word_aliases и ведёт к тому же документу. Раньше под каждым написанием лежала
+// полная копия документа: проверка чинила одну, а открывалась другая, и статьи разъезжались.
+// Таблицы может ещё не быть (SQL прогоняет владелец) — тогда работаем как раньше, без алиасов.
+const normKey = s => cleanQuery(String(s || '')).toLowerCase().replace(/[’ʼ`]/g, "'").replace(/\s+/g, ' ').trim();
+const _aliasCache = {};      // ключ → заголовок статьи, '' — алиаса нет (промах тоже помним)
+let _aliasesMissing = false;
+const _aliasGone = res => res.status === 404 || res.status === 400; // таблицы нет: PostgREST отвечает 404/400
+
+async function resolveAlias(key) {
+  const k = normKey(key);
+  if (!k || _aliasesMissing) return '';
+  if (_aliasCache[k] !== undefined) return _aliasCache[k];
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/word_aliases?alias=eq.${encodeURIComponent(k)}&select=word`, { headers: SB_H });
+    if (_aliasGone(res)) { _aliasesMissing = true; return ''; }
+    const rows = res.ok ? await res.json() : [];
+    _aliasCache[k] = rows.length ? normKey(rows[0].word) : '';
+  } catch (e) { console.warn('alias lookup:', e); return ''; }
+  return _aliasCache[k];
+}
+// Статья по любому написанию: сперва под своим заголовком, потом через алиас
+async function getArticle(key) {
+  const k = normKey(key);
+  if (!k) return null;
+  const direct = await sbGet('dictionary', k);
+  if (direct) return direct;
+  const word = await resolveAlias(k);
+  return word && word !== k ? await sbGet('dictionary', word) : null;
+}
+// Запомнить написание запроса. Пишут только вошедшие — как и в саму статью
+async function saveAlias(alias, word) {
+  const a = normKey(alias), w = normKey(word);
+  if (!a || !w || a === w || _aliasesMissing) return false;
+  if (!(window.Auth && Auth.user())) return false;
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/word_aliases`, {
+      method: 'POST', headers: { ...SB_H, Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify({ alias: a, word: w })
+    });
+    if (_aliasGone(res)) { _aliasesMissing = true; return false; }
+    if (res.ok) _aliasCache[a] = w; else console.warn('alias save:', res.status, await res.text());
+    return res.ok;
+  } catch (e) { console.warn('alias save exception:', e); return false; }
+}
+// Статья и написание, которым её искали, — одной операцией: документ под заголовком, запрос в алиасы
+async function saveArticle(entry, query) {
+  const key = normKey(entry.word || query);
+  if (!key) return false;
+  const ok = await sbSave('dictionary', 'word', key, entry);
+  const q = normKey(query);
+  if (q && q !== key && !(await saveAlias(q, key)) && _aliasesMissing) {
+    // Таблицы алиасов ещё нет (SQL не прогнали) — сохраняем как раньше, копией: иначе написание
+    // запроса потеряется и то же слово в следующий раз снова пойдёт к модели
+    await sbSave('dictionary', 'word', q, entry);
+  }
+  return ok;
+}
+
 // Названия частей речи по-русски: подпись «также существительное» под словом и в превью
 const POS_RU = { sostantivo: 'существительное', verbo: 'глагол', aggettivo: 'прилагательное', avverbio: 'наречие', preposizione: 'предлог', congiunzione: 'союз', pronome: 'местоимение', interiezione: 'междометие', articolo: 'артикль', numerale: 'числительное', locuzione: 'выражение' };
 
@@ -805,7 +866,7 @@ async function wordIpa(w) {
   if (p) return p.text;
   const it = await fetchItWiktIpa(w);
   if (it) return it;
-  const c = await sbGet('dictionary', w).catch(() => null);
+  const c = await getArticle(w).catch(() => null);
   return c && c.phonetic && !c.phoneticApprox && !isPhrase(c.word || w) ? c.phonetic : '';
 }
 // ── Транскрипция без модели ──────────────────────────────────────────────────
@@ -971,7 +1032,7 @@ async function fillPhonetic(entry) {
   if (entry.phonetic && r.approx && entry.phoneticSrc !== 'rules') return; // приблизительным точное не заменяем
   entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; entry.phoneticSrc = r.src;
   if (currentDictEntry === entry) renderEntry(entry);
-  if (window.Auth && Auth.user()) sbSave('dictionary', 'word', entry.word.toLowerCase(), entry);
+  if (window.Auth && Auth.user()) sbSave('dictionary', 'word', normKey(entry.word), entry);
 }
 
 // ── Ловушка транслитерации: mammone → «мамон» ────────────────────────────────
@@ -1059,7 +1120,26 @@ async function pruneRelated(entry) {
   entry.relatedWords = ok;
   if (currentDictEntry === entry) renderEntry(entry);
   // запись в общем кэше чиним, если пользователь вошёл (анонимам писать нельзя)
-  if (window.Auth && Auth.user() && entry.word) sbSave('dictionary', 'word', entry.word.toLowerCase(), entry);
+  if (window.Auth && Auth.user() && entry.word) sbSave('dictionary', 'word', normKey(entry.word), entry);
+}
+
+// Разовое схлопывание копий статей (кнопка у владельца в окне SQL). Строки, ключ которых не
+// совпадает с заголовком статьи, превращаются в алиасы. Делает это функция в базе: клиенту прав
+// на удаление строк не дано, и выдавать их ради одной операции не стоит.
+async function collapseDictionaryAliases() {
+  if (!(window.Auth && Auth.user())) { showToast('Нужно войти в аккаунт'); return; }
+  showToast('Схлопываю копии…');
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/rpc/collapse_dictionary_aliases`, { method: 'POST', headers: SB_H, body: '{}' });
+    const text = await res.text();
+    if (!res.ok) { showToast('Не вышло: ' + (text.slice(0, 140) || res.status)); return; }
+    const n = parseInt(text) || 0;
+    _aliasesMissing = false;
+    Object.keys(_aliasCache).forEach(k => delete _aliasCache[k]);
+    if (typeof _mapInfos !== 'undefined') { _mapInfos = null; _myMapInfos = null; }
+    showToast(n ? `✓ Схлопнуто копий: ${n}` : 'Копий не нашлось');
+    console.log('collapseDictionaryAliases: строк схлопнуто', n);
+  } catch (e) { showToast('Не вышло: ' + e.message); }
 }
 
 // Разовая чистка всего кэша (кнопка у владельца в окне SQL): у каждой статьи проверяются связи,
@@ -1725,7 +1805,7 @@ function applyRuFix(entry, v) {
 }
 
 async function recheckArticle(word) {
-  const entry = await sbGet('dictionary', String(word).toLowerCase());
+  const entry = await getArticle(word);
   if (!entry || !entry.word) return null;
   let base = null;
   if (entry.source === 'wiktionary') {
@@ -1734,7 +1814,7 @@ async function recheckArticle(word) {
   const v = applyRuFix(entry, await verifyArticle(entry, base));
   entry.status = v.ok ? 'checked' : 'flagged'; entry.checkNotes = v.errors; entry.checkWarnings = v.warnings;
   entry.sources = { ...(entry.sources || {}), check: v.by };
-  await sbSave('dictionary', 'word', entry.word.toLowerCase(), entry);
+  await sbSave('dictionary', 'word', normKey(entry.word), entry);
   if (currentDictEntry && String(currentDictEntry.word || '').toLowerCase() === entry.word.toLowerCase()) {
     Object.assign(currentDictEntry, { status: entry.status, checkNotes: entry.checkNotes, checkWarnings: entry.checkWarnings, sources: entry.sources });
     renderSourceLine(currentDictEntry);
@@ -1783,9 +1863,9 @@ russianMain: fill it ONLY when russian.main should be replaced — with the Russ
 // Сохранить, показать, проверить второй моделью, сохранить статус. Проверка идёт после первого
 // сохранения: её сбой не должен оставить слово без статьи.
 async function finalizeArticle(entry, query, base, opts = {}) {
-  const key = String(entry.word || query).toLowerCase(), qk = String(query || '').toLowerCase();
+  const key = normKey(entry.word || query), qk = normKey(query);
   entry.pipeline = 2; entry.status = 'draft'; entry.checkNotes = [];
-  const save = async () => { await sbSave('dictionary', 'word', key, entry); if (qk && qk !== key) await sbSave('dictionary', 'word', qk, entry); };
+  const save = async () => { await saveArticle(entry, qk); }; // документ под заголовком, написание запроса — в алиасы
   await save();
   if (!opts.silent && currentDictWord === key) renderEntry(entry);
   try {
@@ -1975,13 +2055,13 @@ If isVerb false → conjugations null. If isNoun false → singular/plural null.
 label: one of [obsolete, archaic, dialectal, regional, vulgar, offensive, slang, colloquial, rare, literary, poetic, formal, figurative, humorous, technical, medicine, law, nautical, botany, zoology, military], or an empty string for an ordinary sense. Set it only when the sense really is restricted; never guess.
 alsoForms: this article is about one word only. If the very same spelling is ALSO an inflected form of a different word (the noun "puzza" is also "puzza" from the verb puzzare), list that other word here so the reader can jump to it. Do not describe it and do not add its conjugation table here. Empty array when there is no such word.`;
   // 1. Кэш Supabase — мгновенно
-  const cachedWord = opts.force ? null : await sbGet('dictionary', word.toLowerCase());
+  const cachedWord = opts.force ? null : await getArticle(word);
   if (cachedWord) {
     if (opts.chooser && offerFormsChooser(cachedWord, word)) return;
     try {
       renderEntry(cachedWord); showState('result'); showCacheBadge(); addToHistory(cachedWord.word || word, 'dict'); pruneRelated(cachedWord); fillPhonetic(cachedWord);
       // сохранённый перевод-транслитерация чинится при открытии и, если пользователь вошёл, пересохраняется
-      fixTransliteratedRussian(cachedWord).then(fixed => { if (fixed && currentDictEntry === cachedWord) { renderEntry(cachedWord); if (window.Auth && Auth.user()) sbSave('dictionary', 'word', (cachedWord.word || word).toLowerCase(), cachedWord); } });
+      fixTransliteratedRussian(cachedWord).then(fixed => { if (fixed && currentDictEntry === cachedWord) { renderEntry(cachedWord); if (window.Auth && Auth.user()) sbSave('dictionary', 'word', normKey(cachedWord.word || word), cachedWord); } });
     }
     catch(e) { console.error("renderEntry from cache failed:", e); }
     return;
@@ -2081,9 +2161,7 @@ meanings: 1-3 items, most frequent first. Do NOT include phonetic transcription,
       relatedWords: await verifyWords(raw.relatedWords),
       llm: _lastDictLlm
     };
-    const key = entry.word.toLowerCase(), queryKey = phrase.toLowerCase();
-    await sbSave('dictionary', 'word', key, entry);
-    if (queryKey !== key) await sbSave('dictionary', 'word', queryKey, entry);
+    await saveArticle(entry, phrase);
     renderEntry(entry);
     showState('result');
     addToHistory(entry.word, 'dict');
@@ -2967,11 +3045,7 @@ const USAGE_CHOICES = ['', ...new Set(Object.values(USAGE_RU))];
 
 async function saveCurrentEntry() {
   const e = currentDictEntry; if (!e) return false;
-  const key = String(e.word || currentDictWord || '').toLowerCase();
-  const q = String(currentDictWord || '').toLowerCase();
-  const keys = [...new Set([key, q].filter(Boolean))];
-  const ok = await Promise.all(keys.map(k => sbSave('dictionary', 'word', k, e)));
-  return ok.some(Boolean);
+  return await saveArticle(e, currentDictWord);
 }
 
 function voiceModal() {
@@ -3940,7 +4014,7 @@ async function fetchQuickDict(word, skipIf) {
   // Блоки ru.wiktionary греем сразу, параллельно с кэшем и Викисловарём: какой из них подходит,
   // выяснится ниже, когда станет известна часть речи
   const ruWarm = fetchRuWiktBlocks(w, skipIf).catch(() => []);
-  const [cached, fd] = await Promise.all([sbGet('dictionary', w).catch(() => null), fetchFreeDictionary(w)]);
+  const [cached, fd] = await Promise.all([getArticle(w).catch(() => null), fetchFreeDictionary(w)]);
   if (cached) return { data: cached, complete: true };
   let m = fd ? mapFreeDictionary(fd, { light: true }) : null;
   if (!m) return null;
@@ -3959,7 +4033,7 @@ async function fetchQuickDict(word, skipIf) {
     // Словоформа: показываем начальную форму
     const lemma = m.lemma.toLowerCase();
     fetchRuWiktBlocks(lemma, skipIf).catch(() => []); // греем: выбор блока будет по части речи начальной формы
-    const [cached2, fd2] = await Promise.all([sbGet('dictionary', lemma).catch(() => null), fetchFreeDictionary(lemma)]);
+    const [cached2, fd2] = await Promise.all([getArticle(lemma).catch(() => null), fetchFreeDictionary(lemma)]);
     if (cached2) return { data: { ...cached2, formWord: w }, complete: true };
     const m2 = fd2 ? mapFreeDictionary(fd2, { light: true }) : null;
     if (!m2 || m2.lemma || m2.lemmas) return { data: { formWord: w, word: m.lemma, formOf: [m.lemma] }, complete: true };
@@ -4134,7 +4208,7 @@ async function addWordToDeck(word, light) {
   if (window.Auth && !Auth.require('Войдите, чтобы добавлять слова в колоды')) return;
   hidePreview(); hideBottomSheet();
   const lemma = (light && light.word) || word;
-  const full = await sbGet('dictionary', lemma.toLowerCase());
+  const full = await getArticle(lemma);
   Cards.addEntries([full || Object.assign({ word: lemma }, light || {})]);
 }
 function addPreviewToDeck() {

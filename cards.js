@@ -264,7 +264,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   // берём только если других нет вовсе: это не «редкое», а незнакомое списку.
   async function phraseTarget(phrase) {
     const key = String(phrase || '').trim().toLowerCase();
-    try { const have = await sbGet('dictionary', key); if (have && have.word) return phrase; } catch (e) {}
+    try { const have = await getArticle(key); if (have && have.word) return phrase; } catch (e) {}
     const words = String(phrase || '').split(/[^A-Za-zÀ-öø-ÿ]+/).filter(isPhraseWord);
     if (!words.length || typeof freqRank !== 'function') return words[words.length - 1] || phrase;
     const ranked = await Promise.all(words.map(async w => [w, await freqRank(w)]));
@@ -930,7 +930,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     // Выражение из нескольких слов словари не знают: берём кэш статьи, транскрипцию собираем из слов,
     // остальное (перевод, пример, значение) допишет модель — но уже без транскрипции
     const [cached, fd, ruBlocks] = await Promise.all([
-      sbGet('dictionary', lw).catch(() => null),
+      getArticle(lw).catch(() => null),
       phrase ? null : fetchFreeDictionary(lw),
       phrase ? [] : fetchRuWiktBlocks(lw).catch(() => [])
     ]);

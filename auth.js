@@ -17,6 +17,14 @@
 
 -- 1. Общий кэш: читают все, пишут вошедшие пользователи
 create table if not exists dictionary (word text primary key, data jsonb, created_at timestamptz default now());
+-- Написание, которым статью искали, — строкой, а не копией документа: «benche» ведёт к «benché»,
+-- «mi piaceva» к «piacere». Одна статья — одна строка в dictionary.
+create table if not exists word_aliases (
+  alias text primary key,
+  word text not null,
+  created_at timestamptz default now()
+);
+create index if not exists word_aliases_word_idx on word_aliases(word);
 create table if not exists russian_search (word text primary key, data jsonb, created_at timestamptz default now());
 create table if not exists grammar (topic text primary key, data jsonb, created_at timestamptz default now());
 
@@ -98,16 +106,20 @@ create table if not exists profiles (
 do $$ declare r record; begin
   for r in select schemaname, tablename, policyname from pg_policies
            where schemaname = 'public'
-             and tablename in ('dictionary','russian_search','grammar','favorites_dict','favorites_grammar','decks','notes','cards','reviews','word_views','profiles') loop
+             and tablename in ('dictionary','word_aliases','russian_search','grammar','favorites_dict','favorites_grammar','decks','notes','cards','reviews','word_views','profiles') loop
     execute format('drop policy if exists %I on %I.%I', r.policyname, r.schemaname, r.tablename);
   end loop;
 end $$;
 alter table dictionary enable row level security;
+alter table word_aliases enable row level security;
 alter table russian_search enable row level security;
 alter table grammar enable row level security;
 drop policy if exists dz_read on dictionary;   create policy dz_read on dictionary for select using (true);
 drop policy if exists dz_insert on dictionary; create policy dz_insert on dictionary for insert to authenticated with check (true);
 drop policy if exists dz_update on dictionary; create policy dz_update on dictionary for update to authenticated using (true) with check (true);
+drop policy if exists dz_read on word_aliases;   create policy dz_read on word_aliases for select using (true);
+drop policy if exists dz_insert on word_aliases; create policy dz_insert on word_aliases for insert to authenticated with check (true);
+drop policy if exists dz_update on word_aliases; create policy dz_update on word_aliases for update to authenticated using (true) with check (true);
 drop policy if exists dz_read on russian_search;   create policy dz_read on russian_search for select using (true);
 drop policy if exists dz_insert on russian_search; create policy dz_insert on russian_search for insert to authenticated with check (true);
 drop policy if exists dz_update on russian_search; create policy dz_update on russian_search for update to authenticated using (true) with check (true);
@@ -142,6 +154,28 @@ create or replace function claim_orphans() returns void language sql security de
   update reviews set user_id = auth.uid() where user_id is null;
 $$;
 grant execute on function claim_orphans() to authenticated;
+
+-- Разовое схлопывание копий: строка, ключ которой не совпадает с заголовком статьи, становится
+-- алиасом, если статья под своим заголовком уже есть. Функция удаляет только такие строки, поэтому
+-- права на удаление всей таблицы никому выдавать не нужно.
+create or replace function collapse_dictionary_aliases() returns integer language plpgsql security definer set search_path = public as $$
+declare n integer := 0;
+begin
+  insert into word_aliases (alias, word)
+    select d.word, lower(d.data->>'word')
+    from dictionary d
+    where d.data->>'word' is not null
+      and lower(d.data->>'word') <> d.word
+      and exists (select 1 from dictionary t where t.word = lower(d.data->>'word'))
+  on conflict (alias) do nothing;
+  delete from dictionary d
+    where d.data->>'word' is not null
+      and lower(d.data->>'word') <> d.word
+      and exists (select 1 from dictionary t where t.word = lower(d.data->>'word'));
+  get diagnostics n = row_count;
+  return n;
+end $$;
+grant execute on function collapse_dictionary_aliases() to authenticated;
 
 -- 5. Обмен колодами по ссылке: владелец создаёт токен, получатель копирует колоду к себе
 create table if not exists deck_shares (
@@ -409,7 +443,7 @@ alter table reviews add column if not exists typed text;`;
     m.innerHTML = `<div class="cards-modal-box wide"><div class="cards-title small">SQL для Supabase</div>
       <p class="cards-p">Supabase → SQL Editor → New query → вставить → Run. Скрипт можно запускать повторно, он ничего не удаляет. Затем в Authentication → URL Configuration укажите Site URL: <b>${location.origin}</b> и добавьте в Redirect URLs адрес <b>${location.origin}${location.pathname}</b> — иначе ссылки из писем о подтверждении почты и смене пароля ведут на localhost:3000, и браузер показывает ошибку «Не удаётся получить доступ к сайту».</p>
       <pre class="cards-sql">${window.DIZ_SETUP_SQL.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))}</pre>
-      <div class="cards-actions"><button class="cards-btn primary" onclick="Auth.copySql()">Скопировать SQL</button><button class="cards-btn" onclick="cleanupRelatedCache()" title="Убрать из связей всех статей слова, которых нет в Викисловаре">Почистить связи в кэше</button><button class="cards-btn" onclick="document.getElementById('sqlModal').style.display='none'">Закрыть</button></div></div>`;
+      <div class="cards-actions"><button class="cards-btn primary" onclick="Auth.copySql()">Скопировать SQL</button><button class="cards-btn" onclick="cleanupRelatedCache()" title="Убрать из связей всех статей слова, которых нет в Викисловаре">Почистить связи в кэше</button><button class="cards-btn" onclick="collapseDictionaryAliases()" title="Копии статьи под разными написаниями запроса свести в одну строку и таблицу алиасов">Схлопнуть копии статей</button><button class="cards-btn" onclick="document.getElementById('sqlModal').style.display='none'">Закрыть</button></div></div>`;
     m.style.display = 'flex';
   }
   function copySql() { (navigator.clipboard ? navigator.clipboard.writeText(window.DIZ_SETUP_SQL) : Promise.reject()).then(() => showToast('✓ SQL скопирован'), () => showToast('Выделите текст и скопируйте вручную')); }
