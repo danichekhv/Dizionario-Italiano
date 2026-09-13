@@ -923,6 +923,16 @@ function accentedVowelIdx(word) {
   const vowels = [...String(word || '').toLowerCase()].filter(c => 'aeiouàèéìíòóùú'.includes(c));
   return vowels.findIndex(c => 'àèéìíòóùú'.includes(c));
 }
+// Варианты, различающиеся только звонкостью s между гласными (casa: /ˈka.sa/ и /ˈka.za/), — это не
+// разные слова, а разные нормы: глухая — традиционная флорентийская и южная (en.wiktionary её так и
+// помечает, но через API пометка теряется), звонкая — то, что звучит сегодня и что у остальных слов
+// этого ряда — mese, cosa, naso — и так стоит первым. Берём звонкую.
+function voicedS(list) {
+  const flat = v => String(v).replace(/[/.]/g, '').replace(/z/g, 's');
+  const same = list.filter(v => flat(v) === flat(list[0]));
+  if (same.length < 2) return list[0];
+  return same.reduce((best, v) => (v.split('z').length > best.split('z').length ? v : best), list[0]);
+}
 async function resolveIpa(word) {
   const k = cleanQuery(word).toLowerCase();
   if (!k) return { ipa: '', approx: false };
@@ -933,10 +943,11 @@ async function resolveIpa(word) {
   if (variants.length > 1) {
     const it = await fetchItWikt(k);
     const want = it.ipa ? stressedVowelIdx(it.ipa) : accentedVowelIdx(it.accented);
-    const hit = want >= 0 ? variants.find(v => stressedVowelIdx(v) === want) : null;
-    if (hit) return { ipa: hit, approx: false, src: 'wikt-en2' };
+    const sameStress = want >= 0 ? variants.filter(v => stressedVowelIdx(v) === want) : [];
+    const pick = voicedS(sameStress.length ? sameStress : variants);
+    if (sameStress.length) return { ipa: pick, approx: false, src: 'wikt-en2' };
     if (it.ipa) return { ipa: it.ipa, approx: false, src: 'wikt-it' };
-    return { ipa: variants[0], approx: false, src: 'wikt-en2' };
+    return { ipa: pick, approx: false, src: 'wikt-en2' };
   }
   const it = await fetchItWikt(k);
   if (it.ipa) return { ipa: it.ipa, approx: false, src: 'wikt-it' };
