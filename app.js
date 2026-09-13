@@ -906,12 +906,38 @@ function approxIpa(word) {
   return '/' + ipa + '/';
 }
 // Итог: { ipa, approx } — approx=true, когда транскрипция построена по правилам, а не взята из словаря
+// У en.wiktionary вариантов произношения бывает несколько, и первым стоит не обязательно тот, что в
+// ходу: у «salubre» там сперва «sàlubre» из словаря произношения, а обычное ударение — salùbre.
+// Когда вариантов больше одного, спрашиваем итальянский Викисловарь и берём тот, с которым он
+// согласен; не согласен ни с одним — берём его собственную транскрипцию.
+// Какая по счёту гласная под ударением: знак ударения стоит перед началом слога, поэтому все
+// гласные до него — из предыдущих слогов. -1, если ударение не отмечено
+function stressedVowelIdx(ipa) {
+  const s = String(ipa || '');
+  const i = s.indexOf('ˈ');
+  if (i < 0) return -1;
+  return (s.slice(0, i).match(/[aeiouɛɔ]/g) || []).length;
+}
+// То же для написания с ударением из раздела «-sill-»: salùbre → вторая гласная
+function accentedVowelIdx(word) {
+  const vowels = [...String(word || '').toLowerCase()].filter(c => 'aeiouàèéìíòóùú'.includes(c));
+  return vowels.findIndex(c => 'àèéìíòóùú'.includes(c));
+}
 async function resolveIpa(word) {
   const k = cleanQuery(word).toLowerCase();
   if (!k) return { ipa: '', approx: false };
   const fd = await fetchFreeDictionary(k).catch(() => null);
-  const p = fd && fd.entries.flatMap(en => en.pronunciations || []).find(x => x.type === 'ipa' && x.text);
-  if (p) return { ipa: p.text, approx: false, src: 'wikt-en' };
+  const variants = [...new Set(fd ? fd.entries.flatMap(en => en.pronunciations || [])
+    .filter(x => x.type === 'ipa' && x.text).map(x => x.text) : [])];
+  if (variants.length === 1) return { ipa: variants[0], approx: false, src: 'wikt-en2' };
+  if (variants.length > 1) {
+    const it = await fetchItWikt(k);
+    const want = it.ipa ? stressedVowelIdx(it.ipa) : accentedVowelIdx(it.accented);
+    const hit = want >= 0 ? variants.find(v => stressedVowelIdx(v) === want) : null;
+    if (hit) return { ipa: hit, approx: false, src: 'wikt-en2' };
+    if (it.ipa) return { ipa: it.ipa, approx: false, src: 'wikt-it' };
+    return { ipa: variants[0], approx: false, src: 'wikt-en2' };
+  }
   const it = await fetchItWikt(k);
   if (it.ipa) return { ipa: it.ipa, approx: false, src: 'wikt-it' };
   if (/\s/.test(k)) return { ipa: '', approx: true, src: 'none' };
@@ -922,8 +948,12 @@ async function resolveIpa(word) {
 }
 // Статья из кэша без транскрипции или с приблизительной: пробуем добыть точную и, если пользователь вошёл, сохраняем
 async function fillPhonetic(entry) {
-  // Пересчитываем только то, что не взято из словаря: пустое, приблизительное или построенное по слогам/правилам
-  const builtByRules = !entry.phonetic || entry.phoneticApprox || entry.phoneticSrc === 'sill' || entry.phoneticSrc === 'rules';
+  // Пересчитываем только то, что не взято из словаря: пустое, приблизительное или построенное по
+  // слогам/правилам. Метка «wikt-en» — старая, времён, когда из нескольких вариантов брался первый
+  // попавшийся; совсем без метки — транскрипция от модели, времён до resolveIpa. И то и другое
+  // пересчитываем один раз, после чего метка стоит и больше сюда не возвращаемся
+  const builtByRules = !entry.phonetic || entry.phoneticApprox || !entry.phoneticSrc
+    || ['sill', 'rules', 'wikt-en'].includes(entry.phoneticSrc);
   if (!entry.word || entry.isPhrase || !builtByRules) return;
   const r = await resolveIpa(entry.word);
   if (!r.ipa || (r.ipa === entry.phonetic && r.src === entry.phoneticSrc)) return;
