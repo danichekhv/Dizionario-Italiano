@@ -1000,15 +1000,15 @@ async function resolveIpa(word) {
   const fd = await fetchFreeDictionary(k).catch(() => null);
   const variants = [...new Set(fd ? fd.entries.flatMap(en => en.pronunciations || [])
     .filter(x => x.type === 'ipa' && x.text).map(x => x.text) : [])];
-  if (variants.length === 1) return { ipa: variants[0], approx: false, src: 'wikt-en2' };
+  if (variants.length === 1) return { ipa: variants[0], approx: false, src: 'wikt-en3' };
   if (variants.length > 1) {
     const it = await fetchItWikt(k);
     const want = it.ipa ? stressedVowelIdx(it.ipa) : accentedVowelIdx(it.accented);
     const sameStress = want >= 0 ? variants.filter(v => stressedVowelIdx(v) === want) : [];
     const pick = voicedS(sameStress.length ? sameStress : variants);
-    if (sameStress.length) return { ipa: pick, approx: false, src: 'wikt-en2' };
+    if (sameStress.length) return { ipa: pick, approx: false, src: 'wikt-en3' };
     if (it.ipa) return { ipa: it.ipa, approx: false, src: 'wikt-it' };
-    return { ipa: pick, approx: false, src: 'wikt-en2' };
+    return { ipa: pick, approx: false, src: 'wikt-en3' };
   }
   const it = await fetchItWikt(k);
   if (it.ipa) return { ipa: it.ipa, approx: false, src: 'wikt-it' };
@@ -1020,12 +1020,13 @@ async function resolveIpa(word) {
 }
 // Статья из кэша без транскрипции или с приблизительной: пробуем добыть точную и, если пользователь вошёл, сохраняем
 async function fillPhonetic(entry) {
-  // Пересчитываем только то, что не взято из словаря: пустое, приблизительное или построенное по
-  // слогам/правилам. Метка «wikt-en» — старая, времён, когда из нескольких вариантов брался первый
-  // попавшийся; совсем без метки — транскрипция от модели, времён до resolveIpa. И то и другое
-  // пересчитываем один раз, после чего метка стоит и больше сюда не возвращаемся
+  // Пересчитываем то, что не взято из словаря: пустое, приблизительное, построенное по слогам или
+  // правилам, — и то, что выбрано прежней версией правила. Метка называет именно версию: «wikt-en»
+  // — первый вариант из списка как есть, «wikt-en2» — со сверкой ударения по итальянскому
+  // Викисловарю, «wikt-en3» — ещё и со звонкой s. Совсем без метки — транскрипция от модели, времён
+  // до resolveIpa. Каждая статья проходит пересчёт один раз: после него стоит свежая метка
   const builtByRules = !entry.phonetic || entry.phoneticApprox || !entry.phoneticSrc
-    || ['sill', 'rules', 'wikt-en'].includes(entry.phoneticSrc);
+    || ['sill', 'rules', 'wikt-en', 'wikt-en2'].includes(entry.phoneticSrc);
   if (!entry.word || entry.isPhrase || !builtByRules) return;
   const r = await resolveIpa(entry.word);
   if (!r.ipa || (r.ipa === entry.phonetic && r.src === entry.phoneticSrc)) return;
@@ -2196,33 +2197,49 @@ async function lookupRussian(word) {
 Find all meaningful Italian translations. Return ONLY a JSON array, no markdown. Each item:
 {"italian":"canonical form","partOfSpeech":"sostantivo/verbo/etc","gender":"m./f./null","shortDefinition":"краткое значение по-русски (4-8 слов)","register":"neutro/formale/colloquiale/letterario"}
 Return 1-8 items. If no translation exists, return [].`;
-  const q = word.trim().toLowerCase();
+  const q = normKey(word);
+  // По какому слову в итоге ищем: форму слова заменяет начальная, и сравнивать переводы надо с ней
+  let searched = word.trim(), ruTitle = '', matchKey = q;
   // Ровно один вариант переведён именно этим словом и статья на него уже есть — открываем её сразу,
   // а не показываем список из одного знакомого слова и нескольких соседей. Остальные варианты
   // не теряются: они уходят строкой под заголовком статьи (см. _ruOthers в renderEntry).
   // Точных попаданий два — смотрим, одним ли словом переведены оба: casa и abitazione оба «дом»,
   // и выбирать между ними не по чему — открываем более частое. «замок» с castello и serratura
   // остаётся списком: в статьях там разные переводы, «замок (здание)» и «замок (на двери)».
-  const exactOnes = list => list.filter(i => i && i.source === 'кэш' && trVariants(i.shortDefinition).some(x => x.toLowerCase() === q));
+  const exactOnes = list => list.filter(i => i && i.source === 'кэш' && trVariants(i.shortDefinition).some(x => x.toLowerCase() === matchKey));
   const openOne = async (list, hit) => {
     _ruOthers = { q: word.trim(), word: String(hit.italian || '').toLowerCase(), items: list.filter(i => i !== hit) };
+    addToHistory(searched, 'ru');
     await lookupWord(hit.italian);
   };
   // В кэше русских запросов осели варианты, найденные по слову внутри скобки («открывать (дверь,
   // окно)»): пропускаем сохранённый список через то же правило, что и живой поиск
   const atStart = (s, w) => { const i = String(s).toLowerCase().indexOf(w); return i === 0 || (i > 0 && !/[а-яёa-z]/i.test(s[i - 1])); };
   const dropStale = list => {
-    const keep = list.filter(i => i && (i.source !== 'кэш' || trVariants(i.shortDefinition).some(x => atStart(x, q))));
+    const keep = list.filter(i => i && (i.source !== 'кэш' || trVariants(i.shortDefinition).some(x => atStart(x, matchKey))));
     return keep.length ? keep : list;
   };
-  const cachedRu = await sbGet('russian_search', q);
+  // Начальная форма русского запроса: «домом» → «дом», «бежал» → «бежать». Без неё каждая форма
+  // слова уходит к модели заново и оседает в кэше отдельной строкой. Спрашиваем только при промахе
+  // кэша: на готовый ответ лишнего запроса к Викисловарю не тратим
+  let cachedRu = await sbGet('russian_search', q);
+  let wikt = null, lemma = '';
+  if (!cachedRu) {
+    wikt = await fetchRuWikt(q).catch(() => ({ words: [], lemma: '' }));
+    lemma = wikt.lemma && wikt.lemma !== q ? wikt.lemma : '';
+    if (lemma) {
+      searched = lemma; matchKey = lemma;
+      ruTitle = `Переводы слова «${lemma}» — «${word.trim()}» это его форма`;
+      cachedRu = await sbGet('russian_search', lemma);
+    }
+  }
   if (cachedRu) {
     const list = await freshenRuGlosses(dropStale(cachedRu));
     const ex = exactOnes(list);
     if (list.length === 1) { await openOne(list, list[0]); return; }
     if (ex.length === 1) { await openOne(list, ex[0]); return; }
     if (ex.length > 1 && await sameMainTranslation(ex)) { await openOne(list, await mostFrequent(ex, i => i.italian)); return; }
-    renderRuResults(word, list); showState('rulist'); showCacheBadge(); return;
+    addToHistory(searched, 'ru'); renderRuResults(searched, list, ruTitle); showState('rulist'); showCacheBadge(); return;
   }
 
   // Слои, от бесплатного к дорогому: переводы уже открытых статей и колод → русский Викисловарь →
@@ -2230,11 +2247,28 @@ Return 1-8 items. If no translation exists, return [].`;
   const items = [];
   const has = w => items.some(i => i.italian.toLowerCase() === String(w || '').toLowerCase());
   try { (await searchOwnTranslations(q)).forEach(i => { if (!has(i.italian)) items.push(i); }); } catch (e) { console.warn('own translations:', e); }
-  try { (await fetchRuWiktItalian(q)).forEach(w => { if (!has(w)) items.push({ italian: w, source: 'словарь' }); }); } catch (e) { console.warn('ru.wiktionary it=:', e); }
+  if (lemma) try { (await searchOwnTranslations(lemma)).forEach(i => { if (!has(i.italian)) items.push(i); }); } catch (e) {}
+  // Страница запроса уже прочитана выше. У «бежал» это страница «бежать» (редирект), и переводы на
+  // ней; у «домом» страница своя и пустая — тогда читаем страницу начальной формы
+  let wiktWords = wikt.words;
+  if (lemma && !wiktWords.length) wiktWords = (await fetchRuWikt(lemma).catch(() => ({ words: [] }))).words;
+  wiktWords.forEach(w => { if (!has(w)) items.push({ italian: w, source: 'словарь' }); });
+  // Страницы формы в Викисловаре может не быть («замком» там нет). Тогда пробуем свои переводы по
+  // основе: отрезаем по букве с конца и ищем слово, которое с этой основы начинается. «собаки» →
+  // «собак» → «собака», «якоря» → «якор» → «якорь». Основу короче четырёх букв не берём — на ней
+  // начинает находиться что попало
+  if (!items.length && !lemma && /^[а-яё-]{5,}$/.test(q)) {
+    for (let cut = 1; cut <= 3 && !items.length; cut++) {
+      const stem = q.slice(0, -cut);
+      if (stem.length < 4) break;
+      try { (await searchOwnTranslations(stem)).forEach(i => { if (!has(i.italian)) items.push(i); }); } catch (e) {}
+      if (items.length) { matchKey = stem; ruTitle = `Переводы слова «${word.trim()}» — искали по основе «${stem}»`; }
+    }
+  }
   let llmError = null;
   if (items.length < 3) {
     try {
-      const results = await llmJson(prompt, 'dict');
+      const results = await llmJson(lemma ? prompt.replace(`"${word}"`, `"${lemma}"`) : prompt, 'dict');
       const list = Array.isArray(results) ? results.filter(r => r && r.italian) : [];
       const ok = await verifyWords(list.map(r => cleanQuery(r.italian)));
       list.forEach(r => { if (ok.includes(cleanQuery(r.italian)) && !has(r.italian)) items.push({ ...r, source: 'модель' }); });
@@ -2245,12 +2279,13 @@ Return 1-8 items. If no translation exists, return [].`;
     $('errorText').textContent = `"${word}" — перевод не найден`; showState('error'); showErrorSuggest(await nearRuWords(q)); return;
   }
   const results = await freshenRuGlosses(await enrichRuItems(items.slice(0, 8)));
-  await sbSave('russian_search', 'word', q, results);
+  await sbSave('russian_search', 'word', lemma || q, results); // все формы слова сходятся в одну строку кэша
   const exFresh = exactOnes(results);
   if (results.length === 1) { await openOne(results, results[0]); return; }
   if (exFresh.length === 1) { await openOne(results, exFresh[0]); return; }
   if (exFresh.length > 1 && await sameMainTranslation(exFresh)) { await openOne(results, await mostFrequent(exFresh, i => i.italian)); return; }
-  renderRuResults(word, results);
+  addToHistory(searched, 'ru');
+  renderRuResults(searched, results, ruTitle);
   showState('rulist');
 }
 
@@ -2282,19 +2317,36 @@ async function searchOwnTranslations(q) {
   out.sort((a, b) => (b._exact ? 1 : 0) - (a._exact ? 1 : 0));
   return out.map(({ _exact, ...i }) => i);
 }
-// Строка |it= в разделе «Перевод» статьи русского слова: [[vecchio]], {{t|it|funzionario|m}}
-async function fetchRuWiktItalian(q) {
-  const res = await fetch(`https://ru.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(q)}&prop=wikitext&format=json&formatversion=2&redirects=1&origin=*`);
-  if (!res.ok) return [];
-  const text = ((await res.json()).parse || {}).wikitext || '';
-  const words = [];
-  for (const m of text.matchAll(/\|it=([^\n]*)/g)) {
-    for (const w of m[1].matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]|\{\{t\|it\|([^}|]+)/g)) {
-      const w0 = cleanQuery(w[1] || w[2] || '').toLowerCase();
-      if (w0 && /^[a-zàèéìíòóùú' ]+$/.test(w0) && !words.includes(w0)) words.push(w0);
+// Страница русского слова на ru.wiktionary: строка |it= в разделе «Перевод» и начальная форма.
+// Форму от начальной формы отличаем двумя способами. «бежал» и «красивая» — редиректы, и API сам
+// возвращает заголовок «бежать», «красивый». У «домом» страница своя, и в ней стоит ссылка на базу:
+// {{Форма-сущ |база=дом |падеж=т}}. Это нужно, чтобы запрос формой попадал в уже накопленные
+// переводы, а не шёл каждый раз к модели заново.
+async function fetchRuWikt(q) {
+  const out = { words: [], lemma: '' };
+  const key = String(q || '').toLowerCase();
+  try {
+    const res = await fetch(`https://ru.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(q)}&prop=wikitext&format=json&formatversion=2&redirects=1&origin=*`);
+    if (!res.ok) return out;
+    const parsed = (await res.json()).parse || {};
+    const text = parsed.wikitext || '';
+    const title = String(parsed.title || '').toLowerCase();
+    if (title && title !== key) out.lemma = title;
+    if (!out.lemma) {
+      const base = text.match(/\|\s*база\s*=\s*([^\n|}]+)/);
+      // В разметке у слова стоит знак ударения (до́м) — снимаем, иначе ключ не совпадёт ни с чем
+      const b = base ? cleanQuery(base[1]).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim() : '';
+      if (b && b !== key && /^[а-яё\s-]+$/.test(b)) out.lemma = b;
     }
-  }
-  return words.slice(0, 8);
+    for (const m of text.matchAll(/\|it=([^\n]*)/g)) {
+      for (const w of m[1].matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]|\{\{t\|it\|([^}|]+)/g)) {
+        const w0 = cleanQuery(w[1] || w[2] || '').toLowerCase();
+        if (w0 && /^[a-zàèéìíòóùú' ]+$/.test(w0) && !out.words.includes(w0)) out.words.push(w0);
+      }
+    }
+    out.words = out.words.slice(0, 8);
+  } catch (e) { console.warn('ru.wiktionary page:', e); }
+  return out;
 }
 // Пояснение под словом в списке модель придумывает сама, и выходит «большая ворота». Если у слова
 // уже есть статья, её перевод и точнее, и написан по-русски: одним запросом подменяем. Варианты из
@@ -3661,7 +3713,9 @@ function clearHistory() {
 function renderHistory() {
   const sec = $('searchRecent'), input = $('searchInput');
   if (!sec || !input) return;
-  const h = getHistory().filter(i => i.mode === (currentMode === 'grammar' ? 'grammar' : 'dict'));
+  // В русском поиске «недавние» свои: искали переводы, а не итальянские слова
+  const mode = currentMode === 'grammar' ? 'grammar' : (currentLang === 'ru' ? 'ru' : 'dict');
+  const h = getHistory().filter(i => i.mode === mode);
   if (document.activeElement !== input || input.value.trim() || h.length === 0) { sec.style.display = 'none'; return; }
   sec.style.display = 'block';
   // mousedown с preventDefault: клик по слову не должен снимать фокус с поля раньше, чем сработает
@@ -3742,6 +3796,7 @@ function showErrorSuggest(words) {
 // ищут по одному слову, поэтому режем перевод на варианты тем же правилом, что и везде.
 function myTranslationsForSuggest() {
   const out = new Map();
+  getHistory().filter(i => i.mode === 'ru').forEach(i => out.set(String(i.word).toLowerCase(), 'недавнее'));
   if (window.Cards && Cards.allTranslations) Cards.allTranslations().forEach(t => trVariants(t).forEach(v => {
     const w = v.toLowerCase(); if (w && !out.has(w)) out.set(w, 'в колоде');
   }));
@@ -3817,6 +3872,7 @@ function historyClick(word, mode) {
   $('searchInput').value = word;
   $('searchInput').blur(); // прячем клавиатуру на телефоне
   if (mode === 'grammar') lookupGrammar(word);
+  else if (mode === 'ru') lookupRussian(word);
   else lookupWord(word);
 }
 
