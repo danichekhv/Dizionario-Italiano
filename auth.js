@@ -448,7 +448,8 @@ grant execute on function llm_usage_bump_anon(text) to anon;`;
           <button class="cards-btn" onclick="Auth.signOut()">Выйти</button>
           <button class="auth-link" onclick="Auth.changePasswordUi()">Сменить пароль</button>
           ${isAdmin() ? '<button class="auth-link" onclick="Auth.showSql()">SQL для базы</button>' : ''}
-        </div>`;
+        </div>
+        <div class="apikey-hint-small">Новые статьи, карточки и La Pratica доступны как вошедшему.</div>`;
     } else {
       box.innerHTML = `${sqlNote}
         <input class="apikey-input auth-input" id="authEmail" type="email" placeholder="почта" autocomplete="email" spellcheck="false">

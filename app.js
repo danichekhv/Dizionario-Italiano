@@ -66,6 +66,7 @@ function showApiKeyScreen() {
   $('headerSettingsBtn').style.visibility = 'hidden';
   // Проверка словаря — инструмент владельца: золотой набор и пересборка кэша
   const qb = $('qaBtn'); if (qb) qb.style.display = (window.Auth && Auth.isAdmin && Auth.isAdmin()) ? 'block' : 'none';
+  $('apikeyBackBtn').classList.add('visible'); // экран всегда можно закрыть — без ключа теперь нечего ждать
   if (window.Auth) Auth.renderUi();
 }
 
