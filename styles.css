@@ -3528,7 +3528,14 @@ body.mode-grammar .suggest-src { color: var(--night-muted); }
 .search-recent { max-height: min(40vh, 320px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 /* На телефоне видно четыре строки подсказок, остальные шесть — прокруткой внутри списка: окно должно
    целиком помещаться над клавиатурой, иначе его низ уходит под неё и прокрутка «упирается» */
-@media (max-width: 640px) { .search-recent { max-height: 196px; } .suggest-item { padding: 10px 8px; } }
+@media (max-width: 640px) {
+  .search-recent { max-height: 196px; }
+  .suggest-item { padding: 10px 8px; }
+  /* У грамматики справа целая фраза перевода, а не короткая метка вроде «в колоде» — в один ряд
+     с итальянским названием темы на узком экране не помещается и криво переносится. В столбик. */
+  body.mode-grammar .suggest-item { flex-direction: column; align-items: flex-start; gap: 2px; }
+  body.mode-grammar .suggest-src { margin-left: 0; white-space: normal; }
+}
 
 /* ── Омографы в статье: ancora — наречие «ещё» и существительное «якорь» ── */
 /* Помета употребления: устар., диал., вульг. Ставится перед толкованием и в шапке омографа */
