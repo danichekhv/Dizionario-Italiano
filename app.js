@@ -1823,6 +1823,120 @@ async function recheckArticle(word) {
   return entry;
 }
 
+// ── Исправление по замечаниям проверки ───────────────────────────────────────
+// Раньше вердикт был тупиком: статья помечалась flagged, замечания ложились в checkNotes — и всё.
+// «Пересобрать» пишет заново с нуля и о прошлых претензиях не знает, поэтому повторяет ту же ошибку.
+// Здесь модель получает готовую статью и список того, что нашла проверка, и правит только названное.
+const FIX_MAX_TRIES = 2; // не справились дважды — статья остаётся flagged и ждёт человека
+
+// Пометы в статье уже русские («устар. · разг.»), но модель может вернуть их и по-английски.
+// Принимаем оба вида: русские оставляем как есть, английские и итальянские переводим.
+const RU_USAGE_LABELS = new Set(Object.values(USAGE_RU));
+function fixLabel(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  const parts = s.split(/\s*·\s*/).filter(Boolean);
+  return parts.length && parts.every(p => RU_USAGE_LABELS.has(p)) ? parts.join(' · ') : usageLabel([s], '');
+}
+
+function fixArticlePrompt(entry, notes) {
+  const article = {
+    word: entry.word,
+    partOfSpeech: entry.partOfSpeech,
+    gender: entry.gender || '',
+    russian: entry.russian || { main: '', alternatives: '' },
+    meanings: (entry.meanings || []).map(m => ({ definition: m.definition, example: m.example || '', label: m.label || '' })),
+    homographs: (entry.homographs || []).map(h => ({ partOfSpeech: h.partOfSpeech, russian: h.russian || '', label: h.label || '' }))
+  };
+  return `A dictionary entry for the Italian word "${entry.word}" was written by one model and checked by another. The reviewer found these problems:
+${notes.map((n, i) => `${i + 1}. ${n}`).join('\n')}
+
+The entry as it stands:
+${JSON.stringify(article)}
+
+Rewrite ONLY what the reviewer objected to; everything the reviewer did not mention must come back unchanged, word for word. The notes are in Russian, the entry keeps its own languages: definitions in Italian, translations and usage labels in Russian.
+
+Return ONLY valid JSON, no markdown, with every field below:
+{
+  "partOfSpeech": "part of speech in Italian, as in the entry unless the reviewer objected",
+  "gender": "m. or f. or m./f., empty when the word is not a noun",
+  "russian": { "main": "primary Russian translation of the most common present-day sense", "alternatives": "other Russian translations, semicolon-separated, or empty" },
+  "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian", "label": "usage label or empty string" } ],
+  "homographs": [ { "russian": "primary Russian translation; alternatives after ;", "label": "usage label or empty string" } ]
+}
+meanings: the corrected full list, ordered from most to least common in Italian today. Drop a meaning the reviewer called not a sense of this word; keep every other one as it was. Never return an empty list.
+homographs: exactly ${article.homographs.length} item(s), in the same order as above — those are other words with the same spelling, so fix only their Russian translation and label.`;
+}
+
+// Патч ложится на копию: если после правки статья развалилась, в базе остаётся прежняя.
+function applyArticleFix(entry, patch) {
+  const fixed = JSON.parse(JSON.stringify(entry));
+  const pos = String((patch && patch.partOfSpeech) || '').trim();
+  if (pos) fixed.partOfSpeech = pos;
+  const gender = String((patch && patch.gender) || '').trim();
+  if (/^(m\.|f\.|m\.\/f\.)$/.test(gender)) fixed.gender = gender;
+  const ru = patch && patch.russian;
+  if (ru && String(ru.main || '').trim()) fixed.russian = { main: String(ru.main).trim(), alternatives: String(ru.alternatives || '').trim() };
+  const meanings = (Array.isArray(patch && patch.meanings) ? patch.meanings : [])
+    .filter(m => m && String(m.definition || '').trim())
+    .map(m => ({ definition: String(m.definition).trim(), example: String(m.example || '').trim(), label: fixLabel(m.label) }));
+  if (meanings.length) fixed.meanings = meanings;
+  // Омографы — чужие слова, их факты пришли из Викисловаря: правим по месту только перевод и помету
+  const hp = Array.isArray(patch && patch.homographs) ? patch.homographs : [];
+  fixed.homographs = (fixed.homographs || []).map((h, i) => {
+    const x = hp[i]; if (!x) return h;
+    const r = String(x.russian || '').trim();
+    return { ...h, russian: r || h.russian, label: fixLabel(x.label) || h.label };
+  });
+  return fixed;
+}
+
+// Одна попытка исправления: правка по замечаниям, проверка полноты и новый вердикт от проверяющего.
+// Возвращает статью в том виде, в каком она легла в базу.
+async function fixArticle(word) {
+  const entry = await getArticle(word);
+  if (!entry || !entry.word) return null;
+  const notes = (entry.checkNotes || []).filter(n => !/^проверка не удалась/.test(n));
+  if (entry.status !== 'flagged' || !notes.length) return entry;  // чинить нечего
+  if ((entry.fixTries || 0) >= FIX_MAX_TRIES) return entry;       // дважды не вышло — дальше только руками
+  const key = normKey(entry.word);
+  // Факты Викисловаря нужны и проверке полноты, и проверяющему: без них он судит только по своей памяти
+  let base = null;
+  if (entry.source === 'wiktionary') {
+    try { const fd = await fetchFreeDictionary(entry.word); const m = fd && mapFreeDictionary(fd); if (m && !m.lemma && !m.lemmas) base = m; } catch (e) {}
+  }
+  let fixed, fixBy;
+  try {
+    const patch = await llmJson(fixArticlePrompt(entry, notes), 'article');
+    fixBy = _lastDictLlm; // проверка ниже перебьёт метку, поэтому запоминаем сразу
+    fixed = applyArticleFix(entry, patch);
+    validateArticle(fixed, base);
+  } catch (e) {
+    // Попытка всё равно потрачена: иначе батч будет вечно спотыкаться об одно и то же слово
+    entry.fixTries = (entry.fixTries || 0) + 1;
+    entry.checkWarnings = [...(entry.checkWarnings || []), 'исправление не удалось: ' + (e.message || '')];
+    await sbSave('dictionary', 'word', key, entry);
+    return entry;
+  }
+  fixed.fixTries = (entry.fixTries || 0) + 1;
+  try {
+    const v = applyRuFix(fixed, await verifyArticle(fixed, base));
+    fixed.status = v.ok ? 'checked' : 'flagged';
+    fixed.checkNotes = v.errors; fixed.checkWarnings = v.warnings;
+    fixed.sources = { ...(fixed.sources || {}), check: v.by, fix: fixBy };
+  } catch (e) {
+    // Правка сохраняется, вердикт — нет: статья становится обычным черновиком, и её подберёт
+    // «Перепроверить». Иначе сорванный лимит выбрасывал бы уже сделанную работу
+    fixed.status = 'draft'; fixed.checkNotes = ['проверка не удалась: ' + (e.message || '')]; fixed.checkWarnings = [];
+    fixed.sources = { ...(fixed.sources || {}), fix: fixBy };
+  }
+  await sbSave('dictionary', 'word', key, fixed);
+  if (currentDictWord === key && currentDictEntry && normKey(currentDictEntry.word) === key) {
+    currentDictEntry = fixed; renderEntry(fixed);
+  }
+  return fixed;
+}
+
 async function verifyArticleFacts(entry, base) {
   const senses = ((base && base.senses) || []).map((s, i) => `${i + 1}. ${s.label ? '(' + s.label + ') ' : ''}${s.gloss}`).join('\n');
   // Пометы Викисловаря передаём и для омографов: без них проверяющий решал, что «устар.» относится
@@ -1878,6 +1992,12 @@ async function finalizeArticle(entry, query, base, opts = {}) {
   if (!opts.silent && currentDictWord === key && currentDictEntry && String(currentDictEntry.word || '').toLowerCase() === key) {
     currentDictEntry.status = entry.status; currentDictEntry.checkNotes = entry.checkNotes; currentDictEntry.checkWarnings = entry.checkWarnings; currentDictEntry.sources = entry.sources;
     renderSourceLine(currentDictEntry);
+  }
+  // Нашли расхождения — сразу и чиним: статья на экране и в базе уже есть, правка идёт следом
+  // и обновляет обе. Иначе пометка так и лежала бы в кэше, пока владелец не разберёт её руками.
+  if (entry.status === 'flagged') {
+    try { const f = await fixArticle(entry.word); if (f) Object.assign(entry, f); }
+    catch (e) { console.warn('fixArticle:', e); }
   }
   return entry;
 }

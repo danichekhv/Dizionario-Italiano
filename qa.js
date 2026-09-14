@@ -103,6 +103,34 @@
     B.running = false; render();
   }
 
+  // ── Исправление флагнутых: правка по замечаниям, а не переписывание с нуля ───
+  // Вердикт проверяющего до сих пор был тупиком: пометка лежала в статье, и разбирать её было некому.
+  // Здесь по каждому замечанию идёт адресная правка и новый вердикт; статья, не вытянувшая двух
+  // попыток, остаётся flagged — вот её и стоит смотреть глазами.
+  async function runFix() {
+    const B = S.batch;
+    if (B.running) return;
+    if (!(window.Auth && Auth.user())) { showToast('Нужно войти'); return; }
+    const res = await fetch(`${SB_URL}/rest/v1/dictionary?select=word,st:data->>status,ft:data->>fixTries&limit=3000`, { headers: SB_H });
+    if (!res.ok) { showToast('Не удалось прочитать кэш: HTTP ' + res.status); return; }
+    // Статьи, которым исправление уже не помогло дважды, пропускаем: дальше это работа для человека
+    const words = [...new Set((await res.json()).filter(r => r.word && r.st === 'flagged' && (parseInt(r.ft) || 0) < FIX_MAX_TRIES).map(r => r.word))];
+    if (!words.length) { showToast('Статей с расхождениями нет'); return; }
+    B.running = true; B.mode = 'Исправление'; S.stop = false; B.done = 0; B.total = words.length; B.log = []; B.counts = { checked: 0, flagged: 0, draft: 0, error: 0 }; render();
+    for (const w of words) {
+      if (S.stop) break;
+      try {
+        const e = await fixArticle(w);
+        const st = e ? (e.status || 'draft') : 'error';
+        B.counts[st] = (B.counts[st] || 0) + 1;
+        B.log.unshift(`${w} — ${st}${e && e.checkNotes && e.checkNotes.length ? ': ' + e.checkNotes.join('; ') : ''}`);
+      } catch (err) { B.counts.error++; B.log.unshift(`${w} — ошибка: ${err.message || err}`); }
+      B.done++; if (B.log.length > 200) B.log.length = 200; render();
+      await pause(1500);
+    }
+    B.running = false; render();
+  }
+
   // ── Пересборка кэша: всё, что собрано не текущим конвейером ──────────────────
   async function runBatch() {
     const B = S.batch;
@@ -166,11 +194,11 @@
       </table></div>
       <div class="qa-batch">
         <div class="cards-title small">Кэш целиком</div>
-        <div class="qa-intro">«Пересобрать» заново пишет и проверяет всё, что собрано старой склейкой; уже пересобранное пропускается. «Перепроверить» трогает только статьи без вердикта: те, что не дождались проверяющего из-за лимитов, и статью не переписывает. После срыва в лимит темп сам сбавляется на минуту.</div>
+        <div class="qa-intro">«Пересобрать» заново пишет и проверяет всё, что собрано старой склейкой; уже пересобранное пропускается. «Перепроверить» трогает только статьи без вердикта: те, что не дождались проверяющего из-за лимитов, и статью не переписывает. «Исправить по замечаниям» берёт статьи с расхождениями и правит ровно то, на что указал проверяющий, после чего просит новый вердикт; не вытянувшие двух попыток остаются помеченными. После срыва в лимит темп сам сбавляется на минуту.</div>
         ${B.running || B.total ? `<div class="qa-note">${esc(B.mode)}</div><div class="qa-progress"><i style="width:${B.total ? Math.round(B.done / B.total * 100) : 0}%"></i></div>
           <div class="qa-note">${B.done} / ${B.total} · проверено ${B.counts.checked || 0} · с расхождениями ${B.counts.flagged || 0} · не проверено ${B.counts.draft || 0} · ошибок ${B.counts.error || 0}</div>
           <div class="qa-log">${B.log.map(esc).join('<br>')}</div>` : ''}
-        ${B.running ? '' : `<div class="cards-actions"><button class="cards-btn" onclick="Qa.runBatch()">${svgIcon('refresh')} Пересобрать кэш</button><button class="cards-btn" onclick="Qa.runRecheck()">${svgIcon('chart')} Перепроверить непроверенные</button></div>`}
+        ${B.running ? '' : `<div class="cards-actions"><button class="cards-btn" onclick="Qa.runBatch()">${svgIcon('refresh')} Пересобрать кэш</button><button class="cards-btn" onclick="Qa.runRecheck()">${svgIcon('chart')} Перепроверить непроверенные</button><button class="cards-btn" onclick="Qa.runFix()">${svgIcon('tool')} Исправить по замечаниям</button></div>`}
       </div>`;
   }
 
@@ -179,7 +207,7 @@
       if (!isAdmin()) { showToast('Проверка словаря доступна только владельцу сайта'); return; }
       currentMode = 'dict'; applyModeUI('dict'); showState('qa'); render();
     },
-    render, runGolden, runBatch, runRecheck,
+    render, runGolden, runBatch, runRecheck, runFix,
     stop() { S.stop = true; showToast('Останавливаю после текущего слова'); },
     _golden: GOLDEN, _state: S
   };
