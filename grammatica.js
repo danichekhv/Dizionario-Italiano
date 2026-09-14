@@ -311,13 +311,7 @@
       </div>
       ${S.failed ? `<div class="gram-note">Не удалось узнать, какие статьи уже есть. Список тем показан целиком.</div>` : ''}
       ${note}
-      ${body ? `<div class="bento">${body}</div>` : `<div class="gram-note">По запросу ничего не нашлось. Справочник закрытый: если темы нет в списке, статьи по ней не будет.</div>`}
-      <div class="gram-legend">
-        <span><i class="gram-dot none"></i> статьи нет</span>
-        <span><i class="gram-dot draft"></i> черновик</span>
-        <span><i class="gram-dot verified"></i> вычитано</span>
-        ${isAdmin() ? '<span class="gram-legend-admin">кнопка «создать» у пустой темы генерирует статью через бэкенд</span>' : ''}
-      </div>`;
+      ${body ? `<div class="bento">${body}</div>` : `<div class="gram-note">По запросу ничего не нашлось. Справочник закрытый: если темы нет в списке, статьи по ней не будет.</div>`}`;
   }
 
   // ── Действия ─────────────────────────────────────────────────────────────────
