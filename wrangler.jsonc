@@ -1,10 +1,15 @@
-// Настройки для Cloudflare Workers: сайт раздаётся как статические файлы из корня репозитория.
+// Настройки для Cloudflare Workers: статика из корня репозитория плюс worker.js для /api/*
+// (сборка словарной статьи на общем ключе — см. prompts-article.js и worker.js).
 // Имя должно совпадать с именем Worker в панели Cloudflare (dizio.<аккаунт>.workers.dev).
+// Секреты (GEMINI_KEY, CHECK_KEY, CHECK_PROVIDER) сюда не попадают — они заводятся
+// через `wrangler secret put` или вкладку Settings → Variables в панели Cloudflare.
 {
   "name": "dizio",
+  "main": "worker.js",
   "compatibility_date": "2025-01-01",
   "assets": {
     "directory": "./",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application"
   }
 }

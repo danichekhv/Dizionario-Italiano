@@ -262,7 +262,32 @@ $$;
 grant execute on function my_map_words() to authenticated;
 
 -- набранный на карточке ответ: пока просто сохраняем, потом неверные пойдут в тот же журнал
-alter table reviews add column if not exists typed text;`;
+alter table reviews add column if not exists typed text;
+
+-- 8. Дневной счётчик генераций для бэкенда сборки статьи (worker.js): пишет и проверяет статью
+-- теперь общий ключ владельца, а не ключ каждого пользователя, поэтому нужен грубый предохранитель
+-- от расхода. security definer — чтобы инкремент был одним атомарным запросом, а не read-modify-write
+-- с гонкой между вкладками; auth.uid() читается из JWT запроса независимо от того, чей definer.
+create table if not exists llm_usage (
+  user_id uuid not null default auth.uid(),
+  day date not null default current_date,
+  count int not null default 0,
+  primary key (user_id, day)
+);
+alter table llm_usage enable row level security;
+drop policy if exists dz_own on llm_usage;
+create policy dz_own on llm_usage for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+create or replace function llm_usage_bump() returns int
+language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  insert into llm_usage(user_id, day, count) values (auth.uid(), current_date, 1)
+  on conflict (user_id, day) do update set count = llm_usage.count + 1
+  returning count into n;
+  return n;
+end $$;
+grant execute on function llm_usage_bump() to authenticated;`;
 
   // ── Сессия ───────────────────────────────────────────────────────────────────
   function load() { try { session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { session = null; } }

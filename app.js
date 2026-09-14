@@ -578,35 +578,10 @@ async function callFast(prompt) {
   return extractJson(data.choices?.[0]?.message?.content || '');
 }
 
-async function callFastStream(prompt, onText) {
-  const response = await fetch(FAST_PROVIDERS[getFastProvider()].url, { method: 'POST', headers: fastHeaders(), body: fastBody(prompt, true) });
-  if (!response.ok || !response.body) throw await fastError(response);
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '', text = '';
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let nl;
-    while ((nl = buffer.indexOf('\n')) !== -1) {
-      const line = buffer.slice(0, nl).trim();
-      buffer = buffer.slice(nl + 1);
-      if (!line.startsWith('data:')) continue;
-      const payload = line.slice(5).trim();
-      if (!payload || payload === '[DONE]') continue;
-      let chunk;
-      try { chunk = JSON.parse(payload); } catch { continue; }
-      if (chunk.error) throw new Error(`${FAST_PROVIDERS[getFastProvider()].name}: ` + (chunk.error.message || 'stream error'));
-      const t = chunk.choices?.[0]?.delta?.content || '';
-      if (t) { text += t; if (onText) { try { onText(text); } catch(e) {} } }
-    }
-  }
-  return extractJson(text);
-}
-
-// Маршрутизация по задачам: 'dict' — быстрый провайдер при наличии ключа, всё остальное — Gemini.
-// При отказе по лимиту или сбое тот же запрос сразу уходит в Gemini. Ошибка ключа не маскируется.
+// Маршрутизация по задачам: 'dict' — быстрый провайдер при наличии ключа, иначе Gemini. Сборка/проверка/
+// починка статьи ('article'/'check') сюда больше не попадают — они переехали на бэкенд с общим ключом
+// (см. articleApi ниже, worker.js): там пишет всегда Gemini, а проверяет всегда другой провайдер,
+// без зависимости от того, какие ключи случайно завёл пользователь.
 let _lastDictLlm = 'Gemini';
 const isKeyError = msg => /401|403|Unauthorized|invalid_api_key|Wrong API Key|PERMISSION_DENIED/i.test(msg || '');
 // Причину отката показываем на экране (не чаще раза в 20 секунд), иначе непонятно, почему статью написал Gemini
@@ -619,82 +594,52 @@ function noteFastFallback(e) {
     showToast('⚠ ' + msg.slice(0, 140) + ' → Gemini');
   }
 }
-// Кто отвечает за какую задачу:
-//   dict    — подсказки и мелочи: быстрый провайдер, если есть ключ, иначе Gemini
-//   article — сохраняемая словарная статья: Gemini; быстрый провайдер только если ключа Gemini нет вовсе
-//   check   — проверка статьи: другая модель, чем писала, иначе она подтвердит собственные выдумки
-function pickModel(task) {
-  const fast = useFastForDict(), gem = !!getApiKey();
-  if (task === 'article') return gem ? 'gemini' : (fast ? 'fast' : 'gemini');
-  if (task === 'dict' || task === 'check') return fast ? 'fast' : 'gemini';
-  return 'gemini';
-}
+function pickModel(task) { return task === 'dict' && useFastForDict() ? 'fast' : 'gemini'; }
 async function llmJson(prompt, task) {
   if (pickModel(task) === 'fast') {
-    // Проверку статьи нельзя молча передавать Gemini: он же её и писал и подтвердит собственные ошибки.
-    // Лимит у бесплатного ключа минутный, поэтому ждём по-настоящему: retry-after или 5, 15, 30 секунд.
-    const CHECK_BACKOFF = [5000, 15000, 30000];
-    for (let attempt = 0; attempt < CHECK_BACKOFF.length + 1; attempt++) {
-      try { const r = await callFast(prompt); _lastDictLlm = fastLabel(); return r; }
-      catch(e) {
-        if (isKeyError(e.message)) throw e;
-        if (isRateLimit(e)) _lastRateLimitAt = Date.now();
-        if (task === 'check') {
-          if (attempt >= CHECK_BACKOFF.length) throw e;
-          const wait = isRateLimit(e) ? Math.max(CHECK_BACKOFF[attempt], (e.retryAfter || 0) * 1000 + 500) : 2500;
-          await new Promise(r => setTimeout(r, wait));
-          continue;
-        }
-        noteFastFallback(e); break;
-      }
+    try { const r = await callFast(prompt); _lastDictLlm = fastLabel(); return r; }
+    catch(e) {
+      if (isKeyError(e.message)) throw e;
+      if (isRateLimit(e)) _lastRateLimitAt = Date.now();
+      noteFastFallback(e);
     }
   }
   const r = await callGemini(prompt);
   _lastDictLlm = 'Gemini';
   return r;
 }
-async function llmJsonStream(prompt, task, onText) {
-  if (pickModel(task) === 'fast') {
-    try { const r = await callFastStream(prompt, onText); _lastDictLlm = fastLabel(); return r; }
-    catch(e) { if (isKeyError(e.message)) throw e; noteFastFallback(e); }
-  }
-  const r = await callGeminiStream(prompt, onText);
-  _lastDictLlm = 'Gemini';
-  return r;
-}
 
-function extractJson(text) {
-  const objStart = text.indexOf('{');
-  const arrStart = text.indexOf('[');
-  // Pick whichever comes first in the response
-  if (arrStart !== -1 && (objStart === -1 || arrStart < objStart)) {
-    const arrEnd = text.lastIndexOf(']');
-    if (arrEnd !== -1) return JSON.parse(text.slice(arrStart, arrEnd + 1));
-  }
-  if (objStart !== -1) {
-    const objEnd = text.lastIndexOf('}');
-    if (objEnd !== -1) return JSON.parse(text.slice(objStart, objEnd + 1));
-  }
-  throw new Error('No JSON found in: ' + text.slice(0, 200));
-}
-
-// Потоковый вариант: тот же один запрос, но onText получает накопленный текст по мере генерации.
-// Это позволяет показать начало ответа (русский перевод), пока модель дописывает остальное.
-async function callGeminiStream(prompt, onText) {
-  if (!getApiKey()) throw new Error('NO_GEMINI_KEY');
-  const url = `${GEMINI_MODEL_URL.replace(':generateContent', ':streamGenerateContent')}?alt=sse&key=${getApiKey()}`;
-  const response = await fetch(url, {
+// ── Бэкенд сборки статьи: общий ключ владельца вместо ключа каждого пользователя ─────────────
+// Промпты этого пути не строятся в браузере — их строит worker.js из prompts-article.js. Отсюда
+// уходят только структурированные данные (слово, факты Викисловаря, статья, замечания проверки),
+// а не готовый текст промпта: иначе ручка стала бы бесплатным доступом к модели для кого угодно.
+async function articleApi(path, body) {
+  const res = await fetch(`/api/article/${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: geminiRequestBody(prompt)
+    headers: { 'Content-Type': 'application/json', 'Authorization': SB_H['Authorization'] },
+    body: JSON.stringify(body)
   });
-  if (!response.ok || !response.body) {
-    const data = await response.json().catch(() => ({}));
-    const msg = data.error?.message || `HTTP ${response.status}`;
-    if (_geminiThinkingOff && isThinkingParamError(msg)) { markThinkingUnsupported(); return callGeminiStream(prompt, onText); }
-    throw new Error(msg);
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { if (window.Auth) Auth.require('Войдите, чтобы собирать новые статьи словаря'); throw new Error(data.error || 'Нужно войти в аккаунт'); }
+  if (res.status === 429) { showToast('⏳ ' + (data.error || 'Дневной лимит исчерпан')); throw new Error(data.error || 'Дневной лимит исчерпан'); }
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+// Потоковый вариант — только для гибридного пути (fdCompletionPrompt): Worker проксирует «как есть»
+// SSE-ответ Gemini, поэтому ридер тот же, что раньше читал прямой ответ Google, только URL свой.
+async function streamArticleHybrid(base, ruHint, onText) {
+  const res = await fetch('/api/article/hybrid', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': SB_H['Authorization'] },
+    body: JSON.stringify({ base, ruHint })
+  });
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) { if (window.Auth) Auth.require('Войдите, чтобы собирать новые статьи словаря'); throw new Error(data.error || 'Нужно войти в аккаунт'); }
+    if (res.status === 429) { showToast('⏳ ' + (data.error || 'Дневной лимит исчерпан')); throw new Error(data.error || 'Дневной лимит исчерпан'); }
+    throw new Error(data.error || `HTTP ${res.status}`);
   }
-  const reader = response.body.getReader();
+  const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '', text = '';
   while (true) {
@@ -716,6 +661,21 @@ async function callGeminiStream(prompt, onText) {
     }
   }
   return extractJson(text);
+}
+
+function extractJson(text) {
+  const objStart = text.indexOf('{');
+  const arrStart = text.indexOf('[');
+  // Pick whichever comes first in the response
+  if (arrStart !== -1 && (objStart === -1 || arrStart < objStart)) {
+    const arrEnd = text.lastIndexOf(']');
+    if (arrEnd !== -1) return JSON.parse(text.slice(arrStart, arrEnd + 1));
+  }
+  if (objStart !== -1) {
+    const objEnd = text.lastIndexOf('}');
+    if (objEnd !== -1) return JSON.parse(text.slice(objStart, objEnd + 1));
+  }
+  throw new Error('No JSON found in: ' + text.slice(0, 200));
 }
 
 // ── Free Dictionary API (Wiktionary) — быстрые словарные факты без LLM ─────────
@@ -1682,44 +1642,7 @@ function parseRuWiktionaryBlocks(text) {
   return out;
 }
 
-function fdCompletionPrompt(base, opts = {}) {
-  const senseLines = base.senses.map((s, i) =>
-    `${i + 1}. ${s.label ? '(' + s.label + ') ' : ''}${s.gloss}${s.example ? ` — e.g. "${s.example}"` : ''}`).join('\n');
-  // Синонимы и антонимы уже есть от Викисловаря, и вид связи у них известен. У модели просим другое —
-  // тематических соседей и однокоренные, — и всегда: раньше её не звали, если Викисловарь дал три слова,
-  // и статья оставалась вообще без тематических связей, а именно они и наполняют карту.
-  const haveRelated = (base.relatedWords || []).slice(0, 8);
-  const homos = base.homographs || [];
-  const homoLines = homos.map((h, i) => `${i + 1}. ${h.partOfSpeech}${h.gender ? ` (${h.gender})` : ''}${h.phonetic ? ` ${h.phonetic}` : ''}: ${h.glosses.join('; ')}`).join('\n');
-  // Викисловарь у некоторых слов не знает современного значения (у «sito» нет «сайта»),
-  // а порядок у него исторический, поэтому устаревшее идёт первым. И то и другое чиним здесь.
-  const meaningsRule = base.senses.length
-    ? `cover every known sense above, then add any frequent present-day sense of THIS word (same part of speech) that is missing from that list. Never add a sense that belongs to one of the homographs listed below — those are other words. Order by how common the sense is in Italian today: obsolete, dialectal and rare senses go last. Reuse a given example if it is a natural full sentence, otherwise write your own.`
-    : `1-3 items ordered from most to least frequent usage.`;
-  const LABELS = 'obsolete, archaic, dialectal, regional, vulgar, offensive, slang, colloquial, rare, literary, poetic, formal, figurative, humorous, technical, medicine, law, nautical, botany, zoology, military';
-  return `You are an expert Italian linguist. Complete the dictionary entry for the Italian ${base.partOfSpeech} "${base.word}"${base.gender ? ` (${base.gender})` : ''}.
-Known senses from Wiktionary (English glosses, most common first):
-${senseLines || '(none)'}${homos.length ? `
-
-The same spelling is also a different word (homographs):
-${homoLines}` : ''}
-
-Return ONLY valid JSON, no markdown:
-{${opts.skipRussian ? '' : `
-  "russian": { "main": "primary Russian translation", "alternatives": "2-3 alternatives semicolon-separated or empty" },`}
-  "category": "${CATEGORY_PROMPT}",${!base.gender && /^sostantivo/.test(base.partOfSpeech || '') ? `
-  "gender": "m. or f. or m./f. — Wiktionary did not record it",` : ''}
-  "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian", "label": "usage label or empty string" } ],
-  "relatedWords": ["3-4 Italian words tied to this one by topic or by word family (same root), NOT synonyms or antonyms${haveRelated.length ? `, and none of these: ${haveRelated.join(', ')}` : ''}"]${homos.length ? `,
-  "homographs": [ { "russian": "primary Russian translation; alternatives after ;", "label": "usage label or empty string", "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian", "label": "usage label or empty string" } ] } ]` : ''}
-}
-meanings: ${meaningsRule}
-label: one of [${LABELS}], or an empty string for an ordinary sense. Set it only when the sense really is restricted; never guess.${homos.length ? `
-homographs: one object per homograph listed above, in the same order, 1-2 meanings each.` : ''}
-russian.main MUST translate sense 1 of THIS word (the most common sense), never a homograph. Definitions are written in Italian; never copy an English gloss.${ruHintRule(opts.ruHint)}`;
-}
-
-// ── Конвейер статьи: подсказка → модель → проверка полноты → сохранение → проверка второй моделью ──
+// ── Конвейер статьи: подсказка → бэкенд → проверка полноты → сохранение → проверка второй моделью ──
 // Русский Викисловарь больше не соперник, а подсказка внутри промпта: его список плоский на все
 // слова этого написания, поэтому что из него подходит, решает модель, которая видит глосс.
 async function ruHintFor(word) {
@@ -1735,10 +1658,6 @@ async function ruHintFor(word) {
     });
     return out.length ? out.slice(0, 4) : null;
   } catch (e) { return null; }
-}
-function ruHintRule(hint) {
-  if (!hint || !hint.length) return '';
-  return `\nRussian Wiktionary lists these Russian words for this spelling, grouped by the part of speech it gives them (a group may belong to a DIFFERENT word spelled the same): ${hint.join(' | ')}. Use a word only if its part of speech is the one above and it translates the sense described above; otherwise ignore the whole list.`;
 }
 
 // Полнота статьи проверяется механически до сохранения. Раньше кривой ответ модели молча
@@ -1758,33 +1677,11 @@ function validateArticle(entry, base) {
   if (problems.length) { const err = new Error('Статья неполная: ' + problems.join(', ')); err.validation = problems; throw err; }
 }
 
-// Проверка второй моделью по фактам Викисловаря: перевод того ли значения, есть ли пометы,
-// не выдумано ли. Другая модель, чем писала, иначе она подтвердит собственные ошибки.
-// Проверка в два вопроса разным контекстом. Вопрос «настоящее ли это значение» задаётся БЕЗ списка
-// Викисловаря: со списком перед глазами проверяющий браковал «vita = талия» и «andare = работать»
-// как «не из списка», даже когда именно эти примеры были вписаны в правила как разрешённые.
-async function verifySenses(entry) {
-  const ms = (entry.meanings || []).filter(m => m && m.definition);
-  if (!ms.length) return { errors: [] };
-  const prompt = `You know Italian at native level. For a learner's dictionary, the Italian ${cleanPos(entry.partOfSpeech) || 'word'} "${entry.word}" was given these definitions:
-${ms.map((m, i) => `${i + 1}. ${m.definition}`).join('\n')}
-
-For EACH definition say whether it describes a genuine sense of the word "${entry.word}" in Italian. Any register counts: standard, colloquial, figurative, technical, regional, dated. Judge from your own knowledge of Italian; there is no list to compare against. A definition is NOT genuine only if the word does not have that meaning at all, or the meaning belongs to a different word that merely looks the same.
-Return ONLY valid JSON: { "verdicts": [ { "n": 1, "genuine": true/false, "note": "short reason in Russian, only when genuine is false" } ] }`;
-  const r = await llmJson(prompt, 'check');
-  const verdicts = Array.isArray(r && r.verdicts) ? r.verdicts : [];
-  const errors = verdicts.filter(v => v && v.genuine === false).map(v => `значение ${v.n}${ms[v.n - 1] ? ` «${String(ms[v.n - 1].definition).slice(0, 60)}»` : ''} не является значением слова${v.note ? ': ' + String(v.note).trim() : ''}`);
-  return { errors: errors.slice(0, 6) };
-}
-
+// Проверка второй моделью по фактам Викисловаря и по самим значениям — оба вопроса теперь
+// задаёт бэкенд (worker.js): пишет всегда Gemini, проверяет всегда другой провайдер, это больше
+// не зависит от того, какие ключи случайно завёл пользователь.
 async function verifyArticle(entry, base) {
-  // Два вопроса по очереди, а не разом: два одновременных запроса к Groq на каждое слово упирались в лимит
-  const f = await verifyArticleFacts(entry, base); // без сверки фактов вердикта нет — ошибка уходит наверх
-  let sErrors = [], sWarn = [];
-  try { sErrors = (await verifySenses(entry)).errors; }
-  catch (e) { sWarn = ['проверка значений не удалась: ' + (e.message || '')]; }
-  const errors = [...sErrors, ...f.errors].slice(0, 8);
-  return { ok: !errors.length, errors, warnings: [...f.warnings, ...sWarn], by: f.by };
+  return articleApi('check', { entry, base });
 }
 
 // Перепроверка без перегенерации: статья в кэше уже есть, не хватает только вердикта.
@@ -1839,35 +1736,6 @@ function fixLabel(raw) {
   return parts.length && parts.every(p => RU_USAGE_LABELS.has(p)) ? parts.join(' · ') : usageLabel([s], '');
 }
 
-function fixArticlePrompt(entry, notes) {
-  const article = {
-    word: entry.word,
-    partOfSpeech: entry.partOfSpeech,
-    gender: entry.gender || '',
-    russian: entry.russian || { main: '', alternatives: '' },
-    meanings: (entry.meanings || []).map(m => ({ definition: m.definition, example: m.example || '', label: m.label || '' })),
-    homographs: (entry.homographs || []).map(h => ({ partOfSpeech: h.partOfSpeech, russian: h.russian || '', label: h.label || '' }))
-  };
-  return `A dictionary entry for the Italian word "${entry.word}" was written by one model and checked by another. The reviewer found these problems:
-${notes.map((n, i) => `${i + 1}. ${n}`).join('\n')}
-
-The entry as it stands:
-${JSON.stringify(article)}
-
-Rewrite ONLY what the reviewer objected to; everything the reviewer did not mention must come back unchanged, word for word. The notes are in Russian, the entry keeps its own languages: definitions in Italian, translations and usage labels in Russian.
-
-Return ONLY valid JSON, no markdown, with every field below:
-{
-  "partOfSpeech": "part of speech in Italian, as in the entry unless the reviewer objected",
-  "gender": "m. or f. or m./f., empty when the word is not a noun",
-  "russian": { "main": "primary Russian translation of the most common present-day sense", "alternatives": "other Russian translations, semicolon-separated, or empty" },
-  "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural example sentence in Italian", "label": "usage label or empty string" } ],
-  "homographs": [ { "russian": "primary Russian translation; alternatives after ;", "label": "usage label or empty string" } ]
-}
-meanings: the corrected full list, ordered from most to least common in Italian today. Drop a meaning the reviewer called not a sense of this word; keep every other one as it was. Never return an empty list.
-homographs: exactly ${article.homographs.length} item(s), in the same order as above — those are other words with the same spelling, so fix only their Russian translation and label.`;
-}
-
 // Патч ложится на копию: если после правки статья развалилась, в базе остаётся прежняя.
 function applyArticleFix(entry, patch) {
   const fixed = JSON.parse(JSON.stringify(entry));
@@ -1907,8 +1775,8 @@ async function fixArticle(word) {
   }
   let fixed, fixBy;
   try {
-    const patch = await llmJson(fixArticlePrompt(entry, notes), 'article');
-    fixBy = _lastDictLlm; // проверка ниже перебьёт метку, поэтому запоминаем сразу
+    const { patch, by } = await articleApi('fix', { entry, notes });
+    fixBy = by;
     fixed = applyArticleFix(entry, patch);
     validateArticle(fixed, base);
   } catch (e) {
@@ -1935,44 +1803,6 @@ async function fixArticle(word) {
     currentDictEntry = fixed; renderEntry(fixed);
   }
   return fixed;
-}
-
-async function verifyArticleFacts(entry, base) {
-  const senses = ((base && base.senses) || []).map((s, i) => `${i + 1}. ${s.label ? '(' + s.label + ') ' : ''}${s.gloss}`).join('\n');
-  // Пометы Викисловаря передаём и для омографов: без них проверяющий решал, что «устар.» относится
-  // к русскому слову «паром», а не к итальянскому значению, и браковал верную статью
-  const homos = ((base && base.homographs) || []).map((h, i) => `${i + 1}. ${h.partOfSpeech}${h.label ? ` [Wiktionary marks it: ${h.label}]` : ''}: ${(h.glosses || []).join('; ')}`).join('\n');
-  const article = {
-    word: entry.word, partOfSpeech: entry.partOfSpeech, gender: entry.gender, russian: entry.russian, english: entry.english,
-    meanings: (entry.meanings || []).map(m => ({ definition: m.definition, label: m.label || '' })),
-    homographs: (entry.homographs || []).map(h => ({ partOfSpeech: h.partOfSpeech, russian: h.russian, label: h.label || '' }))
-  };
-  // Пометы в статье — русские сокращения тегов Викисловаря. Без этой таблицы проверяющий требовал
-  // писать их по-итальянски и браковал «муз.» за то, что у Викисловаря «другая аббревиатура».
-  const groups = {}; Object.entries(USAGE_RU).forEach(([en, ru]) => { (groups[ru] = groups[ru] || []).push(en); });
-  const labelMap = Object.entries(groups).map(([ru, ens]) => `${ru} = ${ens.join('/')}`).join('; ');
-  const prompt = `You are checking a dictionary entry for the Italian word "${entry.word}" written by another model. Report real errors; do not invent problems.
-${senses ? `Reference from Wiktionary — senses of THIS word (English glosses, Wiktionary order; the list may be incomplete and its order is historical, not by frequency):\n${senses}\n` : 'Wiktionary has no entry for this word; judge from your own knowledge of Italian.\n'}${homos ? `Other words with the same spelling, NOT this word:\n${homos}\n` : ''}
-The entry:
-${JSON.stringify(article)}
-
-Rules:
-- The writer was told to cover the Wiktionary senses AND add frequent present-day senses of this word that Wiktionary lacks. A meaning beyond the list is fine if it is a genuine common sense of this word ("andare" = to work/function, "vita" = waist, "tempo" = musical tempo). It is an error only if it is not a sense of this word at all, or belongs to a homograph listed above.
-- russian.main must translate the most common present-day sense of this word, consistent with the list. Wiktionary's first line is not automatically the most common.
-- Labels describe how the ITALIAN sense is used, never the Russian word. They are Russian abbreviations by design: ${labelMap}. A label is questionable only if it contradicts Wiktionary's mark for that sense or is clearly wrong for Italian; its spelling and language are never a problem.
-
-errors (make ok false): russian.main is a wrong translation; a meaning belongs to one of the homographs listed above; a definition is an English gloss or not Italian; partOfSpeech or gender contradicts Wiktionary; a homograph's russian translates the wrong word. Whether a meaning is a genuine sense of this word at all is checked separately — never report that here, and never report a meaning merely because it is absent from the Wiktionary list.
-warnings (ok stays true): doubtful labels, weak examples, missing common sense, style.
-Return ONLY valid JSON: { "ok": true/false, "errors": ["one short line each, in Russian"], "warnings": ["one short line each, in Russian"], "russianMain": "" }. When in doubt, it is a warning, not an error.
-russianMain: fill it ONLY when russian.main should be replaced — with the Russian word to use instead, 1-3 words, nothing else. Leave it empty otherwise.`;
-  const r = await llmJson(prompt, 'check');
-  const clean = a => (Array.isArray(a) ? a : []).map(s => String(s).trim()).filter(Boolean).slice(0, 6);
-  const errors = clean(r && (r.errors || r.issues)), warnings = clean(r && r.warnings);
-  // Проверяющий не просто жалуется, а называет замену. Берём её: короткая русская строка, старый
-  // перевод уезжает в варианты — ничего не теряется, а статья перестаёт хранить менее частый смысл.
-  const fix = String((r && r.russianMain) || '').trim();
-  const fixRu = fix && fix.length <= 40 && /^[а-яёА-ЯЁ][а-яёА-ЯЁ\s-]*$/.test(fix) ? fix : '';
-  return { ok: !errors.length && (r ? r.ok !== false || !errors.length : false), errors, warnings, fixRu, by: _lastDictLlm };
 }
 
 // Сохранить, показать, проверить второй моделью, сохранить статус. Проверка идёт после первого
@@ -2088,7 +1918,7 @@ async function lookupWordHybrid(query, base, opts = {}) {
   try {
     const ruHint = await ruHintFor(base.word);
     let shownRu = false, shownMeanings = 0;
-    const extra = await llmJsonStream(fdCompletionPrompt(base, { ruHint }), 'article', partial => {
+    const extra = await streamArticleHybrid(base, ruHint, partial => {
       if (currentDictWord !== key || !currentDictEntry || !currentDictEntry._pending) return;
       if (!shownRu) {
         const m = partial.match(/"russian"\s*:\s*\{[^{}]*\}/);
@@ -2101,6 +1931,7 @@ async function lookupWordHybrid(query, base, opts = {}) {
       }
     });
     const entry = fdMergeCompletion(base, extra, null);
+    entry.llm = 'Gemini'; // пишет теперь всегда бэкенд общим ключом, выбора провайдера у клиента больше нет
     entry.relatedWords = await verifyWords(entry.relatedWords, base.relatedWords || []); // синонимы Викисловаря доверенные, добавки модели — проверяем
     if (!entry.phonetic) { const r = await resolveIpa(entry.word); entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; entry.phoneticSrc = r.src; }
     await fixTransliteratedRussian(entry); // «мамон» вместо перевода — переспрашиваем у Gemini
@@ -2132,49 +1963,6 @@ async function lookupWord(word, _depth = 0, opts = {}) {
   if (!word) return;
   // headless — конвейер без экрана: для прогона золотого набора и пересборки кэша. Возвращает статью.
   if (!opts.headless) showState('loading');
-  const prompt = `You are an expert Italian linguist. Given the Italian word "${word}", provide a complete dictionary entry in JSON format.
-Return ONLY valid JSON, no markdown, no explanation. Schema:
-{
-  "word": "canonical form",
-  "partOfSpeech": "EXACTLY ONE of these, never a combination: sostantivo, verbo, aggettivo, avverbio, preposizione, congiunzione, pronome, articolo, interiezione",
-  "category": "${CATEGORY_PROMPT}",
-  "gender": "m. / f. / m./f. / null",
-  "phonetic": "IPA with ˈ before stressed syllable",
-  "singular": { "article": "il/lo/la/l'", "form": "word" },
-  "plural": { "article": "i/gli/le", "form": "plural form" },
-  "russian": { "main": "primary Russian translation", "alternatives": "2-3 alts semicolon-separated or empty" },
-  "english": { "main": "primary English translation", "alternatives": "2-3 alts semicolon-separated or empty" },
-  "meanings": [
-    { "definition": "Definition in Italian (1 sentence)", "example": "Example sentence in Italian", "label": "usage label or empty string" },
-    { "definition": "Second meaning if exists", "example": "Example for second meaning", "label": "usage label or empty string" }
-  ],
-  "isNoun": true/false,
-  "isVerb": true/false,
-  "alsoForms": [ { "lemma": "another Italian word this exact spelling is also an inflected form of", "pos": "sostantivo / verbo / aggettivo", "desc": "short Russian note, e.g. «форма глагола puzzare»" } ],
-  "relatedWords": ["слово1", "слово2", "слово3"],
-  "conjugations": {
-    "Indicativo Presente": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
-    "Indicativo Passato Prossimo": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
-    "Indicativo Imperfetto": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
-    "Indicativo Trapassato Prossimo": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
-    "Indicativo Passato Remoto": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
-    "Indicativo Futuro Semplice": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
-    "Indicativo Futuro Anteriore": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
-    "Congiuntivo Presente": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
-    "Congiuntivo Passato": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
-    "Congiuntivo Imperfetto": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
-    "Congiuntivo Trapassato": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
-    "Condizionale Presente": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
-    "Condizionale Passato": {"io":"","tu":"","lui/lei":"","noi":"","voi":"","loro":""},
-    "Imperativo": {"tu":"","lui/lei":"","noi":"","voi":"","loro":""},
-    "Infinito": {"Presente":"","Passato":""},
-    "Participio": {"Presente":"","Passato":""},
-    "Gerundio": {"Presente":"","Passato":""}
-  }
-}
-If isVerb false → conjugations null. If isNoun false → singular/plural null. If not a real Italian word → word null. relatedWords: 3-5 semantically related Italian words (synonyms, antonyms, thematic). meanings: 1-4 items ordered from most frequent to least frequent usage; obsolete, dialectal and rare senses go last. Always include at least 1 meaning.
-label: one of [obsolete, archaic, dialectal, regional, vulgar, offensive, slang, colloquial, rare, literary, poetic, formal, figurative, humorous, technical, medicine, law, nautical, botany, zoology, military], or an empty string for an ordinary sense. Set it only when the sense really is restricted; never guess.
-alsoForms: this article is about one word only. If the very same spelling is ALSO an inflected form of a different word (the noun "puzza" is also "puzza" from the verb puzzare), list that other word here so the reader can jump to it. Do not describe it and do not add its conjugation table here. Empty array when there is no such word.`;
   // 1. Кэш Supabase — мгновенно
   const cachedWord = opts.force ? null : await getArticle(word);
   if (cachedWord) {
@@ -2214,10 +2002,10 @@ alsoForms: this article is about one word only. If the very same spelling is ALS
     return lookupWordHybrid(word, mapped, opts);
   }
 
-  // 3. Fallback: слова нет в Викисловаре или таблица форм неполная — Gemini генерирует всё
+  // 3. Fallback: слова нет в Викисловаре или таблица форм неполная — бэкенд генерирует всё
   try {
     const ruHint = await ruHintFor(word);
-    const entry = await llmJson(prompt + ruHintRule(ruHint), 'article');
+    const { entry } = await articleApi('fallback', { word, ruHint });
     if (!entry.word) { if (opts.headless) throw new Error('parola non trovata'); $('errorText').textContent = `"${word}" — parola non trovata`; showState('error'); return; }
     entry.relatedWords = await verifyWords(entry.relatedWords);
     entry.partOfSpeech = cleanPos(entry.partOfSpeech);
@@ -2233,7 +2021,7 @@ alsoForms: this article is about one word only. If the very same spelling is ALS
     entry.unverified = !(await wordExists(entry.word || word));
     // Транскрипцию модели не берём: словари, иначе правила чтения
     { const r = await resolveIpa(entry.word || word); entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; entry.phoneticSrc = r.src; }
-    entry.llm = _lastDictLlm;
+    entry.llm = 'Gemini'; // пишет теперь всегда бэкенд общим ключом
     entry.sources = { structure: 'model', text: entry.llm, ruHint: !!ruHint };
     validateArticle(entry, null); // неполную статью не сохраняем
     if (opts.headless) { await finalizeArticle(entry, word, null, { silent: true }); return entry; }
@@ -2296,6 +2084,9 @@ const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&
 
 function describeApiError(msg) {
   if (/NO_GEMINI_KEY/.test(msg)) return `${svgIcon('key')} Этого слова ещё нет в общей базе, для генерации статьи нужен ключ Gemini — <u style="cursor:pointer" onclick="showApiKeyScreen()">указать ключ</u> (бесплатно, минута)`;
+  // Бэкенд сборки статьи сам показал экран входа/тост про лимит — здесь только текст под шапкой ошибки
+  if (/^Нужно войти в аккаунт$/.test(msg)) return escapeHtml(msg);
+  if (/^Дневной лимит/.test(msg)) return `⏳ ${escapeHtml(msg)}`;
   const isQuota = /quota|RESOURCE_EXHAUSTED|429|rate limit/i.test(msg);
   const isBadKey = /API[ _]key|API_KEY|PERMISSION_DENIED|leaked|403|401|Unauthorized|invalid_api_key/i.test(msg);
   const who = (msg.match(/^(Groq|Cerebras|Mistral)/i) || [])[1] || 'Gemini';
