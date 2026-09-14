@@ -4385,6 +4385,14 @@ loadHomeCache();
 renderHome();
 renderHistory(); // «Недавние» на главной при первой загрузке: иначе список появлялся только после возврата на неё
 
+// ── Открытие сразу со статьёй по ?word=... (внешний словарь в читалках вроде ReadEra) ────────
+const _urlWord = new URLSearchParams(window.location.search).get('word');
+if (_urlWord && _urlWord.trim()) {
+  currentMode = 'dict'; applyModeUI('dict');
+  $('searchInput').value = _urlWord.trim();
+  lookupWord(_urlWord.trim(), 0, { chooser: true });
+}
+
 // ── Bottom sheet (mobile) ─────────────────────────────────────────────────────
 let _sheetWord = '';
 let _sheetIsGrammar = false;
