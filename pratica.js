@@ -16,46 +16,6 @@
   const esc = s => escapeHtml(s == null ? '' : String(s));
   const pluralRu = (n, one, few, many) => { const m = n % 10, h = n % 100; return (m === 1 && h !== 11) ? one : (m >= 2 && m <= 4 && (h < 10 || h >= 20)) ? few : many; };
 
-  // ── Запрос к модели ──────────────────────────────────────────────────────────
-  function buildPrompt(text) {
-    return `Вот текст на итальянском языке, который написал изучающий язык (родной язык — русский).
-
-ТЕКСТ:
-"""
-${text}
-"""
-
-Разбери этот текст и верни ТОЛЬКО валидный JSON без markdown:
-{
-  "issues": [
-    {
-      "fragment": "точная копия куска текста выше, буква в букву",
-      "correction": "исправленный вариант этого же куска",
-      "translation": "перевод исправленного варианта на русский, коротко",
-      "lemma": "словарная форма исправленного слова: инфинитив для глагола, единственное число мужского рода для существительного и прилагательного. Пустая строка, если правка не про одно слово",
-      "lemma_translation": "перевод словарной формы на русский, коротко. Пустая строка, если lemma пустая",
-      "type": "одно из: grammar, vocabulary, register, word-order, spelling",
-      "topic": "одно из: ${topicList().join(', ')}",
-      "explanation": "объяснение по-русски, одно-два предложения"
-    }
-  ],
-  "words_used": ["леммы значимых слов из текста"],
-  "good_points": ["что получилось хорошо, по-русски, коротко"],
-  "overall": "одно-два предложения по-русски об общем впечатлении"
-}
-
-Требования:
-- fragment обязан быть точной подстрокой исходного текста: без изменений, без многоточий, без добавленных слов. Бери самый короткий кусок, в котором видна ошибка.
-- lemma это словарная форма того слова, которое ты исправил, а не та форма, что стоит в предложении: andato → andare, belle → bello, dei libri → libro.
-- Если изменилось одно слово, lemma обязательна, даже когда правка выглядит как оборот: в «sono 22 anni» → «ho 22 anni» изменился глагол, значит lemma это avere. В «mi chiamo Marco» это chiamarsi.
-- Пустая строка только если изменился порядок слов или сразу несколько разных слов.
-- Отмечай только то, что носитель счёл бы неверным или неестественным. Не придумывай ошибок там, где текст просто написан не так, как написал бы ты.
-- Если ошибок нет, верни пустой массив issues.
-- topic только из списка выше. Если ошибка не грамматическая, ставь ${LESSICO}.
-- words_used: начальные формы (cercando → cercare, le chiavi → chiave), только значимые слова. Не включай артикли, предлоги, союзы, местоимения и вспомогательные essere и avere.
-- Объяснения, переводы и общее впечатление пиши по-русски. Итальянские примеры оставляй по-итальянски.
-- Никаких баллов, оценок и уровней.`;
-  }
 
   // Модель иногда возвращает вольную структуру, поэтому приводим ответ к ожидаемому виду сами
   function normalize(raw, text) {
@@ -111,14 +71,13 @@ ${text}
     if (cut.length < text.length) showToast(`Разбираю первые ${MAX_CHARS} знаков`);
     S.loading = true; S.error = ''; S.result = null; render();
     try {
-      // Задача не словарная, поэтому запрос идёт в Gemini: тут важны русские объяснения
-      const raw = await llmJson(buildPrompt(cut), 'pratica');
+      const { raw } = await backendApi('/api/pratica', { text: cut, topics: topicList() });
       const res = normalize(raw, cut);
       anchor(res);
       S.result = res;
       saveLog(res);
     } catch (e) {
-      S.error = /NO_GEMINI_KEY/.test(e.message || '') ? 'Для разбора нужен ключ Gemini' : (e.message || 'Не получилось разобрать текст');
+      S.error = e.message || 'Не получилось разобрать текст';
     } finally {
       S.loading = false; render();
     }
@@ -203,8 +162,8 @@ ${text}
     return `
       <div class="pr-intro">Вставьте свой текст на итальянском: письмо, запись в дневнике, ответ в чате.
         Разбор смотрит только на то, что вы написали сами.</div>
-      ${(window.Auth && Auth.user()) ? '' : `<div class="pr-note">Разобрать текст можно и так, но чтобы разборы копились в вашем профиле, нужно
-        <u style="cursor:pointer" onclick="Auth.require('Войдите, чтобы сохранять разборы')">войти в аккаунт</u>.</div>`}
+      ${(window.Auth && Auth.user()) ? '' : `<div class="pr-note">Разбор текста работает только вошедшим —
+        <u style="cursor:pointer" onclick="Auth.require('Войдите, чтобы разбирать текст')">войти в аккаунт</u>.</div>`}
       <div class="pr-input-wrap">
         <textarea class="pr-input" id="prInput" spellcheck="false" autocapitalize="off"
           placeholder="Ieri sono andato al mercato con mia sorella…"
@@ -216,7 +175,7 @@ ${text}
           </button>
         </div>
       </div>
-      ${S.error ? `<div class="pr-error">${esc(S.error)}${/ключ/.test(S.error) ? ` — <u style="cursor:pointer" onclick="showApiKeyScreen()">указать ключ</u>` : ''}</div>` : ''}
+      ${S.error ? `<div class="pr-error">${esc(S.error)}${/войти|регистр/i.test(S.error) ? ` — <u style="cursor:pointer" onclick="showApiKeyScreen()">войти</u>` : ''}</div>` : ''}
       ${S.loading ? `<div class="pr-loading">Читаю текст<span class="loading-dots"><span></span><span></span><span></span></span></div>` : ''}`;
   }
 

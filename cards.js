@@ -978,17 +978,12 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       if (S.build) { S.build.status = `Модель дописывает недостающее: ${Math.min(i + BATCH, need.length)} из ${need.length}…`; render(); }
       const list = chunk.map(x => ({ word: x.word, isPhrase: x.isPhrase || undefined, partOfSpeech: x.pos || undefined, englishGlosses: x.glosses.length ? x.glosses : undefined,
         missing: fieldsOf(x).filter(f => !x[f]) }));
-      const prompt = `You are an expert Italian lexicographer. For each Italian item below, provide ONLY the fields listed in "missing".
-Fields: "translation" = primary Russian translation (1-3 words, alternatives after ";" allowed), "phonetic" = IPA with ˈ before the stressed syllable, "example" = one natural Italian sentence using the word, "meaning" = short definition in Italian (1 sentence).
-Items with "isPhrase": true are multi-word expressions (idioms, collocations, set phrases): "translation" = the idiomatic Russian equivalent, not word-for-word; "meaning" = what the whole expression means; "example" = a natural sentence using the whole expression. Never add a phonetic for them.
-Return ONLY a JSON array of objects {"word": "...", ...fields}, in the same order, no markdown.
-${JSON.stringify(list)}`;
       try {
-        const res = await llmJson(prompt, 'dict');
-        const arr = Array.isArray(res) ? res : (res && Array.isArray(res.items) ? res.items : []);
+        const { results, by } = await backendApi('/api/cards-fill', { list });
+        const arr = Array.isArray(results) ? results : (results && Array.isArray(results.items) ? results.items : []);
         arr.forEach(r => { const t = chunk.find(x => x.word.toLowerCase() === String(r.word || '').toLowerCase()) || chunk[arr.indexOf(r)]; if (!t) return;
           fieldsOf(t).forEach(f => { if (!t[f] && r[f]) t[f] = String(r[f]); }); });
-        used = _lastDictLlm;
+        used = by;
       } catch (e) { showToast('⚠ Модель не ответила: ' + e.message); }
     }
     return used;

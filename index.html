@@ -18,7 +18,7 @@
 </head>
 <body>
 
-<!-- API Key setup screen -->
+<!-- Экран настроек: вход в аккаунт (генерация теперь на общем ключе владельца, свой ключ не нужен) -->
 <div class="apikey-overlay" id="apikeyOverlay">
   <div class="apikey-box">
     <div class="apikey-ornament">Configurazione · Настройка</div>
@@ -27,62 +27,20 @@
     <div class="apikey-rule"><div class="apikey-rule-diamond"></div></div>
     <div class="apikey-label">Аккаунт</div>
     <div class="auth-box" id="authBox"></div>
-    <div class="apikey-label apikey-label-opt">Gemini API Key</div>
-    <div class="apikey-input-wrap">
-      <input class="apikey-input masked" id="apikeyInput" type="text"
-        placeholder="AIzaSy…"
-        autocomplete="off" spellcheck="false"
-        onkeydown="if(event.key==='Enter') saveApiKey()"
-      />
-      <button class="apikey-eye" id="apikeyEye" onclick="toggleApiKeyVisibility()" title="Показать/скрыть" data-icon="eye"></button>
-    </div>
-    <div class="apikey-error" id="apikeyError">Введите корректный ключ (начинается с AIza…)</div>
+    <p class="apikey-hint">Без входа доступны словарь и грамматика из общей базы. Новые статьи, карточки и La Pratica — только вошедшим.</p>
 
-    <div class="apikey-label apikey-label-opt">Быстрый провайдер <span>необязательно · для словарных статей и подсказок</span></div>
-    <div class="apikey-input-wrap">
-      <select class="apikey-input apikey-select" id="fastProviderSelect" onchange="onFastProviderChange()">
-        <option value="groq">Groq · бесплатно, около 1000 запросов в день</option>
-        <option value="cerebras">Cerebras · требует привязки оплаты</option>
-        <option value="mistral">Mistral · бесплатно, нужен номер телефона</option>
-      </select>
-    </div>
-    <div class="apikey-input-wrap">
-      <input class="apikey-input masked" id="fastKeyInput" type="text"
-        placeholder="gsk_…"
-        autocomplete="off" spellcheck="false"
-        onkeydown="if(event.key==='Enter') saveApiKey()"
-      />
-      <button class="apikey-eye" onclick="toggleKeyVisibility('fastKeyInput')" title="Показать/скрыть" data-icon="eye"></button>
-    </div>
-    <div class="apikey-input-wrap">
-      <input class="apikey-input apikey-model" id="fastModelInput" type="text" list="fastModels"
-        placeholder="модель, по умолчанию openai/gpt-oss-120b"
-        autocomplete="off" spellcheck="false"
-      />
-      <datalist id="fastModels"></datalist>
-    </div>
-    <div class="apikey-error" id="fastKeyError">Ключ выглядит некорректно</div>
-    <div class="apikey-hint-small" id="fastHint">С ключом словарные статьи и подсказки идут через выбранный сервис, грамматика и поиск с русского остаются на Gemini. Если сервис отказывает, запрос уходит в Gemini.</div>
-
-    <button class="apikey-btn" onclick="saveApiKey()">Сохранить</button>
     <button class="apikey-back-btn" id="apikeyBackBtn" onclick="hideApiKeyScreen()">← Назад</button>
     <button class="apikey-back-btn" id="installBtn" style="display:none" onclick="installApp()"><span data-icon="download"></span> Установить как приложение</button>
     <button class="apikey-back-btn" id="qaBtn" style="display:none" onclick="hideApiKeyScreen(); Qa.open()"><span data-icon="chart"></span> Проверка словаря</button>
-    <p class="apikey-hint">
-      Ключи: Gemini на <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>,
-      Groq на <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a>,
-      Mistral на <a href="https://console.mistral.ai" target="_blank">console.mistral.ai</a><br><br>
-      Ключи хранятся только в вашем браузере и никуда, кроме самих сервисов, не передаются.
-    </p>
   </div>
 </div>
 
-<!-- Кнопка смены ключа (показывается когда ключ уже есть) -->
+<!-- Кнопка настроек: открывает экран входа в аккаунт -->
 <div class="container">
   <header>
-    <button class="header-settings-btn" id="headerSettingsBtn" onclick="showApiKeyScreen()" title="Настройки API">
+    <button class="header-settings-btn" id="headerSettingsBtn" onclick="showApiKeyScreen()" title="Настройки">
       <span data-icon="settings"></span>
-      <span>API key</span>
+      <span>Аккаунт</span>
     </button>
     <button class="header-fav-btn" id="headerFavBtn" onclick="openFavorites()" title="Избранное">
       <span class="header-fav-star" data-icon="star"></span>
@@ -340,7 +298,7 @@
 </button>
 
 <!-- Floating settings button (mobile) -->
-<button class="settings-float-btn" id="settingsFloatBtn" onclick="showApiKeyScreen()" title="API key">
+<button class="settings-float-btn" id="settingsFloatBtn" onclick="showApiKeyScreen()" title="Настройки">
   <span data-icon="settings"></span>
 </button>
 

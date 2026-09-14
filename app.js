@@ -53,53 +53,20 @@ const ICONS = {
 function svgIcon(name) { return `<svg class="icon icon-${name}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`; }
 document.querySelectorAll('[data-icon]').forEach(el => { el.innerHTML = svgIcon(el.dataset.icon); });
 // ── Конфигурация ─────────────────────────────────────────────────────────────
-const GEMINI_MODEL_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent`;
-
 // Темы слов: одна и та же таксономия в промптах и в легенде графа (graph.js).
 // Раньше было 10 тем и почти всё уходило в «altro», теперь модель выбирает из ~40.
 const CATEGORY_KEYS = ['cibo','bevande','cucina','natura','animali','piante','geografia','clima','tempo','persone','famiglia','corpo','salute','emozioni','carattere','casa','oggetti','vestiti','città','viaggio','trasporti','lavoro','scuola','scienza','tecnologia','denaro','diritto','politica','società','cultura','arte','musica','sport','comunicazione','azioni','movimento','pensiero','quantità','astratto','grammatica','altro'];
 const CATEGORY_PROMPT = CATEGORY_KEYS.join(' / ') + ' — choose the single most specific one; use altro only if nothing fits';
 
-function getApiKey() {
-  return localStorage.getItem('dizionario_gemini_key') || '';
-}
-
-function getApiUrl() {
-  return `${GEMINI_MODEL_URL}?key=${getApiKey()}`;
-}
-
-// ── API Key screen logic ──────────────────────────────────────────────────────
+// ── Экран настроек: вход в аккаунт ─────────────────────────────────────────────
+// Раньше здесь же заводили ключи Gemini/быстрого провайдера (BYOK) — генерация теперь идёт
+// через бэкенд общим ключом владельца, свой ключ не нужен, экран остался только про вход.
 function showApiKeyScreen() {
   $('apikeyOverlay').classList.add('open');
   $('headerSettingsBtn').style.visibility = 'hidden';
   // Проверка словаря — инструмент владельца: золотой набор и пересборка кэша
   const qb = $('qaBtn'); if (qb) qb.style.display = (window.Auth && Auth.isAdmin && Auth.isAdmin()) ? 'block' : 'none';
-  const existing = getApiKey();
-  if (existing) $('apikeyInput').value = existing;
-  $('fastProviderSelect').value = getFastProvider();
-  $('fastKeyInput').value = getFastKey();
-  onFastProviderChange();
   if (window.Auth) Auth.renderUi();
-  // Назад можно только если ключ уже сохранён — при первом запуске возвращаться некуда
-  $('apikeyBackBtn').classList.add('visible'); // экран всегда можно закрыть, ключ не обязателен
-  $('apikeyError').classList.remove('visible');
-  $('fastKeyError').classList.remove('visible');
-  setTimeout(() => $('apikeyInput').focus(), 100);
-}
-
-// Подстраиваем подсказки под выбранный быстрый провайдер
-function onFastProviderChange() {
-  const id = $('fastProviderSelect').value;
-  const p = FAST_PROVIDERS[id] || FAST_PROVIDERS.groq;
-  $('fastKeyInput').placeholder = p.keyHint;
-  $('fastModelInput').placeholder = `модель, по умолчанию ${p.model}`;
-  $('fastModelInput').value = getFastModel(true, id); // у каждого провайдера своё сохранённое имя модели
-  $('fastModels').innerHTML = p.models.map(m => `<option value="${m}">`).join('');
-}
-
-function toggleKeyVisibility(id) {
-  const inp = $(id);
-  inp.classList.toggle('masked'); // ключ маскируется CSS, а не type=password: иначе браузер предлагает «сохранить пароль» при каждом переходе
 }
 
 function hideApiKeyScreen() {
@@ -107,42 +74,10 @@ function hideApiKeyScreen() {
   $('headerSettingsBtn').style.visibility = 'visible';
 }
 
-// Escape тоже закрывает экран ключа, если ключ уже есть
+// Escape тоже закрывает экран настроек
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && $('apikeyOverlay').classList.contains('open')) hideApiKeyScreen();
 });
-
-function toggleApiKeyVisibility() {
-  const inp = $('apikeyInput');
-  inp.classList.toggle('masked'); // ключ маскируется CSS, а не type=password: иначе браузер предлагает «сохранить пароль» при каждом переходе
-}
-
-function saveApiKey() {
-  const val = $('apikeyInput').value.trim();
-  const err = $('apikeyError');
-  // Ключ Gemini можно оставить пустым: читать кэш и учить карточки можно и без него
-  if (val && (!val.startsWith('AIza') || val.length < 20)) {
-    err.classList.add('visible');
-    return;
-  }
-  err.classList.remove('visible');
-  // Быстрый провайдер необязателен: пустое поле ключа — всё идёт через Gemini
-  const fk = $('fastKeyInput').value.trim();
-  const ferr = $('fastKeyError');
-  if (fk && fk.length < 20) { ferr.classList.add('visible'); return; }
-  ferr.classList.remove('visible');
-  if (val) localStorage.setItem('dizionario_gemini_key', val); else localStorage.removeItem('dizionario_gemini_key');
-  const providerId = $('fastProviderSelect').value;
-  localStorage.setItem('dizionario_fast_provider', providerId);
-  if (fk) localStorage.setItem('dizionario_fast_key', fk); else localStorage.removeItem('dizionario_fast_key');
-  const model = $('fastModelInput').value.trim();
-  if (model) localStorage.setItem('dizionario_fast_model_' + providerId, model); else localStorage.removeItem('dizionario_fast_model_' + providerId);
-  if (window.Auth && Auth.user()) Auth.pushProfile(); // ключи уезжают в профиль и подхватятся на других устройствах
-  hideApiKeyScreen();
-}
-
-// Экран ключей и входа при запуске не показываем: словарь читает общий кэш и без них.
-// Ключ спросится, когда понадобится генерация, вход — когда понадобятся личные данные.
 
 // ── Supabase ──────────────────────────────────────────────────────────────────
 const SB_URL = "https://qmsgumhvbsefpbbkvxgs.supabase.co";
@@ -480,154 +415,62 @@ function showState(state) {
   updateBackBtn();
 }
 
-// ── Gemini API ────────────────────────────────────────────────────────────────
-// У моделей Gemini 3 перед ответом включены «размышления» — для словарной задачи это лишние секунды.
-// Просим минимальный уровень; если модель не знает такой параметр, запоминаем и больше не шлём.
-let _geminiThinkingOff = (() => { try { return localStorage.getItem('dizionario_thinking_unsupported') !== '1'; } catch(e) { return true; } })();
-function markThinkingUnsupported() {
-  _geminiThinkingOff = false;
-  try { localStorage.setItem('dizionario_thinking_unsupported', '1'); } catch(e) {} // чтобы не тратить запрос на пробу при каждом заходе
-}
-function geminiRequestBody(prompt) {
-  const generationConfig = { temperature: 0.2, responseMimeType: 'application/json' };
-  if (_geminiThinkingOff) generationConfig.thinkingConfig = { thinkingLevel: 'minimal' };
-  return JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig });
-}
-const isThinkingParamError = msg => /thinking/i.test(msg || '');
-
-async function callGemini(prompt) {
-  if (!getApiKey()) throw new Error('NO_GEMINI_KEY');
-  const response = await fetch(getApiUrl(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: geminiRequestBody(prompt)
-  });
-  const data = await response.json();
-  if (data.error) {
-    if (_geminiThinkingOff && isThinkingParamError(data.error.message)) { markThinkingUnsupported(); return callGemini(prompt); }
-    throw new Error(data.error.message);
-  }
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  return extractJson(text);
-}
-
-// ── Быстрый провайдер (OpenAI-совместимый API: Groq / Cerebras / Mistral) ───────────
-// Используется только для словаря и подсказок и только если введён ключ; грамматика и поиск
-// с русского остаются на Gemini, где качество русского текста важнее скорости.
-const FAST_PROVIDERS = {
-  groq:     { name: 'Groq',     url: 'https://api.groq.com/openai/v1/chat/completions', model: 'openai/gpt-oss-120b',
-              models: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'qwen/qwen3-32b'], keyHint: 'gsk_…' },
-  cerebras: { name: 'Cerebras', url: 'https://api.cerebras.ai/v1/chat/completions', model: 'gpt-oss-120b',
-              models: ['gpt-oss-120b', 'qwen-3-235b-a22b-instruct-2507', 'llama-3.3-70b'], keyHint: 'csk-…' },
-  mistral:  { name: 'Mistral',  url: 'https://api.mistral.ai/v1/chat/completions', model: 'mistral-small-latest',
-              models: ['mistral-small-latest', 'mistral-medium-latest'], keyHint: 'ключ Mistral' },
-};
-// Перенос настроек из прежней версии, где был только Cerebras
-try {
-  if (!localStorage.getItem('dizionario_fast_key') && localStorage.getItem('dizionario_cerebras_key')) {
-    localStorage.setItem('dizionario_fast_key', localStorage.getItem('dizionario_cerebras_key'));
-    localStorage.setItem('dizionario_fast_provider', 'cerebras');
-    const m = localStorage.getItem('dizionario_cerebras_model'); if (m) localStorage.setItem('dizionario_fast_model_cerebras', m);
-  }
-  // Промежуточная версия хранила одну модель на всех провайдеров — переносим её только к Cerebras
-  const legacy = localStorage.getItem('dizionario_fast_model');
-  if (legacy) { if (!localStorage.getItem('dizionario_fast_model_cerebras')) localStorage.setItem('dizionario_fast_model_cerebras', legacy); localStorage.removeItem('dizionario_fast_model'); }
-} catch(e) {}
-function getFastProvider() { try { return FAST_PROVIDERS[localStorage.getItem('dizionario_fast_provider')] ? localStorage.getItem('dizionario_fast_provider') : 'groq'; } catch(e) { return 'groq'; } }
-function getFastKey() { try { return localStorage.getItem('dizionario_fast_key') || ''; } catch(e) { return ''; } }
-// Модель хранится отдельно для каждого провайдера: у Groq та же gpt-oss называется openai/gpt-oss-120b
-function getFastModel(raw, provider) {
-  const p = provider || getFastProvider();
-  let m = ''; try { m = localStorage.getItem('dizionario_fast_model_' + p) || ''; } catch(e) {}
-  return raw ? m : (m || FAST_PROVIDERS[p].model);
-}
-const useFastForDict = () => !!getFastKey();
-const fastLabel = () => `${FAST_PROVIDERS[getFastProvider()].name} · ${getFastModel()}`;
-
-function fastBody(prompt, stream) {
-  const model = getFastModel();
-  const body = {
-    model, stream, temperature: 0.2, max_tokens: 2048,
-    response_format: { type: 'json_object' },
-    messages: [
-      { role: 'system', content: 'You are a precise Italian lexicographer. Answer with valid JSON only, no markdown.' },
-      { role: 'user', content: prompt }
-    ]
-  };
-  if (/gpt-oss/.test(model)) body.reasoning_effort = 'low'; // у reasoning-моделей иначе уходят секунды на размышления
-  return JSON.stringify(body);
-}
-const fastHeaders = () => ({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${getFastKey()}` });
-async function fastError(response) {
-  const data = await response.json().catch(() => ({}));
-  const msg = data.error?.message || data.message || `HTTP ${response.status}`;
-  const err = new Error(`${FAST_PROVIDERS[getFastProvider()].name}: ${msg}`);
-  err.status = response.status;
-  // Groq присылает, сколько ждать; без заголовка ждём по своей лесенке
-  const ra = parseFloat(response.headers.get('retry-after') || '');
-  if (!isNaN(ra)) err.retryAfter = ra;
-  return err;
-}
-const isRateLimit = e => !!e && (e.status === 429 || /429|rate limit|quota|RESOURCE_EXHAUSTED|too many requests/i.test(e.message || ''));
-let _lastRateLimitAt = 0; // пакетные прогоны смотрят сюда и сбавляют темп
-
-async function callFast(prompt) {
-  const response = await fetch(FAST_PROVIDERS[getFastProvider()].url, { method: 'POST', headers: fastHeaders(), body: fastBody(prompt, false) });
-  if (!response.ok) throw await fastError(response);
-  const data = await response.json();
-  return extractJson(data.choices?.[0]?.message?.content || '');
-}
-
-// Маршрутизация по задачам: 'dict' — быстрый провайдер при наличии ключа, иначе Gemini. Сборка/проверка/
-// починка статьи ('article'/'check') сюда больше не попадают — они переехали на бэкенд с общим ключом
-// (см. articleApi ниже, worker.js): там пишет всегда Gemini, а проверяет всегда другой провайдер,
-// без зависимости от того, какие ключи случайно завёл пользователь.
-let _lastDictLlm = 'Gemini';
-const isKeyError = msg => /401|403|Unauthorized|invalid_api_key|Wrong API Key|PERMISSION_DENIED/i.test(msg || '');
-// Причину отката показываем на экране (не чаще раза в 20 секунд), иначе непонятно, почему статью написал Gemini
-let _lastFallbackToastAt = 0;
-function noteFastFallback(e) {
-  const msg = (e && e.message) || String(e);
-  console.warn('fast provider → Gemini:', msg);
-  if (Date.now() - _lastFallbackToastAt > 20000) {
-    _lastFallbackToastAt = Date.now();
-    showToast('⚠ ' + msg.slice(0, 140) + ' → Gemini');
-  }
-}
-function pickModel(task) { return task === 'dict' && useFastForDict() ? 'fast' : 'gemini'; }
-async function llmJson(prompt, task) {
-  if (pickModel(task) === 'fast') {
-    try { const r = await callFast(prompt); _lastDictLlm = fastLabel(); return r; }
-    catch(e) {
-      if (isKeyError(e.message)) throw e;
-      if (isRateLimit(e)) _lastRateLimitAt = Date.now();
-      noteFastFallback(e);
-    }
-  }
-  const r = await callGemini(prompt);
-  _lastDictLlm = 'Gemini';
-  return r;
-}
-
-// ── Бэкенд сборки статьи: общий ключ владельца вместо ключа каждого пользователя ─────────────
-// Промпты этого пути не строятся в браузере — их строит worker.js из prompts-article.js. Отсюда
-// уходят только структурированные данные (слово, факты Викисловаря, статья, замечания проверки),
+// ── Бэкенд: общий ключ владельца вместо ключа каждого пользователя ───────────────────────────
+// Раньше здесь были callGemini/llmJson/FAST_PROVIDERS (BYOK) — вся генерация, включая грамматику,
+// словарь, карточки и La Pratica, теперь идёт через бэкенд (см. articleApi/previewApi ниже,
+// worker.js, prompts.js). Промпты не строятся в браузере — их строит worker.js. Отсюда уходят
+// только структурированные данные (слово, факты Викисловаря, статья, замечания проверки),
 // а не готовый текст промпта: иначе ручка стала бы бесплатным доступом к модели для кого угодно.
-async function articleApi(path, body) {
-  const res = await fetch(`/api/article/${path}`, {
+// Пробные генерации анонима: тёплый предохранитель на клиенте. Сервер тоже считает анонимов
+// (по IP, потолок куда щедрее — страховка на случай обхода мимо браузера), а этот, видимый,
+// и есть основной: 15 попыток, потом честная просьба зарегистрироваться. Сбрасывается очисткой
+// localStorage или в инкогнито — это ожидаемо, цель подтолкнуть, а не построить стену.
+const ANON_TRIAL_LIMIT = 15;
+function anonTrialsUsed() { try { return parseInt(localStorage.getItem('dizionario_anon_trials')) || 0; } catch (e) { return 0; } }
+function bumpAnonTrial() { try { localStorage.setItem('dizionario_anon_trials', String(anonTrialsUsed() + 1)); } catch (e) {} }
+function anonTrialsLeft() { return Math.max(0, ANON_TRIAL_LIMIT - anonTrialsUsed()); }
+
+async function backendApi(path, body) {
+  const loggedIn = !!(window.Auth && Auth.user());
+  if (!loggedIn && anonTrialsLeft() <= 0) {
+    const msg = 'Упс, бесплатные попытки закончились — зарегистрируйтесь, это меньше минуты';
+    if (window.Auth) Auth.require(msg);
+    throw new Error(msg);
+  }
+  const res = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': SB_H['Authorization'] },
     body: JSON.stringify(body)
   });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) { if (window.Auth) Auth.require('Войдите, чтобы собирать новые статьи словаря'); throw new Error(data.error || 'Нужно войти в аккаунт'); }
+  if (res.status === 403) throw new Error(data.error || 'Доступ ограничен');
   if (res.status === 429) { showToast('⏳ ' + (data.error || 'Дневной лимит исчерпан')); throw new Error(data.error || 'Дневной лимит исчерпан'); }
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  if (!loggedIn) bumpAnonTrial();
   return data;
+}
+async function articleApi(path, body) { return backendApi(`/api/article/${path}`, body); }
+// Шторка: без всплывающих окон и тостов на 401/429 — вызывающий код уже ловит ошибки и молча
+// деградирует (fetchQuickRussian и т.п.), интрузивный попап на каждый промах наведения — это лишнее.
+async function previewApi(path, body) {
+  const res = await fetch(`/api/preview/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': SB_H['Authorization'] },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
 }
 // Потоковый вариант — только для гибридного пути (fdCompletionPrompt): Worker проксирует «как есть»
 // SSE-ответ Gemini, поэтому ридер тот же, что раньше читал прямой ответ Google, только URL свой.
 async function streamArticleHybrid(base, ruHint, onText) {
+  const loggedIn = !!(window.Auth && Auth.user());
+  if (!loggedIn && anonTrialsLeft() <= 0) {
+    const msg = 'Упс, бесплатные попытки закончились — зарегистрируйтесь, это меньше минуты';
+    if (window.Auth) Auth.require(msg);
+    throw new Error(msg);
+  }
   const res = await fetch('/api/article/hybrid', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': SB_H['Authorization'] },
@@ -639,6 +482,7 @@ async function streamArticleHybrid(base, ruHint, onText) {
     if (res.status === 429) { showToast('⏳ ' + (data.error || 'Дневной лимит исчерпан')); throw new Error(data.error || 'Дневной лимит исчерпан'); }
     throw new Error(data.error || `HTTP ${res.status}`);
   }
+  if (!loggedIn) bumpAnonTrial();
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '', text = '';
@@ -1020,14 +864,11 @@ async function fixTransliteratedRussian(entry) {
   const ru = entry.russian && entry.russian.main, en = entry.english && entry.english.main;
   if (!ru || !looksTransliterated(entry.word, ru, en)) return false;
   const gloss = en || ((entry.meanings || [])[0] || {}).definition || '';
-  const prompt = `Italian ${entry.partOfSpeech || 'word'} "${entry.word}"${gloss ? ` means: ${gloss}` : ''}.
-Give its natural Russian translation as a real Russian word or phrase. Do NOT transliterate the Italian word into Cyrillic.
-Return ONLY valid JSON, no markdown: {"russian":{"main":"перевод","alternatives":"1-3 alternatives semicolon-separated or empty"}}`;
   try {
-    const r = await callGemini(prompt);
-    const main = r && r.russian && String(r.russian.main || '').trim();
+    const { russian: r } = await previewApi('translit', { word: entry.word, partOfSpeech: entry.partOfSpeech || '', gloss });
+    const main = r && String(r.main || '').trim();
     if (!main || looksTransliterated(entry.word, main, en)) return false;
-    entry.russian = { main, alternatives: String(r.russian.alternatives || '') };
+    entry.russian = { main, alternatives: String(r.alternatives || '') };
     return true;
   } catch (e) { console.warn('translit fix:', e.message); return false; }
 }
@@ -1848,7 +1689,7 @@ function extractMeaningsFromPartial(partial) {
   return out;
 }
 
-function fdMergeCompletion(base, extra, fastRu) {
+function fdMergeCompletion(base, extra) {
   // Пометку берём от модели; если модель вернула ровно столько значений, сколько знает
   // Викисловарь, и своей пометки не дала — подставляем разобранную из его тегов
   const meanings = Array.isArray(extra.meanings) && extra.meanings.some(m => m && m.definition)
@@ -1875,13 +1716,11 @@ function fdMergeCompletion(base, extra, fastRu) {
     ...rest,
     gender: rest.gender || (/^(m\.|f\.|m\.\/f\.)$/.test(modelGender) ? modelGender : rest.gender),
     homographs,
-    russian: fastRu && fastRu.main
-      ? fastRu
-      : { main: extra.russian?.main || '', alternatives: extra.russian?.alternatives || '' },
+    russian: { main: extra.russian?.main || '', alternatives: extra.russian?.alternatives || '' },
     category: extra.category || 'altro',
     meanings,
     relatedWords: related,
-    llm: _lastDictLlm
+    llm: 'Gemini' // пишет теперь всегда бэкенд общим ключом
   };
 }
 
@@ -1930,8 +1769,7 @@ async function lookupWordHybrid(query, base, opts = {}) {
         renderEntry({ ...currentDictEntry, meanings: meanings.map(m => ({ ...m, label: usageLabel([m.label], '') })), _pending: true });
       }
     });
-    const entry = fdMergeCompletion(base, extra, null);
-    entry.llm = 'Gemini'; // пишет теперь всегда бэкенд общим ключом, выбора провайдера у клиента больше нет
+    const entry = fdMergeCompletion(base, extra);
     entry.relatedWords = await verifyWords(entry.relatedWords, base.relatedWords || []); // синонимы Викисловаря доверенные, добавки модели — проверяем
     if (!entry.phonetic) { const r = await resolveIpa(entry.word); entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; entry.phoneticSrc = r.src; }
     await fixTransliteratedRussian(entry); // «мамон» вместо перевода — переспрашиваем у Gemini
@@ -2044,21 +1882,8 @@ async function lookupWord(word, _depth = 0, opts = {}) {
 // множественного числа и таблиц спряжения — их у выражения нет, а модель их всё равно выдумывает.
 async function lookupPhrase(phrase) {
   const ipaJob = phrasePhonetic(phrase);
-  const prompt = `You are an expert Italian linguist. The user entered the Italian multi-word expression "${phrase}" (an idiom, collocation or set phrase).
-Return ONLY valid JSON, no markdown:
-{
-  "word": "the expression in its canonical citation form (verb in the infinitive, no quotes), or null if it is not a real Italian expression",
-  "partOfSpeech": "EXACTLY ONE of these, never a combination: locuzione verbale, locuzione avverbiale, locuzione nominale, locuzione aggettivale, locuzione prepositiva, modo di dire, proverbio",
-  "category": "${CATEGORY_PROMPT}",
-  "russian": { "main": "idiomatic Russian equivalent (not word-for-word)", "alternatives": "2-3 alternatives semicolon-separated or empty" },
-  "english": { "main": "idiomatic English equivalent", "alternatives": "2-3 alternatives semicolon-separated or empty" },
-  "meanings": [ { "definition": "What the expression means, in Italian (1 sentence)", "example": "Natural Italian sentence using the whole expression", "label": "one of [obsolete, archaic, dialectal, regional, vulgar, offensive, slang, colloquial, rare, literary, poetic, figurative, humorous] or an empty string; set it only when the sense really is restricted" } ],
-  "register": "neutro / colloquiale / formale / volgare / letterario / regionale",
-  "relatedWords": ["3-5 related Italian words or expressions"]
-}
-meanings: 1-3 items, most frequent first. Do NOT include phonetic transcription, gender, plural or conjugation tables.`;
   try {
-    const raw = await llmJson(prompt, 'dict');
+    const { entry: raw, by } = await backendApi('/api/phrase', { phrase });
     if (!raw || !raw.word) { $('errorText').textContent = `"${phrase}" — espressione non trovata`; showState('error'); return; }
     const entry = {
       word: cleanQuery(raw.word) || phrase, partOfSpeech: cleanPos(raw.partOfSpeech) || 'locuzione', category: raw.category || 'altro',
@@ -2068,7 +1893,7 @@ meanings: 1-3 items, most frequent first. Do NOT include phonetic transcription,
       isNoun: false, isVerb: false, isPhrase: true,
       register: raw.register || '',
       relatedWords: await verifyWords(raw.relatedWords),
-      llm: _lastDictLlm
+      llm: by
     };
     await saveArticle(entry, phrase);
     renderEntry(entry);
@@ -2083,15 +1908,11 @@ meanings: 1-3 items, most frequent first. Do NOT include phonetic transcription,
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 function describeApiError(msg) {
-  if (/NO_GEMINI_KEY/.test(msg)) return `${svgIcon('key')} Этого слова ещё нет в общей базе, для генерации статьи нужен ключ Gemini — <u style="cursor:pointer" onclick="showApiKeyScreen()">указать ключ</u> (бесплатно, минута)`;
-  // Бэкенд сборки статьи сам показал экран входа/тост про лимит — здесь только текст под шапкой ошибки
-  if (/^Нужно войти в аккаунт$/.test(msg)) return escapeHtml(msg);
-  if (/^Дневной лимит/.test(msg)) return `⏳ ${escapeHtml(msg)}`;
-  const isQuota = /quota|RESOURCE_EXHAUSTED|429|rate limit/i.test(msg);
-  const isBadKey = /API[ _]key|API_KEY|PERMISSION_DENIED|leaked|403|401|Unauthorized|invalid_api_key/i.test(msg);
-  const who = (msg.match(/^(Groq|Cerebras|Mistral)/i) || [])[1] || 'Gemini';
-  if (isBadKey) return `${svgIcon('key')} Проблема с ключом ${who} — <u style="cursor:pointer" onclick="showApiKeyScreen()">сменить ключ</u>`;
-  if (isQuota)  return `⏳ Лимит ${who} исчерпан — попробуйте позже или <u style="cursor:pointer" onclick="showApiKeyScreen()">смените ключ</u>`;
+  // Бэкенд сам показал экран входа/тост про лимит — здесь только текст под шапкой ошибки
+  if (/^Нужно войти в аккаунт$|^Упс, бесплатные попытки/.test(msg)) return escapeHtml(msg);
+  if (/^Дневной лимит|^Слишком много запросов без регистрации/.test(msg)) return `⏳ ${escapeHtml(msg)}`;
+  if (/^Доступ ограничен|^Статьи грамматики создаёт/.test(msg)) return escapeHtml(msg);
+  if (/quota|RESOURCE_EXHAUSTED|rate limit/i.test(msg)) return '⏳ Модель сейчас перегружена — попробуйте через минуту';
   return 'Errore: ' + escapeHtml(msg);
 }
 
@@ -2104,10 +1925,6 @@ function handleApiError(msg) {
 async function lookupRussian(word) {
   if (!word.trim()) return;
   showState('loading');
-  const prompt = `You are an expert Italian linguist. The user entered the Russian word "${word}".
-Find all meaningful Italian translations. Return ONLY a JSON array, no markdown. Each item:
-{"italian":"canonical form","partOfSpeech":"sostantivo/verbo/etc","gender":"m./f./null","shortDefinition":"краткое значение по-русски (4-8 слов)","register":"neutro/formale/colloquiale/letterario"}
-Return 1-8 items. If no translation exists, return [].`;
   const q = normKey(word);
   // По какому слову в итоге ищем: форму слова заменяет начальная, и сравнивать переводы надо с ней
   let searched = word.trim(), ruTitle = '', matchKey = q;
@@ -2179,7 +1996,7 @@ Return 1-8 items. If no translation exists, return [].`;
   let llmError = null;
   if (items.length < 3) {
     try {
-      const results = await llmJson(lemma ? prompt.replace(`"${word}"`, `"${lemma}"`) : prompt, 'dict');
+      const { results } = await backendApi('/api/russian-search', { word: lemma || word });
       const list = Array.isArray(results) ? results.filter(r => r && r.italian) : [];
       const ok = await verifyWords(list.map(r => cleanQuery(r.italian)));
       list.forEach(r => { if (ok.includes(cleanQuery(r.italian)) && !has(r.italian)) items.push({ ...r, source: 'модель' }); });
@@ -2320,74 +2137,36 @@ const GRAMMAR_SUGGESTIONS = [
 let _gramKeys = [];
 const grammarKeys = (topic, title) => [...new Set([topic, title].filter(Boolean).map(s => String(s).toLowerCase()))];
 
+// Генерация — только для тем закрытого списка (GRAMMAR_TREE в grammatica.js) и только владельцу:
+// «создать» рядом с темой видит только он (Grammatica.generate), а свободный текст из поиска
+// сюда больше не долетает вовсе — см. doSearch(), она резолвит через topicByName ещё до вызова.
 async function lookupGrammar(topic, opts = {}) {
   if (!topic.trim()) return;
   showState('loading');
-  // Тема из справочника генерируется промптом своего типа: у таблицы форм и у правила
-  // про апостроф разные требования. Свободный запрос идёт по общему промпту ниже.
   const canon = window.Grammatica ? Grammatica.topicByName(topic) : null;
-  const prompt = `Ты эксперт по итальянской грамматике. Пользователь ищет правило по теме: "${topic}".
-
-Составь подробную грамматическую статью на РУССКОМ языке. Верни ТОЛЬКО валидный JSON без markdown:
-{
-  "title": "Название темы по-итальянски",
-  "titleRu": "Название по-русски",
-  "category": "Категория (Глаголы / Существительные / Местоимения / Предлоги / Синтаксис / etc)",
-  "explanation": "Подробное объяснение на русском (3-5 предложений). Используй **жирный** для ключевых терминов и *курсив* для итальянских примеров прямо в тексте.",
-  "rules": [
-    { "text": "Правило 1 — подробно, с примерами **в тексте**. *Esempio: ...* — перевод" },
-    { "text": "Правило 2..." }
-  ],
-  "table": {
-    "headers": ["Колонка 1", "Колонка 2", "Колонка 3"],
-    "rows": [
-      ["ячейка", "*итал. форма*", "пример"],
-      ["ячейка", "*итал. форма*", "пример"]
-    ]
-  },
-  "examples": [
-    { "it": "Итальянское предложение", "ru": "Перевод на русский", "pair": null },
-    { "it": "Пример с местоимением", "ru": "Перевод", "pair": "prev" }
-  ],
-  "errors": [
-    { "wrong": "Volevo che tu parlerebbe con lui.", "right": "Volevo che tu parlassi con lui.", "explain": "После volevo che идёт congiuntivo, а не condizionale." }
-  ],
-  "relatedTopics": ["связанная тема 1", "связанная тема 2", "связанная тема 3"]
-}
-
-Правила:
-- rules: 3-6 пунктов
-- table: если есть что показать в таблице (формы, окончания, местоимения и т.д.) — обязательно заполни; если нет смысла — пустой объект {}
-- examples: 3-6 примеров. Если примеры логически связаны парами (например, с существительным и с местоимением), используй поле "pair": для второго примера пары укажи "pair": "prev", для первого "pair": null. Не все примеры должны быть парными.
-- errors: 2-4 типичные ошибки русскоязычных. wrong и right — целые короткие предложения, отличающиеся ровно в одном месте: отдельная словоформа вне фразы ни правильна, ни неправильна. Неправильный вариант должен быть тем, что человек реально может написать. Не бери ошибку, которой не видно на письме.
-- Если тема не относится к итальянской грамматике — верни { "error": "not_grammar" }`;
 
   const cachedGram = opts.force ? null : await sbGetTopic('grammar', topic.toLowerCase());
   if (cachedGram) {
     _gramKeys = canon ? [...new Set([canon.slug, canon.it.toLowerCase()])] : grammarKeys(topic, cachedGram.title);
     renderGrammar(cachedGram); showState('grammar'); showCacheBadge(); addToHistory(cachedGram.title || topic, 'grammar'); return;
   }
+  if (!canon) {
+    $('errorText').textContent = `"${topic}" — такой темы нет в справочнике`;
+    showState('error'); return;
+  }
 
   try {
-    const g = await callGemini(canon ? Grammatica.promptFor(canon) : prompt);
-    if (g.error === 'not_grammar') {
-      $('errorText').textContent = `"${topic}" — попробуйте другую грамматическую тему`;
-      showState('error'); return;
-    }
+    const sec = Grammatica.section(canon);
+    const { entry: g } = await backendApi('/api/grammar', { topic: { it: canon.it, ru: canon.ru, type: canon.type, sectionIt: sec.it, sectionRu: sec.ru } });
     // Всё, что породила модель, это черновик. «Проверено» ставится отдельно и осознанно,
     // иначе свежая статья выглядит в справочнике как законченная.
     if (!g.status) g.status = 'draft';
-    if (canon) {
-      // Каноническая тема сама задаёт заголовок, раздел, тип и смежные темы:
-      // модель ошибается в разделе, а придуманные ею смежные темы ведут в никуда
-      g.title = canon.it; g.titleRu = canon.ru; g.slug = canon.slug; g.type = canon.type;
-      g.category = Grammatica.sectionRu(canon) || g.category;
-      g.relatedTopics = Grammatica.relatedFor(canon);
-    }
-    // Ключи: для темы справочника это slug и её итальянское название, для свободного
-    // запроса — заголовок от модели и сама строка запроса
-    const keys = canon ? [canon.slug, canon.it.toLowerCase()] : grammarKeys(topic, g.title);
-    _gramKeys = [...new Set(keys)];
+    // Каноническая тема сама задаёт заголовок, раздел, тип и смежные темы:
+    // модель ошибается в разделе, а придуманные ею смежные темы ведут в никуда
+    g.title = canon.it; g.titleRu = canon.ru; g.slug = canon.slug; g.type = canon.type;
+    g.category = sec.ru || g.category;
+    g.relatedTopics = Grammatica.relatedFor(canon);
+    _gramKeys = [...new Set([canon.slug, canon.it.toLowerCase()])];
     for (const k of _gramKeys) await sbSave('grammar', 'topic', k, g);
     renderGrammar(g);
     showState('grammar');
@@ -3080,15 +2859,9 @@ async function regenVoices() {
   const e = currentDictEntry; if (!e) return;
   const word = e.word || currentDictWord;
   showToast('Ищу другие значения…');
-  const prompt = `You are an expert Italian lexicographer. The Italian word "${word}" is already documented as: ${e.partOfSpeech || ''} — ${(e.meanings || []).map(m => m.definition).join('; ') || '—'}.
-List OTHER Italian words spelled exactly "${word}" that are separate dictionary entries (homographs): a different part of speech, a different etymology, or a distinctly different word. Do not repeat the sense(s) above and do not list inflected forms of other words.
-Return ONLY valid JSON, no markdown:
-{ "voices": [ { "partOfSpeech": "exactly one of: sostantivo, verbo, aggettivo, avverbio, pronome, congiunzione, interiezione", "gender": "m. / f. / empty", "phonetic": "IPA in slashes or empty", "label": "usage label or empty string", "russian": "Russian translation; alternatives after ;", "meanings": [ { "definition": "Definition in Italian (1 sentence)", "example": "Natural Italian example", "label": "usage label or empty string" } ] } ] }
-label: one of [obsolete, archaic, dialectal, regional, vulgar, offensive, slang, colloquial, rare, literary, poetic, formal, figurative, humorous, technical, medicine, law, nautical, botany, zoology, military] or empty. Mark obsolete, dialectal and rare entries honestly.
-If there are no such homographs, return { "voices": [] }.`;
   try {
-    const raw = await llmJson(prompt, 'dict');
-    const voices = (Array.isArray(raw && raw.voices) ? raw.voices : []).map(v => ({
+    const { voices: raw } = await backendApi('/api/voices', { word, partOfSpeech: e.partOfSpeech || '', meaningsText: (e.meanings || []).map(m => m.definition).join('; ') });
+    const voices = (Array.isArray(raw) ? raw : []).map(v => ({
       partOfSpeech: cleanPos(v.partOfSpeech), gender: String(v.gender || '').trim(),
       phonetic: String(v.phonetic || '').trim(), label: usageLabel([v.label], ''),
       russian: String(v.russian || '').trim(), glosses: [], example: '',
@@ -3723,7 +3496,19 @@ function myWordsForSuggest() {
 async function renderSuggest() {
   const inp = $('searchInput'), sec = $('searchRecent');
   const q = inp.value.trim().toLowerCase();
-  if (currentMode !== 'dict' || q.length < 2) { hideRecent(); return; }
+  if (q.length < 2) { hideRecent(); return; }
+  // Грамматика: подсказки только из закрытого списка тем, как в словарных поисковиках —
+  // ввод, не совпавший ни с одной темой, никуда не генерирует (см. searchGrammarTopic).
+  if (currentMode === 'grammar') {
+    const items = window.Grammatica ? Grammatica.searchSuggest(q) : [];
+    if (!items.length) { hideRecent(); return; }
+    _sugIndex = -1;
+    sec.innerHTML = `<div class="suggest-list">${items.map(t =>
+      `<button class="suggest-item" onmousedown="event.preventDefault()" onclick="pickSuggest('${t.it.replace(/'/g, "\\'")}')"><span>${escapeHtml(t.it)}</span><span class="suggest-src">${escapeHtml(t.ru)}</span></button>`).join('')}</div>`;
+    showRecentBox(sec);
+    return;
+  }
+  if (currentMode !== 'dict') { hideRecent(); return; }
   // В русском поиске подсказываем так же, как в итальянском, только источники свои: переводы
   // из колод вместо своих слов и русский частотный список вместо итальянского
   const ru = currentLang === 'ru';
@@ -3739,7 +3524,7 @@ async function renderSuggest() {
     `<button class="suggest-item" onmousedown="event.preventDefault()" onclick="pickSuggest('${i.w.replace(/'/g, "\\'")}')"><span><b>${escapeHtml(q)}</b>${escapeHtml(i.w.slice(q.length))}</span>${i.src ? `<span class="suggest-src">${i.src}</span>` : ''}</button>`).join('')}</div>`;
   showRecentBox(sec);
 }
-function pickSuggest(w) { hideRecent(); const inp = $('searchInput'); inp.value = w; inp.blur(); if (currentLang === 'ru' && currentMode === 'dict') lookupRussian(w); else lookupWord(w); } // blur прячет клавиатуру на телефоне
+function pickSuggest(w) { hideRecent(); const inp = $('searchInput'); inp.value = w; inp.blur(); if (currentMode === 'grammar') searchGrammarTopic(w); else if (currentLang === 'ru' && currentMode === 'dict') lookupRussian(w); else lookupWord(w); } // blur прячет клавиатуру на телефоне
 function onSearchInput() {
   clearTimeout(_sugTimer);
   // В грамматике то же поле фильтрует справочник: второго поля поиска на экране быть не должно
@@ -3816,10 +3601,18 @@ function goHome() {
   // Раньше из избранного возвращало в тот режим, откуда его открыли, и это читалось как «назад».
   switchMode('dict');
 }
+// Тема грамматики — только из закрытого списка (GRAMMAR_TREE): свободный текст статью
+// больше не генерирует, поиск лишь находит тему в дереве и открывает готовое (или тост
+// «раздел ещё наполняется»/«создать» — это решает Grammatica.openTopic, см. grammatica.js).
+function searchGrammarTopic(val) {
+  const t = window.Grammatica && Grammatica.topicByName(val);
+  if (!t) { showToast(`«${val}» — такой темы нет в справочнике`); return; }
+  Grammatica.openTopic(t.slug);
+}
 function doSearch() {
   const val = $('searchInput').value.trim();
   if (!val) return;
-  if (currentMode === 'grammar') lookupGrammar(val);
+  if (currentMode === 'grammar') searchGrammarTopic(val);
   else if (currentLang === 'ru') lookupRussian(val);
   else lookupWord(val, 0, { chooser: true }); // руками введённое слово может оказаться и формой другого — предлагаем выбор
 }
@@ -4025,11 +3818,8 @@ async function fetchPreviewData(word, isGrammar, skipIf) {
 // Крошечный запрос к Gemini только за русским переводом (ответ ~15 токенов, поэтому быстрый)
 async function fetchGeminiRussian(d) {
   const glosses = (d.senses || []).map(s => s.gloss).filter(Boolean).slice(0, 3).join('; ') || d.english?.main || '';
-  const prompt = `Italian ${d.partOfSpeech || 'word'} "${d.word}"${glosses ? ` (English: ${glosses})` : ''}.
-Return ONLY valid JSON, no markdown: {"russian":{"main":"primary Russian translation","alternatives":"1-3 alternatives semicolon-separated or empty"}}`;
-  const r = await llmJson(prompt, 'dict');
-  const ru = { main: r.russian?.main || '', alternatives: r.russian?.alternatives || '' };
-  return ru.main ? ru : null;
+  const { russian: ru } = await previewApi('ru', { word: d.word, partOfSpeech: d.partOfSpeech || '', glosses });
+  return ru && ru.main ? ru : null;
 }
 
 // Для превью: сначала ru.wiktionary (бесплатно), Gemini только если статьи там нет —
@@ -4066,10 +3856,7 @@ function ensureQuickRussian(q, onUpdate) {
 
 // Слова нет в Викисловаре — старый запасной путь через Gemini
 async function fetchGeminiMiniPreview(word) {
-  const prompt = `Italian word "${word}". Return ONLY valid JSON, no markdown:
-{"word":"canonical form","partOfSpeech":"sostantivo/verbo/aggettivo/etc","category":"${CATEGORY_PROMPT}","phonetic":"IPA with ˈ","russian":{"main":"перевод","alternatives":"alt1; alt2"}}
-If not a real Italian word return {"word":null}.`;
-  const result = await llmJson(prompt, 'dict');
+  const { entry: result } = await previewApi('mini', { word });
   if (!result || !result.word) return null;
   { const r = await resolveIpa(result.word); result.phonetic = r.ipa; result.phoneticApprox = r.approx; } // IPA модели не доверяем
   const q = { data: result, complete: true };

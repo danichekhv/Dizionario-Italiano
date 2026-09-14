@@ -264,30 +264,59 @@ grant execute on function my_map_words() to authenticated;
 -- набранный на карточке ответ: пока просто сохраняем, потом неверные пойдут в тот же журнал
 alter table reviews add column if not exists typed text;
 
--- 8. Дневной счётчик генераций для бэкенда сборки статьи (worker.js): пишет и проверяет статью
--- теперь общий ключ владельца, а не ключ каждого пользователя, поэтому нужен грубый предохранитель
--- от расхода. security definer — чтобы инкремент был одним атомарным запросом, а не read-modify-write
--- с гонкой между вкладками; auth.uid() читается из JWT запроса независимо от того, чей definer.
+-- 8. Дневной счётчик генераций для бэкенда (worker.js): пишет и проверяет статью, шторка при наведении
+-- и всё остальное теперь общий ключ владельца, а не ключ каждого пользователя, поэтому нужен грубый
+-- предохранитель от расхода. security definer — чтобы инкремент был одним атомарным запросом, а не
+-- read-modify-write с гонкой между вкладками; auth.uid() читается из JWT запроса независимо от definer.
+-- bucket разводит «тяжёлые» операции (сборка статьи и т.п.) и «лёгкую» шторку по разным лимитам:
+-- иначе активное чтение с наведениями съедало бы дневной лимит раньше, чем откроется новая статья.
 create table if not exists llm_usage (
   user_id uuid not null default auth.uid(),
   day date not null default current_date,
+  bucket text not null default 'article',
   count int not null default 0,
-  primary key (user_id, day)
+  primary key (user_id, day, bucket)
 );
 alter table llm_usage enable row level security;
 drop policy if exists dz_own on llm_usage;
 create policy dz_own on llm_usage for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 
-create or replace function llm_usage_bump() returns int
+drop function if exists llm_usage_bump(); -- старая сигнатура без параметра: иначе PostgREST не поймёт, какую из двух звать
+create or replace function llm_usage_bump(p_bucket text default 'article') returns int
 language plpgsql security definer set search_path = public as $$
 declare n int;
 begin
-  insert into llm_usage(user_id, day, count) values (auth.uid(), current_date, 1)
-  on conflict (user_id, day) do update set count = llm_usage.count + 1
+  insert into llm_usage(user_id, day, bucket, count) values (auth.uid(), current_date, p_bucket, 1)
+  on conflict (user_id, day, bucket) do update set count = llm_usage.count + 1
   returning count into n;
   return n;
 end $$;
-grant execute on function llm_usage_bump() to authenticated;`;
+grant execute on function llm_usage_bump(text) to authenticated;
+
+-- 9. Анонимный триал: 15 генераций без регистрации показывает и считает сам браузер (localStorage,
+-- обходится очисткой хранилища — это ожидаемо, цель подтолкнуть к регистрации, а не построить стену).
+-- Здесь только тихая серверная страховка от перебора мимо браузера — общий потолок по IP, без привязки
+-- к личности. security definer не от auth.uid() (у анонима его нет), IP передаёт сам Worker.
+create table if not exists anon_usage (
+  ip text not null,
+  day date not null default current_date,
+  count int not null default 0,
+  primary key (ip, day)
+);
+alter table anon_usage enable row level security;
+drop policy if exists dz_anon on anon_usage;
+create policy dz_anon on anon_usage for all to anon, authenticated using (true) with check (true); -- ни одной личной колонки, только счётчик по IP
+
+create or replace function llm_usage_bump_anon(p_ip text) returns int
+language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  insert into anon_usage(ip, day, count) values (p_ip, current_date, 1)
+  on conflict (ip, day) do update set count = anon_usage.count + 1
+  returning count into n;
+  return n;
+end $$;
+grant execute on function llm_usage_bump_anon(text) to anon;`;
 
   // ── Сессия ───────────────────────────────────────────────────────────────────
   function load() { try { session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { session = null; } }
@@ -376,26 +405,20 @@ grant execute on function llm_usage_bump() to authenticated;`;
       if (!res.ok) return;
       const p = (await res.json())[0];
       setupMissing = false;
-      if (!p) { await pushProfile(); await loadTags(); return; } // первый вход — заливаем ключи из браузера в профиль
+      if (!p) { await pushProfile(); await loadTags(); return; } // первый вход — заводим строку профиля
       profileSettings = (p.settings && typeof p.settings === 'object') ? p.settings : {};
       tagColors = profileSettings.tagColors || {};
       applyTagColors();
       loadTags();
-      // ключи из профиля в браузер: на новом устройстве ничего вводить не надо
-      const set = (k, v) => { try { if (v) localStorage.setItem(k, v); } catch (e) {} };
-      set('dizionario_gemini_key', p.gemini_key); set('dizionario_fast_provider', p.fast_provider); set('dizionario_fast_key', p.fast_key);
-      set('dizionario_fast_model_groq', p.fast_model_groq); set('dizionario_fast_model_cerebras', p.fast_model_cerebras); set('dizionario_fast_model_mistral', p.fast_model_mistral);
-      if (!p.gemini_key && getApiKey()) await pushProfile();
-      if (getApiKey()) hideApiKeyScreen();
     } catch (e) { console.warn('profile:', e); }
   }
+  // Раньше сюда же уезжали ключи Gemini/быстрого провайдера (BYOK) для синхронизации между
+  // устройствами — генерация теперь на общем ключе владельца, синхронизировать нечего.
+  // Функция осталась, чтобы завести строку профиля при первом входе (её ждут settings/tagColors).
   async function pushProfile() {
     if (!session) return;
-    const g = k => { try { return localStorage.getItem(k) || null; } catch (e) { return null; } };
-    const body = { user_id: session.user.id, gemini_key: g('dizionario_gemini_key'), fast_provider: g('dizionario_fast_provider'), fast_key: g('dizionario_fast_key'),
-      fast_model_groq: g('dizionario_fast_model_groq'), fast_model_cerebras: g('dizionario_fast_model_cerebras'), fast_model_mistral: g('dizionario_fast_model_mistral'), updated_at: new Date().toISOString() };
     try {
-      const res = await fetch(`${SB_URL}/rest/v1/profiles?on_conflict=user_id`, { method: 'POST', headers: { ...SB_H, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(body) });
+      const res = await fetch(`${SB_URL}/rest/v1/profiles?on_conflict=user_id`, { method: 'POST', headers: { ...SB_H, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ user_id: session.user.id, updated_at: new Date().toISOString() }) });
       if (res.status === 404) { setupMissing = true; renderUi(); }
     } catch (e) { console.warn('profile save:', e); }
   }
@@ -436,10 +459,10 @@ grant execute on function llm_usage_bump() to authenticated;`;
           <button class="cards-btn" onclick="Auth.signUpUi()">Создать аккаунт</button>
           <button class="auth-link" onclick="Auth.resetUi()">Забыли пароль?</button>
         </div>
-        <div class="apikey-hint-small">Без входа словарь работает, но избранное, колоды и карта ваших слов доступны только после входа. Ключи ниже сохраняются в профиле и подхватываются на других устройствах.</div>`;
+        <div class="apikey-hint-small">Без входа доступны словарь и грамматика из общей базы. Избранное, колоды, карта ваших слов, новые статьи и La Pratica — только после входа.</div>`;
     }
     const hb = document.querySelector('#headerSettingsBtn span:not([data-icon])');
-    if (hb) hb.textContent = session ? (session.user.email || '').split('@')[0] : 'API key';
+    if (hb) hb.textContent = session ? (session.user.email || '').split('@')[0] : 'Аккаунт';
   }
   function fieldError(msg) { const el = document.getElementById('authError'); if (el) { el.textContent = msg; el.classList.toggle('visible', !!msg); } }
   function creds() { const email = (document.getElementById('authEmail') || {}).value || '', password = (document.getElementById('authPassword') || {}).value || ''; return { email: email.trim(), password }; }

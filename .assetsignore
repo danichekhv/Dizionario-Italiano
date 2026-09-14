@@ -3,4 +3,4 @@
 .assetsignore
 wrangler.jsonc
 worker.js
-prompts-article.js
+prompts.js

@@ -1,9 +1,9 @@
-// ── Бэкенд сборки словарной статьи: общий ключ вместо ключа каждого пользователя ─────────────
-// Сайт был чистой статикой (см. wrangler.jsonc); всё остальное (грамматика, русский поиск,
-// карточки, La Pratica) по-прежнему зовёт модель прямо с ключа пользователя (BYOK) — сюда
-// переехала только сборка/проверка/починка словарной статьи, самый частый и дорогой путь.
-// Сами промпты вынесены в prompts-article.js — так их проще держать в одном месте и читать отдельно.
-import './prompts-article.js';
+// ── Бэкенд модели: общий ключ владельца вместо ключа каждого пользователя ────────────────────
+// Сайт был чистой статикой (см. wrangler.jsonc). Здесь — все вызовы модели разом: сборка/проверка/
+// починка словарной статьи, устойчивые выражения, русский поиск, Altre voci, шторка при наведении,
+// сборка карточек, La Pratica и грамматика (та — только владельцу, см. ROUTES ниже).
+// Сами промпты вынесены в prompts.js — так их проще держать в одном месте и читать отдельно.
+import './prompts.js';
 const P = self.DizPrompts;
 
 // Публичный анон-ключ Supabase — тот же, что зашит в app.js (SB_URL/SB_KEY). Не секрет,
@@ -11,9 +11,16 @@ const P = self.DizPrompts;
 const SB_URL = 'https://qmsgumhvbsefpbbkvxgs.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtc2d1bWh2YnNlZnBiYmt2eGdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MjI2OTYsImV4cCI6MjA4ODk5ODY5Nn0.z30dHGdi0uhNH-t1cRS2mtGe4_liamy3FGSIJIrhhmc';
 
-// Сколько статей в день можно собрать/проверить/починить одному пользователю. Не тонкий учёт
-// токенов, а грубый предохранитель от расхода — см. llm_usage_bump() в SQL из auth.js.
+// Грубые предохранители от расхода, не тонкий учёт токенов — см. llm_usage_bump()/llm_usage_bump_anon()
+// в SQL из auth.js. article — «тяжёлые» операции (генерация чего угодно, кроме шторки); preview —
+// шторка при наведении, частая и дешёвая, отдельным ведром, чтобы не съедала article раньше времени.
+// anon — вошедших это не касается: раздельный, мягкий потолок по IP на пробу без регистрации.
 const DAILY_LIMIT = 80;
+const PREVIEW_LIMIT = 500;
+const ANON_LIMIT = 30;
+// Пробных генераций без регистрации браузер разрешает 15 (localStorage на клиенте, см. app.js) —
+// это видимый, тёплый предохранитель. ANON_LIMIT выше — тихая серверная страховка по IP на случай,
+// если кто-то обходит клиентский счётчик скриптом мимо браузера; она общая на всех анонимов с одного IP.
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview';
 const CHECK_URLS = {
@@ -46,27 +53,43 @@ function extractJson(text) {
 const ADMIN_EMAILS = ['danichek.hv@gmail.com'];
 
 // ── Кто вызывает и сколько ему ещё можно сегодня ────────────────────────────────────────────
+// Анонимный запрос больше не отбивается тут же: часть путей (см. ROUTES) ему открыта, только
+// под своим, более скупым потолком по IP. token остаётся null, если входа нет или он истёк.
 async function requireUser(request) {
+  const ip = request.headers.get('cf-connecting-ip') || '0.0.0.0';
   const auth = request.headers.get('Authorization') || '';
   const token = auth.replace(/^Bearer\s+/i, '').trim();
-  if (!token || token === SB_KEY) return null; // анонимный запрос приходит с тем же анон-ключом — это не пользователь
+  if (!token || token === SB_KEY) return { token: null, isAdmin: false, ip };
   const res = await fetch(`${SB_URL}/auth/v1/user`, { headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` } });
-  if (!res.ok) return null;
+  if (!res.ok) return { token: null, isAdmin: false, ip };
   const user = await res.json().catch(() => null);
-  if (!user || !user.id) return null;
-  return { token, isAdmin: ADMIN_EMAILS.includes(String(user.email || '').toLowerCase()) };
+  if (!user || !user.id) return { token: null, isAdmin: false, ip };
+  return { token, isAdmin: ADMIN_EMAILS.includes(String(user.email || '').toLowerCase()), ip };
 }
 
 // Атомарный инкремент в Supabase (RPC llm_usage_bump, security definer) — под тем же токеном
 // пользователя, что и все остальные запросы к базе, RLS применяется как обычно.
-async function withinQuota(auth) {
+async function withinQuota(auth, bucket) {
   if (auth.isAdmin) return true;
   const res = await fetch(`${SB_URL}/rest/v1/rpc/llm_usage_bump`, {
-    method: 'POST', headers: { apikey: SB_KEY, Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json' }, body: '{}'
+    method: 'POST', headers: { apikey: SB_KEY, Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_bucket: bucket })
   });
   if (!res.ok) return true; // счётчик недоступен — не блокируем генерацию из-за сбоя учёта
   const n = await res.json().catch(() => 0);
-  return typeof n === 'number' ? n <= DAILY_LIMIT : true;
+  const limit = bucket === 'preview' ? PREVIEW_LIMIT : DAILY_LIMIT;
+  return typeof n === 'number' ? n <= limit : true;
+}
+// Для анонима своя RPC (llm_usage_bump_anon) — auth.uid() у него нет, ключ — IP. Зовём тем же
+// анон-ключом, что и остальные анонимные чтения; RLS на anon_usage открыта для роли anon.
+async function withinAnonQuota(ip) {
+  const res = await fetch(`${SB_URL}/rest/v1/rpc/llm_usage_bump_anon`, {
+    method: 'POST', headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_ip: ip })
+  });
+  if (!res.ok) return true;
+  const n = await res.json().catch(() => 0);
+  return typeof n === 'number' ? n <= ANON_LIMIT : true;
 }
 
 // ── Модели: пишет всегда Gemini, проверяет всегда другой провайдер ──────────────────────────
@@ -146,13 +169,47 @@ async function verifyArticle(env, entry, base) {
 }
 
 // ── Маршруты ─────────────────────────────────────────────────────────────────────────────
+// access: 'open' — работает и анонимам (под потолком по IP), 'user' — только вошедшим,
+// 'admin' — только владельцу (grammar: см. правку «поиск по грамматике» — генерация статьи
+// доступна исключительно ему, у остальных только чтение готового из закрытого списка тем).
+// bucket: null у admin-путей — квота владельцу не нужна, он и так исключён из неё.
+const ROUTES = {
+  '/api/article/hybrid':   { access: 'open',  bucket: 'article' },
+  '/api/article/fallback': { access: 'open',  bucket: 'article' },
+  '/api/article/check':    { access: 'open',  bucket: 'article' },
+  '/api/article/fix':      { access: 'open',  bucket: 'article' },
+  '/api/phrase':           { access: 'open',  bucket: 'article' },
+  '/api/russian-search':   { access: 'open',  bucket: 'article' },
+  '/api/voices':           { access: 'open',  bucket: 'article' },
+  '/api/cards-fill':       { access: 'user',  bucket: 'article' },
+  '/api/pratica':          { access: 'user',  bucket: 'article' },
+  '/api/preview/ru':       { access: 'user',  bucket: 'preview' },
+  '/api/preview/mini':     { access: 'user',  bucket: 'preview' },
+  '/api/preview/translit': { access: 'user',  bucket: 'preview' },
+  '/api/grammar':          { access: 'admin', bucket: null }
+};
+
 async function handleApi(request, env) {
   const url = new URL(request.url);
   if (request.method !== 'POST') return json({ error: 'method not allowed' }, 405);
+  const route = ROUTES[url.pathname];
+  if (!route) return json({ error: 'not found' }, 404);
 
   const auth = await requireUser(request);
-  if (!auth) return json({ error: 'Нужно войти в аккаунт' }, 401);
-  if (!(await withinQuota(auth))) return json({ error: `Дневной лимит (${DAILY_LIMIT} статей) исчерпан, попробуйте завтра` }, 429);
+  const isAnon = !auth.token && !auth.isAdmin;
+  if (route.access === 'admin' && !auth.isAdmin) return json({ error: 'Статьи грамматики создаёт только владелец сайта' }, 403);
+  if (route.access === 'user' && !auth.token) return json({ error: 'Нужно войти в аккаунт' }, 401);
+  // route.access === 'open': анониму (isAnon) дальше идти можно, но под потолком по IP ниже
+
+  if (route.bucket) {
+    const ok = isAnon ? await withinAnonQuota(auth.ip) : await withinQuota(auth, route.bucket);
+    if (!ok) {
+      const msg = isAnon
+        ? 'Слишком много запросов без регистрации — зарегистрируйтесь, это займёт меньше минуты'
+        : `Дневной лимит (${route.bucket === 'preview' ? PREVIEW_LIMIT : DAILY_LIMIT}) исчерпан, попробуйте завтра`;
+      return json({ error: msg }, 429);
+    }
+  }
 
   let body;
   try { body = await request.json(); } catch (e) { return json({ error: 'bad json' }, 400); }
@@ -185,6 +242,42 @@ async function handleApi(request, env) {
     if (url.pathname === '/api/article/fix') {
       const patch = await geminiJson(env, P.fixArticlePrompt(body.entry, body.notes));
       return json({ patch, by: 'Gemini' });
+    }
+    if (url.pathname === '/api/phrase') {
+      const entry = await geminiJson(env, P.phrasePrompt(body.phrase));
+      return json({ entry, by: 'Gemini' });
+    }
+    if (url.pathname === '/api/russian-search') {
+      const results = await geminiJson(env, P.russianSearchPrompt(body.word));
+      return json({ results, by: 'Gemini' });
+    }
+    if (url.pathname === '/api/voices') {
+      const raw = await geminiJson(env, P.voicesPrompt(body.word, body.partOfSpeech, body.meaningsText));
+      return json({ voices: raw && raw.voices, by: 'Gemini' });
+    }
+    if (url.pathname === '/api/cards-fill') {
+      const results = await geminiJson(env, P.cardsFillPrompt(body.list));
+      return json({ results, by: 'Gemini' });
+    }
+    if (url.pathname === '/api/pratica') {
+      const raw = await geminiJson(env, P.praticaPrompt(body.text, body.topics));
+      return json({ raw, by: 'Gemini' });
+    }
+    if (url.pathname === '/api/preview/ru') {
+      const raw = await geminiJson(env, P.previewRuPrompt(body.word, body.partOfSpeech, body.glosses));
+      return json({ russian: raw && raw.russian });
+    }
+    if (url.pathname === '/api/preview/mini') {
+      const entry = await geminiJson(env, P.previewMiniPrompt(body.word));
+      return json({ entry });
+    }
+    if (url.pathname === '/api/preview/translit') {
+      const raw = await geminiJson(env, P.previewTranslitPrompt(body.word, body.partOfSpeech, body.gloss));
+      return json({ russian: raw && raw.russian });
+    }
+    if (url.pathname === '/api/grammar') {
+      const g = await geminiJson(env, P.grammarPrompt(body.topic));
+      return json({ entry: g, by: 'Gemini' });
     }
   } catch (e) {
     return json({ error: e.message || String(e) }, 502);
