@@ -3574,3 +3574,11 @@ body.mode-grammar .suggest-src { color: var(--night-muted); }
 .today-hero { position: relative; overflow: hidden; isolation: isolate; }
 .today-hero::before { content: ''; position: absolute; inset: 0; z-index: -1; background: url(today-town.jpg) right bottom / auto 100% no-repeat; mix-blend-mode: multiply; -webkit-mask-image: linear-gradient(90deg, transparent 25%, #000 70%); mask-image: linear-gradient(90deg, transparent 25%, #000 70%); pointer-events: none; }
 @media (max-width: 640px) { .today-hero::before { opacity: .55; } }
+/* На широких экранах рабочие экраны (главная, колоды, практика) выходят за узкую колонку текста.
+   Шапка, поиск и статьи остаются 860px, поэтому при переходах ничего не прыгает */
+@media (min-width: 1200px) {
+  .home-bento, #cardsScreen, #praticaScreen {
+    margin-left: calc(50% - min(560px, 50vw - 32px));
+    margin-right: calc(50% - min(560px, 50vw - 32px));
+  }
+}
