@@ -3523,5 +3523,5 @@ body.mode-grammar .suggest-src { color: var(--night-muted); }
 .tile-setting .step:disabled { opacity: .4; cursor: default; }
 /* «Статистика ›» внизу плитки-ссылки */
 .tile-more { gap: 4px; font-size: var(--fs-body); color: var(--ink-light); }
-.tile-more .icon { width: 16px; height: 16px; }
+.tile-more .icon { width: 15px; height: 15px; stroke-width: 1.6; transform: translateY(1.5px); }
 .tile.link:hover .tile-more { color: var(--accent); }
