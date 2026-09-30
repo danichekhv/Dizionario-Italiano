@@ -1770,7 +1770,7 @@ async function lookupWordHybrid(query, base, opts = {}) {
     addToHistory(base.word, 'dict');
   }
   try {
-    const ruHint = await ruHintFor(base.word);
+    const ruHint = await (opts.ruHintP || ruHintFor(base.word)); // lookupWord обычно уже запустил её параллельно с Викисловарём
     let shownRu = false, shownMeanings = 0;
     const extra = await streamArticleHybrid(base, ruHint, partial => {
       if (currentDictWord !== key || !currentDictEntry || !currentDictEntry._pending) return;
@@ -1846,6 +1846,10 @@ async function lookupWord(word, _depth = 0, opts = {}) {
   // тут только вредит — отдельная короткая ветка
   if (isPhrase(word)) return lookupPhrase(word);
 
+  // Подсказка ru.wiktionary нужна и гибридному пути, и запасному — запускаем её сразу, параллельно
+  // с запросом к Викисловарю ниже, а не после него: раньше эти два внешних запроса шли по очереди
+  const ruHintP = ruHintFor(word);
+
   // 2. Викисловарь: транскрипция, формы, спряжения, глоссы — быстро и без LLM
   const fd = await fetchFreeDictionary(word);
   const mapped = fd ? mapFreeDictionary(fd) : null;
@@ -1865,12 +1869,15 @@ async function lookupWord(word, _depth = 0, opts = {}) {
       return lookupWord(mapped.lemma, _depth + 1);
     }
   } else if (mapped) {
-    return lookupWordHybrid(word, mapped, opts);
+    // Викисловарь мог поправить написание («citta» → «città») — тогда ранняя подсказка спрашивала
+    // не про то слово, и её переспрашиваем заново с канонической формой
+    const hintP = mapped.word && mapped.word.toLowerCase() !== word.toLowerCase() ? ruHintFor(mapped.word) : ruHintP;
+    return lookupWordHybrid(word, mapped, { ...opts, ruHintP: hintP });
   }
 
   // 3. Fallback: слова нет в Викисловаре или таблица форм неполная — бэкенд генерирует всё
   try {
-    const ruHint = await ruHintFor(word);
+    const ruHint = await ruHintP;
     const { entry } = await articleApi('fallback', { word, ruHint });
     if (!entry.word) { if (opts.headless) throw new Error('parola non trovata'); $('errorText').textContent = `"${word}" — parola non trovata`; showState('error'); return; }
     entry.relatedWords = await verifyWords(entry.relatedWords);
