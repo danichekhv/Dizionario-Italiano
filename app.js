@@ -4049,13 +4049,7 @@ function renderHome() {
   } else if (s) {
     const repeat = s.learn + s.due, total = repeat + s.newToday;
     const parts = [repeat ? `${repeat} к повторению` : '', s.newToday ? `${s.newToday} новых` : ''].filter(Boolean).join(' · ');
-    tiles.push(`<div class="tile w4 h2">
-      ${head('layers', 'Сегодня')}
-      <div class="tile-big">${total}</div>
-      <div class="tile-sub">${total ? parts : (s.notes ? 'Всё повторено, новых на сегодня нет' : 'Колоды пока пусты — добавляйте слова из статей')}</div>
-      ${window.Cards && Cards.todayPanel ? Cards.todayPanel() : ''}
-      <div class="tile-foot">${total ? `<button class="cards-btn primary" onclick="Cards.studyAll()">Учить · ${total}</button>` : ''}<button class="cards-btn" onclick="switchMode('cards')">Колоды</button></div>
-    </div>`);
+    tiles.push(`<div class="tile w4 h2 today-tile">${window.Cards && Cards.todayHero ? Cards.todayHero() : ''}</div>`);
     tiles.push(`<div class="tile">
       ${head('trending-up', 'Серия')}
       <div class="tile-big">${s.streak}</div>

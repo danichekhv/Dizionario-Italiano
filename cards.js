@@ -360,13 +360,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         <div class="cards-head-counts" title="новые · заучиваемые · к повторению"><span class="c-new">${c.new}</span><span class="c-learn">${c.learn}</span><span class="c-due">${c.due}</span></div>
       </div>
       <div class="bento">
-        <div class="tile w4 h2">
-          ${head('layers', 'Сегодня')}
-          <div class="tile-big">${due}</div>
-          <div class="tile-sub">${due ? parts : (notes.length ? 'На сегодня всё повторено' : 'Слов пока нет — добавьте из статьи или списком')}</div>
-          ${todayPanel(id)}
-          <div class="tile-foot">${due ? `<button class="cards-btn primary" onclick="${id ? `Cards.study('${id}')` : 'Cards.studyAll()'}">Учить · ${due}</button>` : ''}${notes.length ? `<button class="cards-btn" onclick="${id ? `Cards.study('${id}')` : 'Cards.studyAll()'}" title="Учить, даже если на сегодня ничего не подошло">Учить всё равно</button>` : ''}${id ? '' : `<div class="tile-setting" title="Сколько новых слов добавлять в повторение каждый день"><button class="step" onclick="Cards.setNewPerDay(${Math.max(0, newPerDay() - 5)})" ${newPerDay() ? '' : 'disabled'} aria-label="Меньше">−</button><span><b>${newPerDay()}</b> новых в день</span><button class="step" onclick="Cards.setNewPerDay(${Math.min(500, newPerDay() + 5)})" aria-label="Больше">+</button></div>`}</div>
-        </div>
+        <div class="tile w4 h2 today-tile">${todayHero(id, id ? '' : `<div class="tile-setting" title="Сколько новых слов добавлять в повторение каждый день"><button class="step" onclick="Cards.setNewPerDay(${Math.max(0, newPerDay() - 5)})" ${newPerDay() ? '' : 'disabled'} aria-label="Меньше">−</button><span><b>${newPerDay()}</b> новых в день</span><button class="step" onclick="Cards.setNewPerDay(${Math.min(500, newPerDay() + 5)})" aria-label="Больше">+</button></div>`)}</div>
         <button class="tile link" onclick="Cards.stats(${id ? `'${id}'` : 'null'})" title="Календарь, прогноз повторений, ответы">
           ${head('trending-up', 'Серия')}
           <div class="tile-big">${t.streak}</div>
@@ -423,24 +417,36 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     cardsOfNotes(scopeNotes(deckId)).filter(c => c.state !== 'new').forEach(c => { const d = Math.max(0, Math.floor((c.dueMs - t0) / DAY)); if (d < daysN) b[d]++; });
     return b.map((v, i) => ({ label: i === 0 ? 'сег.' : (i % 5 === 0 ? String(i) : ''), value: v, title: i === 0 ? `сегодня и просроченные: ${v}` : `через ${i} дн.: ${v}` }));
   }
-  // Начинка плитки «Сегодня»: какие слова на очереди и сколько карточек подойдёт в ближайшие 7 дней
-  function todayPanel(deckId) {
-    const cards = cardsOfNotes(scopeNotes(deckId)), now = Date.now(), c = counts(cards);
-    const due = cards.filter(k => k.state !== 'new' && k.dueMs <= now).sort((a, b) => a.dueMs - b.dueMs);
-    const fresh = cards.filter(k => k.state === 'new').slice(0, newPerDay());
-    const ids = [...new Set([...due, ...fresh].map(k => k.note_id))];
-    const words = ids.slice(0, 10).map(noteById).filter(n => n && n.word);
-    const t0 = startOfDay(now), week = new Array(7).fill(0);
-    cards.filter(k => k.state !== 'new').forEach(k => { const d = Math.floor((k.dueMs - t0) / DAY); if (d > 0 && d < 7) week[d]++; });
-    week[0] = c.learn + c.due + Math.min(c.new, newPerDay()); // сегодня — то же число, что крупно в плитке
-    if (!words.length && !week.some(Boolean)) return '';
-    const max = Math.max(1, ...week), dn = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
-    const bars = week.map((v, i) => `<div class="week-day${i ? '' : ' today'}" title="${i ? `через ${i} дн.` : 'сегодня'}: ${v}"><b>${v || ''}</b><i style="height:calc((100% - 30px) * ${(v / max).toFixed(3)})"></i><span>${i ? dn[new Date(t0 + i * DAY + DAY / 2).getDay()] : 'сег'}</span></div>`).join('');
-    const chips = words.map(n => `<button class="today-word" onclick="Cards.openNoteArticle('${esc(n.word).replace(/'/g, '&#39;')}')" title="Открыть статью">${esc(n.word)}</button>`).join('');
-    const more = ids.length > words.length ? `<span class="today-more">и ещё ${ids.length - words.length}</span>` : '';
-    return `<div class="today-panel">
-      ${words.length ? `<div class="today-queue"><span class="today-cap">На очереди</span><div class="today-words">${chips}${more}</div></div>` : '<div></div>'}
-      <div class="today-week"><span class="today-cap">Неделя</span><div class="week-bars">${bars}</div></div>
+  // Плитка «Сегодня»: слева крупная кнопка, справа кольцо «сделано / повторить / новые»
+  function todayHero(deckId, extra = '') {
+    const notes = scopeNotes(deckId), c = counts(cardsOfNotes(notes)), done = todayStats(deckId).count;
+    const repeat = c.learn + c.due, fresh = Math.min(c.new, newPerDay()), left = repeat + fresh;
+    const rs = scopeReviews(deckId).slice(-200); // темп — по последним ответам, иначе ~8 секунд на карточку
+    const avgMs = rs.length ? rs.reduce((sum, r) => sum + Math.min(r.took_ms || 8000, 60000), 0) / rs.length : 8000;
+    const mins = Math.max(1, Math.round(left * avgMs / 60000));
+    const go = deckId ? `Cards.study('${deckId}')` : 'Cards.studyAll()';
+    const title = left ? 'Повторение слов' : notes.length ? 'На сегодня всё' : 'Слов пока нет';
+    const sub = left ? `${left} ${pluralRu(left, 'карточка', 'карточки', 'карточек')} · ≈ ${mins} мин`
+      : notes.length ? 'Всё повторено — можно пройти ещё раз' : 'Добавьте слова из статьи или списком';
+    const arrow = '<svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+    const btn = left ? `<button class="today-go" onclick="${go}"><svg class="icon play" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg>Начать повторение${arrow}</button>`
+      : notes.length ? `<button class="today-go quiet" onclick="${go}">Учить всё равно${arrow}</button>` : '';
+    const segs = [[done, 'var(--sage)', 'сделано'], [repeat, 'var(--accent)', 'повторить'], [fresh, 'rgba(var(--stone-rgb), .3)', 'новые']];
+    const tot = done + left, R = 64, C = 2 * Math.PI * R, gap = segs.filter(x => x[0]).length > 1 ? 3 : 0;
+    let off = 0;
+    const arcs = tot ? segs.filter(x => x[0]).map(([v, col]) => {
+      const len = C * v / tot;
+      const el = `<circle cx="75" cy="75" r="${R}" stroke="${col}" stroke-dasharray="${Math.max(0, len - gap).toFixed(1)} ${C.toFixed(1)}" stroke-dashoffset="${(-off).toFixed(1)}"/>`;
+      off += len; return el;
+    }).join('') : `<circle cx="75" cy="75" r="${R}" stroke="rgba(var(--stone-rgb), .15)"/>`;
+    return `<div class="today-body">
+      <div class="today-hero"><div class="today-kick">Сегодня</div><div class="today-title">${title}</div><div class="today-sub">${sub}</div><div class="today-foot">${btn}</div></div>
+      <div class="today-sep"></div>
+      <div class="today-side">
+        <div class="today-ring"><svg viewBox="0 0 150 150">${arcs}</svg><div class="today-ring-t"><b>${left}</b><span>${left ? 'осталось' : 'готово'}</span></div></div>
+        <div class="today-leg">${segs.map(([v, col, l]) => `<span><i style="background:${col}"></i>${l}</span><b>${v}</b>`).join('')}</div>
+        ${extra}
+      </div>
     </div>`;
   }
   function reviewsPerDay(deckId, daysN = 30) {
@@ -1407,7 +1413,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       const c = counts(S.cards), t = todayStats(null);
       return { learn: c.learn, due: c.due, newToday: Math.min(c.new, newPerDay()), streak: t.streak, todayCount: t.count, notes: S.notes.length, learnedPct: learnedPct(S.cards) };
     },
-    todayPanel: () => S.loaded && !S.missingTables ? todayPanel(null) : '',
+    todayHero: () => S.loaded && !S.missingTables ? todayHero(null) : '',
     reveal, answer, undo,
     openAdd(id) { pushView('add'); S.deckId = id; S.view = 'add'; S.build = null; render(); },
     buildFromText, importFile, saveBuild,
