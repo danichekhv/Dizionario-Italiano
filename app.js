@@ -232,16 +232,19 @@ function updateLangMini() {
   const el = $('langMiniLabel');
   if (el) el.textContent = currentLang === 'ru' ? 'RU → IT' : 'IT → RU';
 }
-function toggleLangMini() { setLang(currentLang === 'ru' ? 'it' : 'ru'); }
+// Чип сидит вплотную к полю ввода — .focus() из setLang тут же подсвечивает всю строку
+// рамкой фокуса (:focus-within) и на телефоне поднимает клавиатуру, хотя человек просто
+// переключил направление, а не собрался печатать. Поэтому здесь без фокуса.
+function toggleLangMini() { setLang(currentLang === 'ru' ? 'it' : 'ru', { skipFocus: true }); }
 
-function setLang(lang) {
+function setLang(lang, opts = {}) {
   currentLang = lang;
   updateLangMini();
   $('searchInput').placeholder = lang === 'ru' ? 'Введите русское слово…' : 'Cerca una parola italiana…';
   updateInitialMsg();
   showState('initial');
   $('searchInput').value = '';
-  $('searchInput').focus();
+  if (!opts.skipFocus) $('searchInput').focus();
 }
 
 // ── Управление состояниями ────────────────────────────────────────────────────
