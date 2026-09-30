@@ -2567,11 +2567,11 @@ function renderEntry(e) {
     pluralRow.style.display = 'grid';
     $('pluralForms').innerHTML = `
       <div class="plural-item">
-        <div class="plural-item-label">Единственное</div>
+        <div class="plural-item-label">Singolare</div>
         <div class="plural-item-form"><em>${e.singular.article}</em>${e.singular.form}</div>
       </div>
       <div class="plural-item">
-        <div class="plural-item-label">Множественное</div>
+        <div class="plural-item-label">Plurale</div>
         <div class="plural-item-form"><em>${e.plural.article}</em>${e.plural.form}</div>
       </div>`;
   } else {
