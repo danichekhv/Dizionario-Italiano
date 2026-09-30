@@ -364,6 +364,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
           ${head('layers', 'Сегодня')}
           <div class="tile-big">${due}</div>
           <div class="tile-sub">${due ? parts : (notes.length ? 'На сегодня всё повторено' : 'Слов пока нет — добавьте из статьи или списком')}</div>
+          ${todayPanel(id)}
           <div class="tile-foot">${due ? `<button class="cards-btn primary" onclick="${id ? `Cards.study('${id}')` : 'Cards.studyAll()'}">Учить · ${due}</button>` : ''}${notes.length ? `<button class="cards-btn" onclick="${id ? `Cards.study('${id}')` : 'Cards.studyAll()'}" title="Учить, даже если на сегодня ничего не подошло">Учить всё равно</button>` : ''}${id ? '' : `<div class="tile-setting" title="Сколько новых слов добавлять в повторение каждый день"><button class="step" onclick="Cards.setNewPerDay(${Math.max(0, newPerDay() - 5)})" ${newPerDay() ? '' : 'disabled'} aria-label="Меньше">−</button><span><b>${newPerDay()}</b> новых в день</span><button class="step" onclick="Cards.setNewPerDay(${Math.min(500, newPerDay() + 5)})" aria-label="Больше">+</button></div>`}</div>
         </div>
         <button class="tile link" onclick="Cards.stats(${id ? `'${id}'` : 'null'})" title="Календарь, прогноз повторений, ответы">
@@ -421,6 +422,26 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const t0 = startOfDay(Date.now()); const b = new Array(daysN).fill(0);
     cardsOfNotes(scopeNotes(deckId)).filter(c => c.state !== 'new').forEach(c => { const d = Math.max(0, Math.floor((c.dueMs - t0) / DAY)); if (d < daysN) b[d]++; });
     return b.map((v, i) => ({ label: i === 0 ? 'сег.' : (i % 5 === 0 ? String(i) : ''), value: v, title: i === 0 ? `сегодня и просроченные: ${v}` : `через ${i} дн.: ${v}` }));
+  }
+  // Начинка плитки «Сегодня»: какие слова на очереди и сколько карточек подойдёт в ближайшие 7 дней
+  function todayPanel(deckId) {
+    const cards = cardsOfNotes(scopeNotes(deckId)), now = Date.now(), c = counts(cards);
+    const due = cards.filter(k => k.state !== 'new' && k.dueMs <= now).sort((a, b) => a.dueMs - b.dueMs);
+    const fresh = cards.filter(k => k.state === 'new').slice(0, newPerDay());
+    const ids = [...new Set([...due, ...fresh].map(k => k.note_id))];
+    const words = ids.slice(0, 10).map(noteById).filter(n => n && n.word);
+    const t0 = startOfDay(now), week = new Array(7).fill(0);
+    cards.filter(k => k.state !== 'new').forEach(k => { const d = Math.floor((k.dueMs - t0) / DAY); if (d > 0 && d < 7) week[d]++; });
+    week[0] = c.learn + c.due + Math.min(c.new, newPerDay()); // сегодня — то же число, что крупно в плитке
+    if (!words.length && !week.some(Boolean)) return '';
+    const max = Math.max(1, ...week), dn = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+    const bars = week.map((v, i) => `<div class="week-day${i ? '' : ' today'}" title="${i ? `через ${i} дн.` : 'сегодня'}: ${v}"><b>${v || ''}</b><i style="height:calc((100% - 30px) * ${(v / max).toFixed(3)})"></i><span>${i ? dn[new Date(t0 + i * DAY + DAY / 2).getDay()] : 'сег'}</span></div>`).join('');
+    const chips = words.map(n => `<button class="today-word" onclick="Cards.openNoteArticle('${esc(n.word).replace(/'/g, '&#39;')}')" title="Открыть статью">${esc(n.word)}</button>`).join('');
+    const more = ids.length > words.length ? `<span class="today-more">и ещё ${ids.length - words.length}</span>` : '';
+    return `<div class="today-panel">
+      ${words.length ? `<div class="today-queue"><span class="today-cap">На очереди</span><div class="today-words">${chips}${more}</div></div>` : '<div></div>'}
+      <div class="today-week"><span class="today-cap">Неделя</span><div class="week-bars">${bars}</div></div>
+    </div>`;
   }
   function reviewsPerDay(deckId, daysN = 30) {
     const t0 = startOfDay(Date.now()) - (daysN - 1) * DAY; const b = new Array(daysN).fill(0);
@@ -1386,6 +1407,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       const c = counts(S.cards), t = todayStats(null);
       return { learn: c.learn, due: c.due, newToday: Math.min(c.new, newPerDay()), streak: t.streak, todayCount: t.count, notes: S.notes.length, learnedPct: learnedPct(S.cards) };
     },
+    todayPanel: () => S.loaded && !S.missingTables ? todayPanel(null) : '',
     reveal, answer, undo,
     openAdd(id) { pushView('add'); S.deckId = id; S.view = 'add'; S.build = null; render(); },
     buildFromText, importFile, saveBuild,

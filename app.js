@@ -4053,6 +4053,7 @@ function renderHome() {
       ${head('layers', 'Сегодня')}
       <div class="tile-big">${total}</div>
       <div class="tile-sub">${total ? parts : (s.notes ? 'Всё повторено, новых на сегодня нет' : 'Колоды пока пусты — добавляйте слова из статей')}</div>
+      ${window.Cards && Cards.todayPanel ? Cards.todayPanel() : ''}
       <div class="tile-foot">${total ? `<button class="cards-btn primary" onclick="Cards.studyAll()">Учить · ${total}</button>` : ''}<button class="cards-btn" onclick="switchMode('cards')">Колоды</button></div>
     </div>`);
     tiles.push(`<div class="tile">
