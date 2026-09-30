@@ -3504,7 +3504,7 @@ body.mode-grammar .suggest-src { color: var(--night-muted); }
 /* Подписи-ярлыки (плитки главной, разделы статьи, поля, статистика): обычным регистром
    и обычной толщиной, отдельным «экранным» шрифтом. Бейджи, теги и шапки таблиц остаются капсом */
 .tile-label, .bento-label, .section-label, .grammar-section-label, .history-label,
-.lang-label, .plural-label, .mood-label, .word-aux-label,
+.lang-label, .plural-label, .plural-item-label, .mood-label, .word-aux-label,
 .study-box-label, .study-dir, .stat-label, .pr-box-label, .cards-field span,
 .apikey-label, .ru-results-title {
   font-family: var(--font-label);
