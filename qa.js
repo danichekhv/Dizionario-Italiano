@@ -33,7 +33,11 @@
   ];
 
   const S = { rows: {}, running: false, stop: false, batch: { running: false, mode: '', done: 0, total: 0, log: [], counts: {} } };
-  // После срыва в лимит сбавляем темп на минуту, иначе следующие слова тоже останутся без проверки
+  // После срыва в лимит сбавляем темп на минуту, иначе следующие слова тоже останутся без проверки.
+  // worker.js заворачивает сбой проверяющего (Groq и т.п.) в HTTP 502 — реальный код ответа теряется,
+  // поэтому срыв ловим по тексту ошибки, а не по res.status
+  const isRateLimitErr = msg => /\b429\b|rate.?limit|too many requests|RESOURCE_EXHAUSTED|quota/i.test(String(msg || ''));
+  const noteIfRateLimited = msg => { if (isRateLimitErr(msg)) window._lastRateLimitAt = Date.now(); };
   const pause = async base => { const recent = Date.now() - (window._lastRateLimitAt || 0) < 60000; await sleep(recent ? 15000 : base); };
   const root = () => $('qaScreen');
   const esc = s => escapeHtml(s == null ? '' : String(s));
@@ -67,10 +71,14 @@
       try {
         const e = await lookupWord(g.word, 0, { force: true, headless: true });
         if (!e || e.redirects) S.rows[g.word] = { state: 'error', note: e && e.redirects ? 'перенаправление на ' + e.redirects.join(', ') : 'нет статьи' };
-        else S.rows[g.word] = { state: 'done', checks: check(g, e), status: e.status, notes: e.checkNotes || [], warnings: e.checkWarnings || [],
-          got: { pos: cleanPos(e.partOfSpeech), gender: e.gender || '', ru: (e.russian && e.russian.main) || '',
-                 llm: e.llm || '', checker: (e.sources && e.sources.check) || '' } };
-      } catch (err) { S.rows[g.word] = { state: 'error', note: err.message || String(err) }; }
+        else {
+          S.rows[g.word] = { state: 'done', checks: check(g, e), status: e.status, notes: e.checkNotes || [], warnings: e.checkWarnings || [],
+            got: { pos: cleanPos(e.partOfSpeech), gender: e.gender || '', ru: (e.russian && e.russian.main) || '',
+                   llm: e.llm || '', checker: (e.sources && e.sources.check) || '' } };
+          // Проверка модели сбоит тихо — finalizeArticle кладёт причину в checkNotes, а не бросает исключение
+          noteIfRateLimited([...(e.checkNotes || []), ...(e.checkWarnings || [])].join(' '));
+        }
+      } catch (err) { S.rows[g.word] = { state: 'error', note: err.message || String(err) }; noteIfRateLimited(err.message); }
       render();
       await pause(2000);
     }
@@ -96,7 +104,8 @@
         const st = e ? (e.status || 'draft') : 'error';
         B.counts[st] = (B.counts[st] || 0) + 1;
         B.log.unshift(`${w} — ${st}${e && e.checkNotes && e.checkNotes.length ? ': ' + e.checkNotes.join('; ') : ''}`);
-      } catch (err) { B.counts.error++; B.log.unshift(`${w} — ошибка: ${err.message || err}`); }
+        noteIfRateLimited([...(e && e.checkNotes || []), ...(e && e.checkWarnings || [])].join(' '));
+      } catch (err) { B.counts.error++; B.log.unshift(`${w} — ошибка: ${err.message || err}`); noteIfRateLimited(err.message); }
       B.done++; if (B.log.length > 200) B.log.length = 200; render();
       await pause(1500);
     }
@@ -124,7 +133,8 @@
         const st = e ? (e.status || 'draft') : 'error';
         B.counts[st] = (B.counts[st] || 0) + 1;
         B.log.unshift(`${w} — ${st}${e && e.checkNotes && e.checkNotes.length ? ': ' + e.checkNotes.join('; ') : ''}`);
-      } catch (err) { B.counts.error++; B.log.unshift(`${w} — ошибка: ${err.message || err}`); }
+        noteIfRateLimited([...(e && e.checkNotes || []), ...(e && e.checkWarnings || [])].join(' '));
+      } catch (err) { B.counts.error++; B.log.unshift(`${w} — ошибка: ${err.message || err}`); noteIfRateLimited(err.message); }
       B.done++; if (B.log.length > 200) B.log.length = 200; render();
       await pause(1500);
     }
@@ -150,7 +160,8 @@
         const st = e && !e.redirects ? (e.status || 'draft') : 'error';
         B.counts[st] = (B.counts[st] || 0) + 1;
         B.log.unshift(`${w} — ${st}${e && e.checkNotes && e.checkNotes.length ? ': ' + e.checkNotes.join('; ') : ''}`);
-      } catch (err) { B.counts.error++; B.log.unshift(`${w} — ошибка: ${err.message || err}`); }
+        noteIfRateLimited([...(e && e.checkNotes || []), ...(e && e.checkWarnings || [])].join(' '));
+      } catch (err) { B.counts.error++; B.log.unshift(`${w} — ошибка: ${err.message || err}`); noteIfRateLimited(err.message); }
       B.done++; if (B.log.length > 200) B.log.length = 200; render();
       await pause(1500);
     }
