@@ -2853,7 +2853,10 @@
     margin-bottom: 16px;
   }
 
-  .back-btn.visible { display: flex; }
+  /* Каждый шаг внутри сайта и так пишется в историю браузера (pushHistory → pushState), поэтому
+     назад ведут кнопка браузера, кнопка мыши и жест. Своя кнопка нужна только установленному
+     приложению: на iPhone у него нет ни панели браузера, ни жеста «назад» */
+  @media (display-mode: standalone) { .back-btn.visible { display: flex; } }
   .back-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
   body.mode-grammar .back-btn { border-color: rgba(var(--blue-rgb),0.25); color: var(--night-muted); }
   body.mode-grammar .back-btn:hover { border-color: var(--blue); color: var(--blue); }
