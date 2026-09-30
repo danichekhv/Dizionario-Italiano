@@ -441,12 +441,15 @@
     gap: 4px; 
   }
 
-  .lang-flag-ru img {
+  /* Флаги нарисованы в разметке (SVG): без чужого сервера и работают офлайн */
+  .lang-flag-ru .flag-icon {
     display: inline-block;
-    width: 22px;
-    height: 22px;
+    width: 21px;
+    height: 14px;
     vertical-align: middle;
-    margin-right: 4px; 
+    margin-right: 6px;
+    border-radius: 2px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, .12);
   }
 
   .translation-text {
