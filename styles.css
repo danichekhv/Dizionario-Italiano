@@ -3570,3 +3570,10 @@ body.mode-grammar .suggest-src { color: var(--night-muted); }
 .today-foot { margin-top: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .today-foot .today-go { margin-top: 0; }
 .today-side .tile-setting { display: flex; align-items: center; gap: 4px; font-size: var(--fs-small); color: var(--muted); white-space: nowrap; }
+/* В колодах и практике нет строки поиска, и «Назад» висел отдельной рамкой в 44px под разделами.
+   Там он — лёгкая ссылка вплотную к навигации */
+body.mode-cards .back-btn, body.mode-pratica .back-btn {
+  margin: -32px 0 8px; padding: 6px 2px; border: none; border-radius: 0;
+  font-size: var(--fs-small); color: var(--muted);
+}
+body.mode-cards .back-btn:hover, body.mode-pratica .back-btn:hover { color: var(--accent); }
