@@ -24,8 +24,11 @@
     --radius: 4px; /* единое скругление для всех кнопок, полей, плашек и карточек; круги остаются кругами */
 
     /* ── Токены дизайна. Всё ниже — единственные допустимые значения; «на глаз» в правилах не пишем ── */
-    /* Шрифты: три роли (заголовки, текст, ярлыки) плюс кириллица и IPA — у Crimson Pro слабая кириллица,
-       а у JetBrains Mono нет знаков IPA (на Android они превращались в квадраты) */
+    /* Шрифты: заголовки, текст, моноширинный — плюс кириллица и IPA (у Crimson Pro слабая кириллица,
+       а у JetBrains Mono нет знаков IPA, на Android они превращались в квадраты). Моно — для того,
+       что реально таблично или числово (IPA-транскрипция, формы, счётчики, код), а не для любого
+       мелкого капслок-ярлыка: капслок-подписи вроде «RU», «DEFINIZIONE», части речи — тем же текстовым
+       шрифтом, что и остальная статья, иначе ярлыки читаются вставкой из чужого интерфейса */
     --font-display: 'Playfair Display', Georgia, serif;
     --font-text: 'Crimson Pro', Georgia, serif;
     --font-cyr: 'PT Serif', 'Crimson Pro', Georgia, serif;
@@ -344,7 +347,8 @@
     letter-spacing: var(--ls-caps);
     text-transform: uppercase;
     color: var(--terracotta);
-    font-family: var(--font-mono);
+    font-family: var(--font-text);
+    font-weight: 600;
     margin-bottom: 12px;
     font-style: normal;
     background: rgba(var(--terracotta-rgb),0.08);
@@ -412,7 +416,7 @@
     font-weight: 400;
   }
   /* «AUSILIARE avere»: подпись как у прочих ярлыков статьи, глагол — акцентом */
-  .word-aux-label { font-family: var(--font-mono); font-style: normal; font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); margin-right: 8px; vertical-align: 2px; }
+  .word-aux-label { font-family: var(--font-text); font-weight: 600; font-style: normal; font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); margin-right: 8px; vertical-align: 2px; }
   .word-aux { color: var(--terracotta); font-weight: 600; }
 
   /* Подсказка «также форма слова: portare» */
@@ -457,7 +461,8 @@
     letter-spacing: var(--ls-caps);
     text-transform: uppercase;
     color: var(--muted);
-    font-family: var(--font-mono);
+    font-family: var(--font-text);
+    font-weight: 600;
     padding-top: 4px;
     display: flex;
     align-items: center;
@@ -507,7 +512,8 @@
     letter-spacing: var(--ls-wide);
     text-transform: uppercase;
     color: var(--muted);
-    font-family: var(--font-mono);
+    font-family: var(--font-text);
+    font-weight: 600;
     margin-bottom: 16px;
     display: flex;
     align-items: center;
@@ -573,7 +579,7 @@
     margin-top: 20px;
     font-size: var(--fs-caption);
     letter-spacing: var(--ls-tight);
-    font-family: var(--font-mono);
+    font-family: var(--font-text);
     color: var(--muted);
     opacity: 0.8;
   }
@@ -665,7 +671,7 @@
   .study-card { background: white; border: 1.5px solid var(--border); border-radius: var(--radius); padding: 36px 32px; text-align: center; min-height: 260px; box-shadow: var(--shadow-md); position: relative; overflow: hidden; }
   .study-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--terracotta), var(--gold), var(--terracotta)); }
   .study-card.ru::before { background: linear-gradient(90deg, var(--blue-deep), var(--blue), var(--blue-deep)); }
-  .study-dir { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); margin-bottom: 20px; }
+  .study-dir { font-family: var(--font-text); font-weight: 600; font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); margin-bottom: 20px; }
   .study-front { font-family: var(--font-display); font-size: clamp(32px, 6vw, 46px); font-weight: 700; color: var(--ink); line-height: var(--lh-tight); }
   .study-rule { height: 1px; background: var(--border); margin: 28px auto; width: 70%; }
   .study-answer { font-family: var(--font-display); font-size: clamp(26px, 5vw, 36px); color: var(--terracotta); font-weight: 700; }
@@ -676,11 +682,11 @@
   .study-alt button { background: none; border: none; padding: 0; cursor: pointer; font: inherit; color: var(--muted); border-bottom: 1px dotted var(--border); }
   .study-alt button:hover { color: var(--terracotta); border-bottom-color: var(--terracotta); }
   .study-box { background: var(--parchment); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; margin: 16px auto 0; max-width: 520px; }
-  .study-box-label { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .study-box-label { font-family: var(--font-text); font-weight: 600; font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
   .study-box-text { font-size: var(--fs-lead); line-height: var(--lh-ui); color: var(--ink); }
   .study-box-text.italic { font-style: italic; }
   .study-tags { margin-top: 16px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-  .tag-chip { font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--sage); background: rgba(var(--sage-rgb),.08); border: 1px solid rgba(var(--sage-rgb),.25); border-radius: var(--radius); padding: 2px 8px; cursor: pointer; }
+  .tag-chip { font-family: var(--font-text); font-weight: 600; font-size: var(--fs-caption); color: var(--sage); background: rgba(var(--sage-rgb),.08); border: 1px solid rgba(var(--sage-rgb),.25); border-radius: var(--radius); padding: 2px 8px; cursor: pointer; }
   .study-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 20px; }
   .study-buttons .sb { padding: 12px 8px; border-radius: var(--radius); border: 1.5px solid; cursor: pointer; font-family: var(--font-text); font-size: var(--fs-lead); display: flex; flex-direction: column; align-items: center; gap: 2px; transition: transform var(--t-fast); }
   .study-buttons .sb:active { transform: scale(.97); }
@@ -711,14 +717,14 @@
   .cards-modal { position: fixed; inset: 0; background: rgba(var(--ink-rgb),.45); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
   .cards-modal-box { background: var(--cream); border-radius: var(--radius); padding: 24px; width: 100%; max-width: 520px; max-height: 90vh; overflow: auto; }
   .cards-field { display: block; margin-top: 12px; }
-  .cards-field span { display: block; font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: .2em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .cards-field span { display: block; font-family: var(--font-text); font-weight: 600; font-size: var(--fs-micro); letter-spacing: .2em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
   .cards-field input, .cards-field textarea { width: 100%; padding: 8px 12px; border: 1.5px solid var(--border); border-radius: var(--radius); background: white; font-family: var(--font-text); font-size: var(--fs-body); }
   .cards-field textarea { min-height: 60px; resize: vertical; }
   /* Статистика */
   .today-box { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: white; border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 16px; flex-wrap: wrap; }
   .today-line { font-size: var(--fs-body); color: var(--ink-light); line-height: var(--lh-text); }
   .today-line b { font-family: var(--font-mono); font-weight: 500; color: var(--terracotta); }
-  .stat-label { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .stat-label { font-family: var(--font-text); font-weight: 600; font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
   .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
   .stat-card { background: white; border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px 16px; }
   .stat-big { font-family: var(--font-display); font-size: 34px; color: var(--ink); line-height: var(--lh-tight); }
@@ -736,7 +742,7 @@
   .cal-head .cards-btn { padding: 4px 8px; line-height: 1; }
   .cal-title { font-family: var(--font-display); font-size: var(--fs-lead); }
   .cal-week, .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
-  .cal-week span { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); text-align: center; padding-bottom: 4px; }
+  .cal-week span { font-family: var(--font-text); font-weight: 600; font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); text-align: center; padding-bottom: 4px; }
   .cal-cell { aspect-ratio: 1; border-radius: var(--radius); background: rgba(var(--stone-rgb),.10); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-family: var(--font-mono); font-size: var(--fs-small); line-height: 1; color: var(--muted); }
   .cal-cell small { font-size: var(--fs-micro); opacity: .8; }
   .cal-cell.empty { background: none; } .cal-cell.future { opacity: .35; }
@@ -833,7 +839,7 @@
   .pr-good-box { background: rgba(var(--sage-rgb), .07); border: 1.5px solid rgba(var(--sage-rgb), .25); border-radius: var(--radius); padding: 12px 20px; margin-bottom: 20px; }
   .pr-good-box ul { margin: 0; padding-left: 20px; }
   .pr-good-box li { line-height: var(--lh-text); color: var(--ink-light); }
-  .pr-box-label { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .pr-box-label { font-family: var(--font-text); font-weight: 600; font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
   .pr-none { background: white; border: 1.5px solid var(--border); border-radius: var(--radius); padding: 20px; color: var(--muted); font-style: italic; }
 
   .pr-issues { display: flex; flex-direction: column; gap: 12px; }
@@ -850,7 +856,7 @@
   .pr-issue-foot .pr-add { margin-left: auto; }
   .pr-issue-foot .pr-add.done { color: var(--sage); border-color: rgba(var(--sage-rgb), .4); }
   .pr-topic { cursor: pointer; border: none; font: inherit; }
-  .pr-type { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-tight); text-transform: uppercase; color: var(--muted); }
+  .pr-type { font-family: var(--font-text); font-weight: 600; font-size: var(--fs-micro); letter-spacing: var(--ls-tight); text-transform: uppercase; color: var(--muted); }
   .pr-loose { opacity: .7; font-style: italic; text-transform: none; }
 
   .pr-words { margin-top: 20px; background: white; border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
@@ -1177,7 +1183,8 @@
     letter-spacing: var(--ls-caps);
     text-transform: uppercase;
     color: var(--terracotta);
-    font-family: var(--font-mono);
+    font-family: var(--font-text);
+    font-weight: 600;
     margin-bottom: 12px;
   }
 
@@ -1641,7 +1648,8 @@
     letter-spacing: var(--ls-caps);
     text-transform: uppercase;
     color: var(--muted);
-    font-family: var(--font-mono);
+    font-family: var(--font-text);
+    font-weight: 600;
     padding-top: 4px;
   }
 
@@ -1662,7 +1670,8 @@
     letter-spacing: var(--ls-caps);
     text-transform: uppercase;
     color: var(--stone);
-    font-family: var(--font-mono);
+    font-family: var(--font-text);
+    font-weight: 600;
   }
 
   .plural-item-form {
@@ -1805,14 +1814,14 @@
   .gram-index-screen.active { display: block; }
   .gram-index-head { margin-bottom: 20px; }
   .gram-index-title { font-family: var(--font-display); font-style: italic; font-size: var(--fs-title); color: var(--night-text); }
-  .gram-index-sub { font-family: var(--font-mono); font-size: var(--fs-caption); letter-spacing: var(--ls-tight); color: var(--night-muted); margin-top: 4px; }
+  .gram-index-sub { font-family: var(--font-text); font-size: var(--fs-caption); letter-spacing: var(--ls-tight); color: var(--night-muted); margin-top: 4px; }
   .gram-note { background: rgba(var(--blue-deep-rgb), .12); border: 1px solid rgba(var(--blue-rgb), .2); border-radius: var(--radius); padding: 10px 16px; color: var(--blue-soft); font-size: var(--fs-small); font-style: italic; margin-bottom: 16px; line-height: var(--lh-ui); }
 
   /* Разделы и темы — плитками (общие правила в разделе «Бенто»); здесь только грамматические детали */
   .gram-index-title i { font-style: italic; }
   .gram-tile .tile-sub { font-family: var(--font-cyr); }
   .gram-tile.empty .tile-title { color: var(--night-muted); }
-  .gram-gen { flex-shrink: 0; margin-left: auto; background: none; border: 1px solid rgba(var(--blue-rgb), .3); border-radius: var(--radius); color: var(--blue-soft); font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-tight); text-transform: uppercase; padding: 4px 8px; cursor: pointer; }
+  .gram-gen { flex-shrink: 0; margin-left: auto; background: none; border: 1px solid rgba(var(--blue-rgb), .3); border-radius: var(--radius); color: var(--blue-soft); font-family: var(--font-text); font-weight: 600; font-size: var(--fs-micro); letter-spacing: var(--ls-tight); text-transform: uppercase; padding: 4px 8px; cursor: pointer; }
   .gram-gen:hover { background: rgba(var(--blue-deep-rgb), .3); color: var(--night-text); border-color: var(--blue); }
 
   /* Точка состояния. Сейчас различаются только «есть» и «нет»;
@@ -1822,12 +1831,12 @@
   .gram-dot.draft { background: var(--gold-light); }
   .gram-dot.checked { background: var(--blue-soft); }
   .gram-dot.verified { background: var(--blue-bright); }
-  .gram-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 16px; font-size: var(--fs-caption); font-family: var(--font-mono); letter-spacing: var(--ls-tight); color: var(--night-dim); }
+  .gram-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 16px; font-size: var(--fs-caption); font-family: var(--font-text); letter-spacing: var(--ls-tight); color: var(--night-dim); }
   .gram-legend span { display: flex; align-items: center; gap: 6px; }
   .gram-legend-admin { font-style: italic; font-family: var(--font-cyr); letter-spacing: 0; }
   /* Состояние статьи в её шапке */
   .gram-status-row { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
-  .gram-status { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; padding: 3px 10px; border-radius: var(--radius); }
+  .gram-status { font-family: var(--font-text); font-weight: 600; font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; padding: 3px 10px; border-radius: var(--radius); }
   .gram-status.s-draft { color: var(--gold-light); background: rgba(var(--gold-rgb), .12); }
   .gram-status.s-checked { color: var(--blue-soft); background: rgba(var(--blue-rgb), .12); }
   .gram-status.s-verified { color: var(--blue-bright); background: rgba(var(--blue-bright-rgb), .15); }
@@ -1871,7 +1880,8 @@
     letter-spacing: var(--ls-caps);
     text-transform: uppercase;
     color: var(--blue);
-    font-family: var(--font-mono);
+    font-family: var(--font-text);
+    font-weight: 600;
     margin-bottom: 12px;
     background: rgba(var(--blue-rgb),0.1);
     padding: 4px 12px;
@@ -1916,7 +1926,8 @@
     letter-spacing: var(--ls-wide);
     text-transform: uppercase;
     color: var(--blue-light);
-    font-family: var(--font-mono);
+    font-family: var(--font-text);
+    font-weight: 600;
     margin-bottom: 16px;
     display: flex;
     align-items: center;
@@ -2247,7 +2258,8 @@
     letter-spacing: var(--ls-wide);
     text-transform: uppercase;
     color: var(--muted);
-    font-family: var(--font-mono);
+    font-family: var(--font-text);
+    font-weight: 600;
     margin-bottom: 12px;
     display: flex;
     align-items: center;
@@ -2259,7 +2271,8 @@
     border: none;
     cursor: pointer;
     color: var(--muted);
-    font-family: var(--font-mono);
+    font-family: var(--font-text);
+    font-weight: 600;
     letter-spacing: var(--ls-tight);
     transition: color var(--t-base);
     padding: 0;
@@ -2352,7 +2365,8 @@
 
   .fav-clear-btn {
     font-size: var(--fs-small);
-    font-family: var(--font-mono);
+    font-family: var(--font-text);
+    font-weight: 600;
     letter-spacing: var(--ls-tight);
     color: var(--stone);
     background: none;
@@ -2840,7 +2854,8 @@
     font-size: var(--fs-caption);
     letter-spacing: var(--ls-caps);
     text-transform: uppercase;
-    font-family: var(--font-mono);
+    font-family: var(--font-text);
+    font-weight: 600;
     padding: 4px 12px;
     border-radius: var(--radius);
     margin-left: 8px;
@@ -2975,7 +2990,8 @@
     letter-spacing: var(--ls-caps);
     text-transform: uppercase;
     color: var(--muted);
-    font-family: var(--font-mono);
+    font-family: var(--font-text);
+    font-weight: 600;
     text-align: left;
     margin-bottom: 8px;
   }
@@ -3012,7 +3028,8 @@
   .apikey-input {
     width: 100%;
     padding: 16px 48px 16px 20px;
-    font-family: var(--font-mono);
+    font-family: var(--font-text);
+    font-style: italic;
     font-size: var(--fs-body);
     background-color: var(--parchment);
     border: 1.5px solid var(--border);
@@ -3172,7 +3189,7 @@
   .wp-formof { font-size: var(--fs-small); font-style: italic; color: var(--muted); margin-bottom: 8px; }
   .wp-formof-list div { font-size: var(--fs-body); margin: 4px 0; color: var(--ink); }
   .wp-formof-list b { font-family: var(--font-display); font-style: italic; font-weight: 600; }
-  .wp-formof-list span { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--terracotta); margin-left: 8px; }
+  .wp-formof-list span { font-family: var(--font-text); font-weight: 600; font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--terracotta); margin-left: 8px; }
   .wp-formof-list em { color: var(--stone); }
   .wp-arrow { color: var(--terracotta); font-weight: 400; margin: 0 4px; }
   .wp-en { font-size: var(--fs-small); font-style: italic; color: var(--stone); margin-top: 4px; }
@@ -3186,7 +3203,8 @@
     font-size: var(--fs-micro);
     letter-spacing: var(--ls-caps);
     text-transform: uppercase;
-    font-family: var(--font-mono);
+    font-family: var(--font-text);
+    font-weight: 600;
     padding: 2px 8px;
     border-radius: var(--radius);
     background: rgba(var(--terracotta-rgb),0.08);
@@ -3316,7 +3334,7 @@
   .sheet-wp-formof { font-size: var(--fs-body); font-style: italic; color: var(--muted); margin-bottom: 8px; }
   .sheet-wp-formof-list div { font-size: var(--fs-lead); margin: 8px 0; color: var(--ink); }
   .sheet-wp-formof-list b { font-family: var(--font-display); font-style: italic; font-weight: 600; }
-  .sheet-wp-formof-list span { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--terracotta); margin-left: 8px; }
+  .sheet-wp-formof-list span { font-family: var(--font-text); font-weight: 600; font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--terracotta); margin-left: 8px; }
   .sheet-wp-formof-list em { color: var(--stone); }
   .sheet-wp-en { font-size: var(--fs-body); font-style: italic; color: var(--stone); margin-top: 8px; }
   .grammar-sheet .sheet-wp-phonetic { color: var(--night-muted); }
@@ -3331,7 +3349,8 @@
     font-size: var(--fs-caption);
     letter-spacing: var(--ls-caps);
     text-transform: uppercase;
-    font-family: var(--font-mono);
+    font-family: var(--font-text);
+    font-weight: 600;
     padding: 4px 12px;
     border-radius: var(--radius);
     background: rgba(var(--terracotta-rgb),0.08);
@@ -3436,7 +3455,7 @@ body.mode-grammar .app-nav-btn.active .nav-badge { background: white; color: var
 #initialMsg { padding: 8px 0 16px; text-align: left; font-style: normal; font-size: var(--fs-body); color: var(--ink); }
 .bento { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-flow: dense; gap: 12px; }
 .bento + .bento, .bento + .cards-actions { margin-top: 16px; }
-.bento-label { font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); margin: 24px 0 8px; }
+.bento-label { font-family: var(--font-text); font-weight: 600; font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); margin: 24px 0 8px; }
 .tile { grid-column: span 2; display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 132px; padding: 14px 16px 16px; background: white; border: 1.5px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); color: var(--ink); font-family: var(--font-text); font-size: var(--fs-body); text-align: left; transition: border-color var(--t-base), transform var(--t-base), box-shadow var(--t-base); }
 .tile.w3 { grid-column: span 3; } .tile.w4 { grid-column: span 4; } .tile.w6 { grid-column: span 6; } .tile.h2 { grid-row: span 2; }
 .tile.link { cursor: pointer; }
@@ -3447,7 +3466,7 @@ body.mode-grammar .app-nav-btn.active .nav-badge { background: white; color: var
 .gram-tile.topic .tile-head { min-height: 0; }
 .tile-icon { width: 36px; height: 36px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: var(--radius); background: var(--parchment); color: var(--accent); }
 .tile-icon .icon { width: 18px; height: 18px; }
-.tile-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); }
+.tile-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-text); font-weight: 600; font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); }
 .tile-count { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--muted); }
 .tile-title { font-family: var(--font-display); font-size: var(--fs-h3); line-height: var(--lh-tight); overflow-wrap: anywhere; }
 .tile-big { font-family: var(--font-display); font-size: 40px; line-height: 1; color: var(--ink); }
@@ -3470,7 +3489,7 @@ body.mode-grammar .tile-big { color: var(--night-text); }
 body.mode-grammar .tile-bar { background: rgba(var(--blue-rgb), .12); }
 body.mode-grammar .tile-bar i { background: var(--blue); }
 /* Хлебные крошки над сеткой: путь до текущего уровня, каждый шаг — кнопка наверх */
-.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; font-family: var(--font-mono); font-size: var(--fs-caption); letter-spacing: var(--ls-tight); color: var(--muted); }
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; font-family: var(--font-text); font-size: var(--fs-caption); letter-spacing: var(--ls-tight); color: var(--muted); }
 .crumbs button { background: none; border: none; padding: 2px 0; color: inherit; font: inherit; letter-spacing: inherit; cursor: pointer; }
 .crumbs button:hover { color: var(--accent); }
 .crumbs .sep { opacity: .5; } .crumbs .cur { color: var(--ink); }
@@ -3508,7 +3527,7 @@ body.mode-grammar .search-recent { background: var(--night-surface); border-colo
 .suggest-item { display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left; background: none; border: none; padding: 8px 8px; border-radius: var(--radius); font-family: var(--font-text); font-size: var(--fs-lead); color: var(--ink); cursor: pointer; }
 .suggest-item b { font-weight: 600; color: var(--terracotta); }
 .suggest-item:hover, .suggest-item.active { background: var(--parchment); }
-.suggest-src { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.suggest-src { margin-left: auto; font-family: var(--font-text); font-weight: 600; font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); white-space: nowrap; }
 /* Темы грамматики в этом же списке подсказок — на тёмной навигации кремовые цвета нечитаемы,
    палитра та же, что уже принята для .history-chip в режиме grammar */
 body.mode-grammar .suggest-item { color: var(--night-text); }
@@ -3540,11 +3559,11 @@ body.mode-grammar .suggest-src { color: var(--night-muted); }
 /* ── Омографы в статье: ancora — наречие «ещё» и существительное «якорь» ── */
 /* Помета употребления: устар., диал., вульг. Ставится перед толкованием и в шапке омографа */
 /* Геометрия та же, что у .tag-chip: плашки в статье должны читаться как одна семья */
-.usage-tag { display: inline-block; margin-right: 8px; padding: 2px 8px; border-radius: var(--radius); background: rgba(var(--gold-rgb), .1); border: 1px solid rgba(var(--gold-rgb), .3); color: var(--gold); font-family: var(--font-mono); font-size: var(--fs-caption); letter-spacing: var(--ls-tight); }
+.usage-tag { display: inline-block; margin-right: 8px; padding: 2px 8px; border-radius: var(--radius); background: rgba(var(--gold-rgb), .1); border: 1px solid rgba(var(--gold-rgb), .3); color: var(--gold); font-family: var(--font-text); font-weight: 600; font-size: var(--fs-caption); letter-spacing: var(--ls-tight); }
 .homograph-admin-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
 .homograph-admin { margin-left: auto; display: flex; gap: 8px; }
 .homograph-hint { color: var(--muted); font-style: italic; font-size: var(--fs-small); }
-.usage-edit { background: none; border: none; padding: 0; cursor: pointer; color: var(--muted); font-family: var(--font-mono); font-size: var(--fs-micro); letter-spacing: var(--ls-tight); text-transform: uppercase; }
+.usage-edit { background: none; border: none; padding: 0; cursor: pointer; color: var(--muted); font-family: var(--font-text); font-weight: 600; font-size: var(--fs-micro); letter-spacing: var(--ls-tight); text-transform: uppercase; }
 .usage-edit:hover { color: var(--terracotta); }
 .homograph { padding: 16px 0; border-top: 1px solid var(--border); }
 .homograph:first-child { border-top: none; padding-top: 0; }
