@@ -3522,6 +3522,6 @@ body.mode-grammar .suggest-src { color: var(--night-muted); }
 .tile-setting .step:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .tile-setting .step:disabled { opacity: .4; cursor: default; }
 /* «Статистика ›» внизу плитки-ссылки */
-.tile-more { gap: 2px; font-size: var(--fs-small); color: var(--muted); }
-.tile-more .icon { width: 14px; height: 14px; }
+.tile-more { gap: 4px; font-size: var(--fs-body); color: var(--ink-light); }
+.tile-more .icon { width: 16px; height: 16px; }
 .tile.link:hover .tile-more { color: var(--accent); }
