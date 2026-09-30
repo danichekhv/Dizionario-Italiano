@@ -1743,6 +1743,20 @@ function offerFormsChooser(entry, typed) {
   return true;
 }
 
+// Дочистка гибридной статьи: связанные слова, которые модель придумала, — прочь; транскрипция,
+// если Викисловарь её не дал, — из резервных правил; перевод-транслитерация («мамон») — переспрашиваем.
+// Мутирует entry на месте и возвращает true, если что-то из этого реально изменилось.
+async function hybridCleanup(entry, base) {
+  let changed = false;
+  const [ok] = await Promise.all([
+    verifyWords(entry.relatedWords, base.relatedWords || []), // синонимы Викисловаря доверенные, добавки модели — проверяем
+    entry.phonetic ? null : resolveIpa(entry.word).then(r => { entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; entry.phoneticSrc = r.src; changed = true; }),
+    fixTransliteratedRussian(entry).then(fixed => { if (fixed) changed = true; })
+  ]);
+  if (ok.length !== entry.relatedWords.length) { entry.relatedWords = ok; changed = true; }
+  return changed;
+}
+
 async function lookupWordHybrid(query, base, opts = {}) {
   const key = base.word.toLowerCase();
   // Развилку показываем, только если её попросили: это делает единственное место, где слово
@@ -1771,12 +1785,25 @@ async function lookupWordHybrid(query, base, opts = {}) {
       }
     });
     const entry = fdMergeCompletion(base, extra);
-    entry.relatedWords = await verifyWords(entry.relatedWords, base.relatedWords || []); // синонимы Викисловаря доверенные, добавки модели — проверяем
-    if (!entry.phonetic) { const r = await resolveIpa(entry.word); entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; entry.phoneticSrc = r.src; }
-    await fixTransliteratedRussian(entry); // «мамон» вместо перевода — переспрашиваем у Gemini
     entry.sources = { structure: 'wiktionary', text: entry.llm, ruHint: !!ruHint };
-    validateArticle(entry, base); // неполную статью не сохраняем и не показываем как готовую
-    await finalizeArticle(entry, query, base, { silent: !!opts.headless });
+    if (opts.headless) {
+      // Батч (золотой набор, пересборка кэша): экрана нет, спешить некуда — статья должна уйти
+      // в базу уже дочищенной, а не подхватить правки фоновым промисом, который батч не дождётся
+      await hybridCleanup(entry, base);
+      validateArticle(entry, base); // неполную статью не сохраняем и не показываем как готовую
+      await finalizeArticle(entry, query, base, { silent: true });
+      return entry;
+    }
+    validateArticle(entry, base); // проверка не зависит от связанных слов, транскрипции и транслитерации — их чистим ниже
+    await finalizeArticle(entry, query, base, {});
+    // Статья уже на экране и сохранена: сверку связанных слов, транскрипцию и ловушку транслитерации
+    // («мамон» вместо перевода) дочищаем на месте следом, как для статей из кэша (см. lookupWord) —
+    // не держим статью в виде «ещё грузится» ради трёх внешних запросов, пока текст уже готов
+    hybridCleanup(entry, base).then(changed => {
+      if (!changed) return;
+      if (currentDictEntry === entry) renderEntry(entry);
+      if (window.Auth && Auth.user()) sbSave('dictionary', 'word', normKey(entry.word), entry);
+    });
     return entry;
   } catch(err) {
     console.error('lookupWordHybrid error:', err);
