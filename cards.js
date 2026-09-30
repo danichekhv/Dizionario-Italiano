@@ -1358,9 +1358,10 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     if (modalOpen()) return; // открыто окно редактирования: клавиши — ему, а не карточке
     if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '')) return;
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!S.revealed) reveal(); else if (e.key === 'Enter') answer(3); }
-    else if (/^[1-4]$/.test(e.key) && S.revealed) answer(parseInt(e.key));
-    else if (e.key === 'z' || e.key === 'Z') undo();
-    else if (e.key === 'e' || e.key === 'E' || e.key === 'у' || e.key === 'У') editCurrent();
+    // preventDefault: следующая карточка сразу ставит фокус в поле ответа, и без него туда допечатается та же клавиша
+    else if (/^[1-4]$/.test(e.key) && S.revealed) { e.preventDefault(); answer(parseInt(e.key)); }
+    else if (e.key === 'z' || e.key === 'Z') { e.preventDefault(); undo(); }
+    else if (e.key === 'e' || e.key === 'E' || e.key === 'у' || e.key === 'У') { e.preventDefault(); editCurrent(); }
     else if (e.key === 'Escape') goBack();
   });
 
