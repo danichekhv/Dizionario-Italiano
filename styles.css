@@ -435,7 +435,7 @@
     color: var(--muted);
     font-family: var(--font-text);
     font-weight: 600;
-    padding-top: 4px;
+    height: calc(var(--fs-h3) * var(--lh-ui)); /* ровно одна строка перевода: подпись по центру первой строки */
     display: flex;
     align-items: center;
     gap: 4px; 
@@ -1453,7 +1453,8 @@
     .word-phonetic { display: block; margin-top: 8px; white-space: normal; }
     .speak-btn .icon { width: 20px; height: 20px; }
     .speak-btn { margin-bottom: 1px; }
-    .lang-row { grid-template-columns: 48px 1fr; gap: 8px; }
+    .lang-row { grid-template-columns: 64px 1fr; gap: 10px; }
+    .lang-label { height: calc(var(--fs-body) * var(--lh-ui)); }
     .translation-text { font-size: var(--fs-body); }
     .translation-alts { font-size: var(--fs-small); }
     .plural-forms { gap: 16px; }
