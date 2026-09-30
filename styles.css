@@ -214,7 +214,7 @@
     box-shadow: var(--shadow-sm);
   }
 
-  .search-wrapper:focus-within {
+  .search-wrapper:has(.search-input:focus) {
     border-color: var(--terracotta);
     box-shadow: var(--shadow-md), var(--focus-ring);
     background: #f9f4ea;
@@ -1522,6 +1522,9 @@
   }
 
   .lang-mini:hover { color: var(--terracotta); }
+  /* Переключатель — не место ввода: своей обводки фокуса у него нет, и рамку строки
+     зажигает только само поле (см. .search-wrapper:has(.search-input:focus)) */
+  .lang-mini:focus, .lang-mini:focus-visible { outline: none; }
 
   /* Russian results list */
   .ru-results {
@@ -1666,7 +1669,7 @@
   }
   body.mode-grammar .search-input { color: var(--night-text); }
   body.mode-grammar .search-input::placeholder { color: var(--night-dim); }
-  body.mode-grammar .search-wrapper:focus-within {
+  body.mode-grammar .search-wrapper:has(.search-input:focus) {
     border-color: var(--blue);
     box-shadow: var(--shadow-md), var(--focus-ring);
     background: #1e2d4e;
