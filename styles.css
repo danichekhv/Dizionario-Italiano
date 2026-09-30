@@ -62,6 +62,9 @@
     --shadow-sm: 0 2px 8px rgba(var(--shadow-rgb), .3);
     --shadow-md: 0 4px 16px rgba(var(--shadow-rgb), .3);
     --shadow-lg: 0 8px 32px rgba(var(--shadow-rgb), .4);
+    /* Переменная с var() внутри вычисляется там, где объявлена: кольцо из :root так и осталось бы
+       терракотовым, поэтому пересобираем его здесь из синего акцента */
+    --focus-ring: 0 0 0 3px rgba(var(--accent-rgb), .35);
   }
 
 
