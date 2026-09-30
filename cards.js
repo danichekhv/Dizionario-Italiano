@@ -683,8 +683,8 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const isIt = S.current.direction === 'it';
     const tokens = clozeTokens(n.example, n.word);
     // Лицевая сторона: пример с пропуском (RU→IT) или с выделенным словом (IT→RU); слова примера кликабельны
-    const sentence = tokens ? `<div class="study-box study-sentence"><div class="study-box-label">Esempio</div><div class="study-box-text italic">${sentenceHtml(tokens, S.revealed || isIt ? 'mark' : 'gap')}</div></div>`
-      : (S.revealed && n.example ? `<div class="study-box"><div class="study-box-label">Esempio</div><div class="study-box-text italic">${makeClickable(n.example)}</div></div>` : '');
+    const sentence = tokens ? `<div class="study-box study-sentence"><div class="study-box-label">Пример</div><div class="study-box-text italic">${sentenceHtml(tokens, S.revealed || isIt ? 'mark' : 'gap')}</div></div>`
+      : (S.revealed && n.example ? `<div class="study-box"><div class="study-box-label">Пример</div><div class="study-box-text italic">${makeClickable(n.example)}</div></div>` : '');
     const chk = S.check;
     const typedBlock = S.revealed && chk ? `
         <div class="study-typed ${chk.ok ? 'ok' : chk.near ? 'near' : 'bad'}">
@@ -704,7 +704,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         ${!isIt && (n.alt || []).length ? `<div class="study-alt">ещё: ${n.alt.map(a => `<button type="button" data-alt-w="${esc(a)}">${esc(a)}</button>`).join(', ')}</div>` : ''}
         ${n.phonetic ? `<div class="study-ipa">${esc(n.phonetic)}</div>` : ''}
         ${sentence}
-        ${n.meaning ? `<div class="study-box"><div class="study-box-label">Significato</div><div class="study-box-text">${makeClickable(n.meaning)}</div></div>` : ''}
+        ${n.meaning ? `<div class="study-box"><div class="study-box-label">Значение</div><div class="study-box-text">${makeClickable(n.meaning)}</div></div>` : ''}
         ${(n.tags || []).length ? `<div class="study-tags">${n.tags.map(t => `<span class="tag-chip">#${esc(t)}</span>`).join('')}</div>` : ''}
         <button class="study-article" onclick="Cards.openNoteArticle('${esc(n.word || '').replace(/'/g, '&#39;')}')">открыть статью ${svgIcon('external')}</button>` : `${sentence}${input}`;
     const suggested = chk ? (chk.ok ? 3 : chk.near ? 2 : 1) : 0;

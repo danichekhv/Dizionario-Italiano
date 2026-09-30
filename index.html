@@ -21,9 +21,9 @@
 <!-- Экран настроек: вход в аккаунт (генерация теперь на общем ключе владельца, свой ключ не нужен) -->
 <div class="apikey-overlay" id="apikeyOverlay">
   <div class="apikey-box">
-    <div class="apikey-ornament">Configurazione · Настройка</div>
+    <div class="apikey-ornament">Настройки</div>
     <div class="apikey-title">Diziona<em>rio</em></div>
-    <p class="apikey-subtitle">Italiano · Russo · Inglese</p>
+    <p class="apikey-subtitle">Итальянский · русский · английский</p>
     <div class="apikey-rule"><div class="apikey-rule-diamond"></div></div>
     <div class="apikey-label">Аккаунт</div>
     <div class="auth-box" id="authBox"></div>
@@ -82,7 +82,7 @@
         autocorrect="off"
         spellcheck="false"
       />
-      <button class="search-btn" id="searchBtn" title="Cerca"><span data-icon="search"></span>
+      <button class="search-btn" id="searchBtn" title="Искать"><span data-icon="search"></span>
       </button>
       <!-- Недавние слова: выпадают под пустым полем, когда оно в фокусе -->
       <div class="search-recent" id="searchRecent" style="display:none"></div>
@@ -125,7 +125,7 @@
   <!-- Favorites screen -->
   <div class="fav-screen" id="favScreen">
     <div class="fav-header">
-      <div class="fav-title">Preferiti — Избранное</div>
+      <div class="fav-title">Preferiti</div>
       <div class="fav-tabs">
         <button class="fav-tab active" id="favTabWords" onclick="switchFavTab('words')">Слова</button>
         <button class="fav-tab" id="favTabGram" onclick="switchFavTab('grammar')">Грамматика</button>
@@ -144,13 +144,13 @@
   </div>
 
   <div class="state-msg" id="loadingMsg">
-    <div>Ricerca in corso…</div>
+    <div>Ищем…</div>
     <div class="loading-dots"><span></span><span></span><span></span></div>
   </div>
 
   <div class="error-msg" id="errorMsg">
     <div class="error-icon" data-icon="search"></div>
-    <div class="error-text" id="errorText">Parola non trovata</div>
+    <div class="error-text" id="errorText">Слово не найдено</div>
     <!-- «может быть, „сапог“?» — слово с одной правкой, когда перевод не нашёлся -->
     <div class="word-also" id="errorSuggest"></div>
   </div>
@@ -201,20 +201,20 @@
         </div>
       </div>
       <div class="plural-row" id="pluralRow" style="display:none">
-        <div class="plural-label">Forme</div>
+        <div class="plural-label">Формы</div>
         <div class="plural-forms" id="pluralForms"></div>
       </div>
     </div>
 
     <div class="definition-section">
-      <div class="section-label">Definizione</div>
+      <div class="section-label">Значения</div>
       <div id="meaningsContainer"></div>
       <div class="entry-source" id="entrySource" style="display:none"></div>
     </div>
 
     <!-- Омографы: то же написание, другая часть речи (ancora: наречие «ещё» и существительное «якорь») -->
     <div class="definition-section homographs-section" id="homographsSection" style="display:none">
-      <div class="section-label">Altre voci · другие значения этого написания</div>
+      <div class="section-label">Другие слова с этим написанием</div>
       <div class="homograph-admin-bar" id="homographsAdmin" style="display:none"></div>
       <div id="homographsContainer"></div>
     </div>
@@ -224,7 +224,7 @@
       <div class="conjugation-header" id="conjToggle">
         <div class="conj-title">
           <div class="conj-icon">V</div>
-          Coniugazione completa
+          Спряжение
         </div>
         <div class="toggle-arrow" id="toggleArrow">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -240,7 +240,7 @@
 
     <!-- Related words -->
     <div class="related-words-section" id="relatedWordsSection" style="display:none">
-      <div class="section-label">Parole correlate
+      <div class="section-label">Связанные слова
         <span class="view-toggle" id="relatedViewToggle">
           <button class="view-toggle-btn" data-v="graph" onclick="setRelatedView('graph')">граф</button>
           <button class="view-toggle-btn" data-v="list" onclick="setRelatedView('list')">список</button>

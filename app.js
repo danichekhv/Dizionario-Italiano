@@ -1876,7 +1876,7 @@ async function lookupWord(word, _depth = 0, opts = {}) {
   try {
     const ruHint = await ruHintP;
     const { entry } = await articleApi('fallback', { word, ruHint });
-    if (!entry.word) { if (opts.headless) throw new Error('parola non trovata'); $('errorText').textContent = `"${word}" — parola non trovata`; showState('error'); return; }
+    if (!entry.word) { if (opts.headless) throw new Error('parola non trovata'); $('errorText').textContent = `"${word}" — слово не найдено`; showState('error'); return; }
     entry.relatedWords = await verifyWords(entry.relatedWords);
     entry.partOfSpeech = cleanPos(entry.partOfSpeech);
     // Сноска «также форма слова»: у статей из Викисловаря она строится из его же данных,
@@ -1916,7 +1916,7 @@ async function lookupPhrase(phrase) {
   const ipaJob = phrasePhonetic(phrase);
   try {
     const { entry: raw, by } = await backendApi('/api/phrase', { phrase });
-    if (!raw || !raw.word) { $('errorText').textContent = `"${phrase}" — espressione non trovata`; showState('error'); return; }
+    if (!raw || !raw.word) { $('errorText').textContent = `"${phrase}" — выражение не найдено`; showState('error'); return; }
     const entry = {
       word: cleanQuery(raw.word) || phrase, partOfSpeech: cleanPos(raw.partOfSpeech) || 'locuzione', category: raw.category || 'altro',
       gender: null, phonetic: await ipaJob, singular: null, plural: null, conjugations: null,
@@ -1945,7 +1945,7 @@ function describeApiError(msg) {
   if (/^Дневной лимит|^Слишком много запросов без регистрации/.test(msg)) return `⏳ ${escapeHtml(msg)}`;
   if (/^Доступ ограничен|^Статьи грамматики создаёт/.test(msg)) return escapeHtml(msg);
   if (/quota|RESOURCE_EXHAUSTED|rate limit/i.test(msg)) return '⏳ Модель сейчас перегружена — попробуйте через минуту';
-  return 'Errore: ' + escapeHtml(msg);
+  return 'Ошибка: ' + escapeHtml(msg);
 }
 
 function handleApiError(msg) {
@@ -2505,7 +2505,7 @@ function renderEntry(e) {
   (e.homographs || []).forEach(h => {
     const label = POS_RU[(h.partOfSpeech || '').split(' ')[0]] || h.partOfSpeech || 'другое слово';
     const gloss = h.russian ? h.russian.split(';')[0].trim() : (h.glosses && h.glosses[0]) || '';
-    alsoParts.push(`также ${escapeHtml(label)}: <button type="button" title="К разделу «Altre voci»" onclick="$('homographsSection').scrollIntoView({behavior:'smooth',block:'center'})">${escapeHtml(gloss)} ↓</button>`);
+    alsoParts.push(`также ${escapeHtml(label)}: <button type="button" title="К другим словам с этим написанием" onclick="$('homographsSection').scrollIntoView({behavior:'smooth',block:'center'})">${escapeHtml(gloss)} ↓</button>`);
   });
   // Пришли сюда прыжком из русского поиска: остальные варианты перевода не теряем. Слово держим
   // в data-атрибуте, а не в onclick: у «po’» и «l’azienda» апостроф внутри строки всё бы сломал.
@@ -2567,11 +2567,11 @@ function renderEntry(e) {
     pluralRow.style.display = 'grid';
     $('pluralForms').innerHTML = `
       <div class="plural-item">
-        <div class="plural-item-label">Singolare</div>
+        <div class="plural-item-label">Единственное</div>
         <div class="plural-item-form"><em>${e.singular.article}</em>${e.singular.form}</div>
       </div>
       <div class="plural-item">
-        <div class="plural-item-label">Plurale</div>
+        <div class="plural-item-label">Множественное</div>
         <div class="plural-item-form"><em>${e.plural.article}</em>${e.plural.form}</div>
       </div>`;
   } else {
@@ -2880,7 +2880,7 @@ async function saveVoice(i) {
 async function deleteVoice(i) {
   const e = currentDictEntry; if (!e || !(e.homographs || [])[i]) return;
   const h = e.homographs[i];
-  if (!confirm(`Удалить «${h.partOfSpeech || ''} ${h.russian || (h.glosses || [])[0] || ''}» из Altre voci?`)) return;
+  if (!confirm(`Удалить «${h.partOfSpeech || ''} ${h.russian || (h.glosses || [])[0] || ''}» из других слов с этим написанием?`)) return;
   e.homographs.splice(i, 1);
   renderEntry(e);
   showToast(await saveCurrentEntry() ? '✓ Удалено' : '⚠ Не сохранилось в общей базе');

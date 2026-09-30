@@ -266,10 +266,10 @@
       const keys = Object.keys(counts).filter(k => counts[k]).sort((a, b) => counts[b] - counts[a]);
       const LIMIT = 8, shown = G.legendOpen || keys.length <= LIMIT ? keys : keys.slice(0, LIMIT);
       // Подписи по-итальянски (это и есть тег слова), русский перевод во всплывающей подсказке
-      const it = k => k === '?' ? 'non aperte' : k;
+      const it = k => k === '?' ? 'не открытые' : k;
       legendEl.innerHTML = shown.map(k => `<button class="wg-chip ${G.hidden.has(k) ? 'off' : ''}" data-k="${k}" title="${labels[k] || k}"><i style="background:${colors[k] || '#8b7355'}"></i>${it(k)}<span>${counts[k]}</span></button>`).join('')
         + (keys.length > LIMIT ? `<button class="wg-chip-all wg-more">${G.legendOpen ? 'свернуть' : `ещё ${keys.length - LIMIT}`}</button>` : '')
-        + (keys.length > 1 ? `<button class="wg-chip-all" data-all="1">tutte</button><button class="wg-chip-all" data-all="0">nessuna</button>` : '');
+        + (keys.length > 1 ? `<button class="wg-chip-all" data-all="1">все</button><button class="wg-chip-all" data-all="0">ни одной</button>` : '');
       const more = legendEl.querySelector('.wg-more'); if (more) more.onclick = () => { G.legendOpen = !G.legendOpen; buildLegend(); };
       legendEl.querySelectorAll('.wg-chip').forEach(b => b.onclick = () => { const k = b.dataset.k; if (G.hidden.has(k)) G.hidden.delete(k); else G.hidden.add(k); buildLegend(); G.alpha = Math.max(G.alpha, 0.3); loop(); });
       legendEl.querySelectorAll('.wg-chip-all[data-all]').forEach(b => b.onclick = () => { if (b.dataset.all === '1') G.hidden.clear(); else keys.forEach(k => G.hidden.add(k)); buildLegend(); G.alpha = Math.max(G.alpha, 0.3); loop(); });
