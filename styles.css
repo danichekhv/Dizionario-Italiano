@@ -3557,15 +3557,15 @@ body.mode-grammar .suggest-src { color: var(--night-muted); }
   .today-go { align-self: stretch; justify-content: center; }
 }
 .today-go { white-space: nowrap; }
-/* На главной плитка вдвое уже, чем в колодах */
+/* Плитка «Сегодня» занимает 4 из 6 колонок — меньше 700px, поэтому всё в ней компактно */
 @media (min-width: 641px) {
-  .home-bento .today-body { grid-template-columns: minmax(0, 1fr) 1px 150px; gap: 16px; }
-  .home-bento .today-hero { padding: 16px 18px 18px; }
-  .home-bento .today-title { font-size: 28px; }
-  .home-bento .today-sub { margin-bottom: 14px; font-size: var(--fs-small); }
-  .home-bento .today-go { padding: 10px 16px; gap: 10px; font-size: var(--fs-body); }
-  .home-bento .today-ring { width: 108px; height: 108px; }
-  .home-bento .today-ring-t b { font-size: 30px; }
+  .today-tile .today-body { grid-template-columns: minmax(0, 1fr) 1px 170px; gap: 16px; }
+  .today-tile .today-hero { padding: 16px 18px 18px; }
+  .today-tile .today-title { font-size: 28px; }
+  .today-tile .today-sub { margin-bottom: 14px; font-size: var(--fs-small); }
+  .today-tile .today-go { padding: 10px 16px; gap: 10px; font-size: var(--fs-body); }
+  .today-tile .today-ring { width: 108px; height: 108px; }
+  .today-tile .today-ring-t b { font-size: 30px; }
 }
 .today-foot { margin-top: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .today-foot .today-go { margin-top: 0; }
