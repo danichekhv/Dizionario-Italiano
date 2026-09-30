@@ -1436,7 +1436,7 @@
     /* Размеры самих кнопок задаются ниже, после общих правил навигации: там они не перебиваются */
     .app-nav-btn .nav-article { display: none; }
 
-    .lang-mini { padding: 0 10px; font-size: var(--fs-caption); }
+    .lang-mini { padding: 0 6px 0 12px; font-size: var(--fs-caption); }
 
     /* Search — full width */
     .search-area { width: 100%; }
@@ -1504,18 +1504,16 @@
      заменил собой пару больших кнопок Italiano/Русский */
   .lang-mini {
     flex-shrink: 0;
-    padding: 0 16px;
+    padding: 0 8px 0 20px;
     display: flex;
     align-items: center;
     font-family: var(--font-text);
-    font-weight: 600;
+    font-weight: 500;
     font-size: var(--fs-small);
     letter-spacing: var(--ls-tight);
-    color: var(--ink-light);
+    color: var(--stone);
     background: transparent;
     border: none;
-    border-right: 1.5px solid var(--border);
-    border-radius: var(--radius) 0 0 var(--radius);
     cursor: pointer;
     transition: color var(--t-base);
   }
@@ -1670,7 +1668,7 @@
     box-shadow: var(--shadow-md), var(--focus-ring);
     background: #1e2d4e;
   }
-  body.mode-grammar .lang-mini { border-right-color: rgba(var(--blue-rgb),0.2); color: var(--night-muted); }
+  body.mode-grammar .lang-mini { color: var(--night-muted); }
   body.mode-grammar .lang-mini:hover { color: var(--blue); }
   body.mode-grammar .search-btn { background: var(--blue-deep); }
   body.mode-grammar .search-btn:hover { background: #2a4d9c; }
