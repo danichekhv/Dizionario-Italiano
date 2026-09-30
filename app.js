@@ -4076,7 +4076,7 @@ function renderHome() {
     <div class="tile-sub">Открытые слова, темы и связи между ними</div>
   </button>`);
   tiles.push(`<button class="tile link" onclick="openFavorites()">
-    ${head('star', 'Preferiti')}
+    ${head('star', 'Избранное')}
     <div class="tile-big">${loggedIn && _homeFavCount !== null ? _homeFavCount : '—'}</div>
     <div class="tile-sub">${loggedIn ? `${homePlural(_homeFavCount || 0, 'сохранённое слово', 'сохранённых слова', 'сохранённых слов')}` : 'избранные слова и правила'}</div>
   </button>`);
