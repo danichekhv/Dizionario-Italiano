@@ -1119,6 +1119,45 @@ const FD_COMPOUND = [
   ['Condizionale Passato',           'Condizionale Presente'],
 ];
 
+// Местоименные глаголы: что стоит перед вспомогательным глаголом в составных временах.
+// agree: subject — причастие по подлежащему (me ne sono andato/a), fem — по «la» (me la sono presa),
+// aux — как у обычного глагола (ci ho messo, но c'è voluto/a)
+const FD_CLITICS = {
+  sene: { pre: ['me ne', 'te ne', 'se ne', 'ce ne', 've ne', 'se ne'], aux: 'essere', agree: 'subject' },
+  sela: { pre: ['me la', 'te la', 'se la', 'ce la', 've la', 'se la'], aux: 'essere', agree: 'fem' },
+  cela: { pre: ['ce la', 'ce la', 'ce la', 'ce la', 'ce la', 'ce la'], aux: 'avere', agree: 'fem' },
+  si:   { pre: FD_REFLEXIVE, aux: 'essere', agree: 'subject' },
+  ci:   { pre: ['ci', 'ci', 'ci', 'ci', 'ci', 'ci'], aux: null, agree: 'aux' },
+};
+const fdClitic = infinitive => ((String(infinitive || '').toLowerCase().match(/r(sene|sela|cela|si|ci)$/) || [])[1] || '');
+// Клитика + вспомогательный глагол. Перед гласной ne/la/ci теряют гласную: se n'è, ce l'ho, c'è
+function fdJoin(pre, aux) {
+  if (!pre) return aux;
+  if (/ ne$/.test(pre) && /^[eè]/.test(aux)) return pre.slice(0, -2) + "n'" + aux;
+  if (/(^| )la$/.test(pre) && /^[aeiouèh]/.test(aux)) return pre.slice(0, -2) + "l'" + aux;
+  if (pre === 'ci' && /^[eèi]/.test(aux)) return "c'" + aux;
+  return pre + ' ' + aux;
+}
+// Составные времена, инфинитив и герундий прошедшего времени: вспомогательный глагол + причастие.
+// Причастие Викисловарь даёт с клитикой (andatosene) — её отрезаем. Возвращает итоговый ausiliare.
+function fdCompound(conj, infinitive, aux, participle) {
+  const key = fdClitic(infinitive), cl = FD_CLITICS[key];
+  if (cl && cl.aux) aux = cl.aux;
+  if (aux !== 'essere' && aux !== 'avere') aux = 'avere';
+  const pp = key ? participle.replace(new RegExp(key + '$'), '') : participle;
+  const mode = cl && cl.agree !== 'aux' ? cl.agree : (aux === 'essere' ? 'subject' : 'none');
+  const form = (i, sg) => mode === 'fem' ? pp.replace(/o$/, 'a') : mode === 'subject' ? pp.replace(/o$/, sg || i < 3 ? 'o/a' : 'i/e') : pp;
+  FD_COMPOUND.forEach(([name, simple]) => {
+    conj[name] = {};
+    FD_PRONOUNS.forEach((p, i) => { conj[name][p] = fdJoin(cl ? cl.pre[i] : '', FD_AUX[aux][simple][i]) + ' ' + form(i); });
+  });
+  const ppSg = form(0, true);
+  const inf = conj['Infinito'] || {}, ger = conj['Gerundio'] || {};
+  conj['Infinito'] = { Presente: inf.Presente || infinitive, Passato: key ? `${aux === 'essere' ? 'esser' : 'aver'}${key} ${ppSg}` : `${aux} ${ppSg}` };
+  conj['Gerundio'] = { Presente: ger.Presente || '—', Passato: `${aux === 'essere' ? 'essendo' : 'avendo'}${key} ${ppSg}` };
+  return aux;
+}
+
 // Собирает таблицу спряжений из forms[] Викисловаря. null — если таблица неполная.
 function fdBuildConjugations(entry, infinitive) {
   const conj = {};
@@ -1147,19 +1186,6 @@ function fdBuildConjugations(entry, infinitive) {
   const present = conj['Indicativo Presente'] || {};
   if (FD_PRONOUNS.some(p => !present[p]) || !participle) return null;
 
-  // Составные времена: вспомогательный глагол + причастие (с согласованием при essere)
-  const reflexive = /rsi$/.test(infinitive);
-  if (reflexive) aux = 'essere';
-  if (aux !== 'essere' && aux !== 'avere') aux = 'avere';
-  const pp = reflexive ? participle.replace(/si$/, '') : participle;
-  const agree = i => aux === 'essere' ? pp.replace(/o$/, i < 3 ? 'o/a' : 'i/e') : pp;
-  FD_COMPOUND.forEach(([name, simple]) => {
-    conj[name] = {};
-    FD_PRONOUNS.forEach((p, i) => {
-      conj[name][p] = (reflexive ? FD_REFLEXIVE[i] + ' ' : '') + FD_AUX[aux][simple][i] + ' ' + agree(i);
-    });
-  });
-
   // Порядок лиц — как в остальном приложении
   FD_SIMPLE_TENSES.forEach(([name]) => {
     if (!conj[name]) return;
@@ -1168,10 +1194,10 @@ function fdBuildConjugations(entry, infinitive) {
     conj[name] = ordered;
   });
 
-  const ppSg = aux === 'essere' ? pp.replace(/o$/, 'o/a') : pp;
-  conj['Infinito']   = { Presente: infinitive, Passato: reflexive ? `essersi ${ppSg}` : `${aux} ${ppSg}` };
+  conj['Infinito']   = { Presente: infinitive };
   conj['Participio'] = { Presente: participlePres || '—', Passato: participle };
-  conj['Gerundio']   = { Presente: gerund || '—', Passato: reflexive ? `essendosi ${ppSg}` : `${aux === 'essere' ? 'essendo' : 'avendo'} ${ppSg}` };
+  conj['Gerundio']   = { Presente: gerund || '—' };
+  aux = fdCompound(conj, infinitive, aux, participle);
   return { conjugations: conj, auxiliary: aux };
 }
 
@@ -2645,6 +2671,8 @@ function renderEntry(e) {
 
   const conjSection = $('conjugationSection');
   if (e.isVerb && e.conjugations) {
+    const pp = e.conjugations['Participio'] && e.conjugations['Participio'].Passato;
+    if (fdClitic(e.word) && pp && pp !== '—') e.auxiliary = fdCompound(e.conjugations, String(e.word).toLowerCase(), e.auxiliary, pp);
     conjSection.style.display = 'block';
     conjSection.classList.toggle('has-related', !!(e.relatedWords && e.relatedWords.length > 0));
     if (!sameWord) {
