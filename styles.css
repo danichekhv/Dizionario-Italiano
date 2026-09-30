@@ -261,6 +261,9 @@
     background: var(--terracotta-dark);
     transform: translateY(-50%) scale(1.05);
   }
+  /* Общее правило нажатия (button:active → translateY(1px)) затирало центровку, и кнопка
+     прыгала вверх на полвысоты: сдвиг на 1px — поверх центровки */
+  .search-btn:not(:disabled):active { transform: translateY(calc(-50% + 1px)); }
 
   .search-btn svg { width: 18px; height: 18px; }
 
@@ -1444,6 +1447,7 @@
     .search-area { width: 100%; }
     .search-wrapper { width: 100%; }
     .search-input { font-size: var(--fs-body); padding: 12px 48px 12px 12px; }
+    .search-btn { right: 4px; }
 
     /* Result card — full width, no overflow */
     .result-card, .grammar-card, .ru-results, .fav-screen {

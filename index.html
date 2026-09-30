@@ -71,7 +71,7 @@
   <div class="search-area">
     <div class="search-wrapper">
       <!-- Компактный переключатель направления перевода: заменил собой пару больших кнопок Italiano/Русский -->
-      <button class="lang-mini" id="langMini" onclick="toggleLangMini()" title="Переключить направление перевода">
+      <button class="lang-mini" id="langMini" onmousedown="event.preventDefault()" onclick="toggleLangMini()" title="Переключить направление перевода">
         <span id="langMiniLabel">IT → RU</span>
       </button>
       <input

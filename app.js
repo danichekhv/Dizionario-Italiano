@@ -232,9 +232,9 @@ function updateLangMini() {
   const el = $('langMiniLabel');
   if (el) el.textContent = currentLang === 'ru' ? 'RU → IT' : 'IT → RU';
 }
-// Чип сидит вплотную к полю ввода — .focus() из setLang тут же подсвечивает всю строку
-// рамкой фокуса (:focus-within) и на телефоне поднимает клавиатуру, хотя человек просто
-// переключил направление, а не собрался печатать. Поэтому здесь без фокуса.
+// Переключение не трогает фокус: клавиатура не поднимается, если была закрыта, и не прячется,
+// если была открыта (для второго в разметке у чипа onmousedown preventDefault — тап не уводит
+// фокус из поля).
 function toggleLangMini() { setLang(currentLang === 'ru' ? 'it' : 'ru', { skipFocus: true }); }
 
 function setLang(lang, opts = {}) {
