@@ -3549,12 +3549,25 @@ body.mode-grammar .suggest-src { color: var(--night-muted); }
 .today-leg i { display: inline-block; width: 9px; height: 9px; margin-right: 8px; border-radius: 50%; }
 .today-leg b { font-weight: 400; color: var(--ink); text-align: right; }
 .today-side .tile-setting { margin: 4px 0 0; }
+/* На телефоне главное — поиск, поэтому «Сегодня» компактная и тихая: текст с небольшой кнопкой
+   слева, маленькое кольцо справа, без легенды */
 @media (max-width: 640px) {
-  .today-body { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .today-sep { display: none; }
-  .today-side { flex-direction: row; flex-wrap: wrap; justify-content: space-between; }
-  .today-leg { width: auto; flex: 1; }
-  .today-go { align-self: stretch; justify-content: center; }
+  .today-tile { padding: 10px; min-height: 0; }
+  .today-body { grid-template-columns: minmax(0, 1fr) auto; gap: 10px 12px; align-items: center; }
+  .today-sep, .today-leg { display: none; }
+  .today-side { display: contents; }
+  .today-side .tile-setting { grid-column: 1 / -1; justify-self: center; margin: 0; }
+  .today-hero { padding: 12px 14px; background: transparent; }
+  .today-kick { display: none; }
+  .today-title { font-size: var(--fs-h3); }
+  .today-sub { margin: 2px 0 10px; font-size: var(--fs-small); }
+  .today-go { padding: 7px 14px; gap: 8px; font-size: var(--fs-small); box-shadow: none; }
+  .today-go .icon { width: 13px; height: 13px; }
+  .today-go .icon:last-child { display: none; }
+  .today-ring { width: 76px; height: 76px; margin-right: 6px; }
+  .today-ring svg { stroke-width: 14; }
+  .today-ring-t b { font-size: 22px; }
+  .today-ring-t span { font-size: var(--fs-micro); }
 }
 .today-go { white-space: nowrap; }
 /* Плитка «Сегодня» занимает 4 из 6 колонок — меньше 700px, поэтому всё в ней компактно */
