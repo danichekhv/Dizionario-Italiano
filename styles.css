@@ -172,29 +172,6 @@
     color: var(--terracotta);
   }
 
-  .header-rule {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin-top: 28px;
-  }
-
-  .header-rule::before,
-  .header-rule::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: linear-gradient(to right, transparent, var(--gold), transparent);
-  }
-
-  .rule-diamond {
-    width: 8px;
-    height: 8px;
-    background: var(--terracotta);
-    transform: rotate(45deg);
-    flex-shrink: 0;
-  }
-
   /* Search */
   .search-area {
     margin-bottom: 48px;
@@ -1662,9 +1639,6 @@
 
   body.mode-grammar h1 { color: var(--night-text); }
   body.mode-grammar h1 em { color: var(--blue); }
-  body.mode-grammar .header-rule::before,
-  body.mode-grammar .header-rule::after { background: linear-gradient(to right, transparent, var(--blue-deep), transparent); }
-  body.mode-grammar .rule-diamond { background: var(--blue); }
 
   body.mode-grammar .search-wrapper {
     background: var(--night-surface);
