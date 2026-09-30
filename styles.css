@@ -3515,7 +3515,12 @@ body.mode-grammar .suggest-src { color: var(--night-muted); }
 }
 
 /* Настройка «новых в день» — в подвале плитки «Сегодня», справа от кнопок */
-.tile-foot .tile-setting { margin-left: auto; font-size: var(--fs-small); }
+.tile-foot .tile-setting { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: var(--fs-small); color: var(--muted); white-space: nowrap; }
+.tile-setting span { padding: 0 4px; }
+.tile-setting b { font-family: var(--font-display); font-weight: 400; font-size: var(--fs-body); color: var(--ink); }
+.tile-setting .step { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; padding: 0; border: 1px solid var(--border); border-radius: 50%; background: none; color: var(--muted); font-size: var(--fs-body); line-height: 1; cursor: pointer; transition: color var(--t-base), border-color var(--t-base); }
+.tile-setting .step:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.tile-setting .step:disabled { opacity: .4; cursor: default; }
 /* «Статистика ›» внизу плитки-ссылки */
 .tile-more { gap: 2px; font-size: var(--fs-small); color: var(--muted); }
 .tile-more .icon { width: 14px; height: 14px; }
