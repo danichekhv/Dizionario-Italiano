@@ -154,6 +154,7 @@ function applyModeUI(mode) {
   document.body.classList.toggle('mode-grammar', isGram);
   document.body.classList.toggle('mode-cards', mode === 'cards');
   document.body.classList.toggle('mode-pratica', mode === 'pratica');
+  document.body.classList.toggle('no-search', mode === 'pratica' || mode === 'cards' || mode === 'favorites'); // экраны без строки поиска
   $('navDict').classList.toggle('active', mode === 'dict');
   $('navGram').classList.toggle('active', isGram);
   $('navCards').classList.toggle('active', mode === 'cards');

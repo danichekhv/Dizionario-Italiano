@@ -3588,5 +3588,5 @@ body.mode-grammar .suggest-src { color: var(--night-muted); }
 .back-btn:hover { color: var(--accent); }
 body.mode-grammar .back-btn { color: var(--night-muted); }
 body.mode-grammar .back-btn:hover { color: var(--blue); }
-/* В колодах и практике нет строки поиска — ссылку подтягиваем вплотную к разделам */
-body.mode-cards .back-btn, body.mode-pratica .back-btn { margin-top: -32px; }
+/* Где нет строки поиска (колоды, практика, избранное) — ссылку подтягиваем вплотную к разделам */
+body.no-search .back-btn { margin-top: -32px; }
