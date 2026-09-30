@@ -829,12 +829,22 @@
   @media (max-width: 640px) { .pr-text { padding: 14px; font-size: var(--fs-body); } .pr-issue { padding: 14px; } }
 
   /* Стартовый экран на десктопе должен помещаться в экран целиком: отступы плотнее */
+  /* Считаем под типичный ноутбук 1920×1080 с масштабом Windows 125%: для страницы это ~1536×700 */
   @media (min-width: 641px) {
-    .container { padding-top: 24px; }
-    header { margin-bottom: 32px; }
-    .app-nav { margin-bottom: 24px; }
-    .search-area { margin-bottom: 24px; }
+    .container { padding-top: 16px; padding-bottom: 24px; } /* снизу 80px были под плавающие кнопки — они только на телефоне */
+    header { margin-bottom: 16px; }
+    h1 { font-size: 52px; }
+    .app-nav { margin-bottom: 16px; }
+    .search-area { margin-bottom: 16px; }
+    .search-input { padding-top: 12px; padding-bottom: 12px; font-size: var(--fs-lead); }
+    .search-btn { width: 36px; height: 36px; right: 8px; }
     #initialMsg { padding: 20px 0 28px; }
+    /* Плитки главной — плотнее; только главной, у колод и грамматики свои раскладки */
+    .home-bento .tile { min-height: 0; padding: 10px 14px 12px; gap: 4px; }
+    .home-bento .tile-head { min-height: 28px; }
+    .home-bento .tile-icon { width: 28px; height: 28px; }
+    .home-bento .tile-icon .icon { width: 16px; height: 16px; }
+    .home-bento .tile-big { font-size: 32px; }
   }
   /* На телефоне то же самое: первая плитка должна быть видна без прокрутки */
   @media (max-width: 640px) {
