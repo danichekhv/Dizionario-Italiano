@@ -394,6 +394,7 @@
   /* Подсказка «также форма слова: portare» */
   .word-also {
     margin-top: 8px;
+    font-family: var(--font-cyr); /* в Crimson Pro нет кириллицы: итальянское и русское слово выходили разного размера */
     font-size: var(--fs-body);
     font-style: italic;
     color: var(--muted);
