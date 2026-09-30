@@ -45,9 +45,7 @@
       <span class="header-fav-star" data-icon="star"></span>
       <span id="headerFavLabel">Preferiti</span>
     </button>
-    <div class="header-ornament" id="headerOrnament">Vocabolario completo</div>
     <h1 id="headerTitle" class="clickable" onclick="goHome()" title="На главную">Diziona<em>rio</em></h1>
-    <p class="subtitle" id="headerSubtitle">Italiano · Russo · Inglese</p>
     <div class="header-rule"><div class="rule-diamond"></div></div>
   </header>
 
@@ -71,19 +69,11 @@
   </nav>
 
   <div class="search-area">
-    <div class="lang-toggle">
-      <button class="lang-toggle-btn active" id="btnIT" onclick="setLang('it')">
-    <span class="lang-flag-ru">
-        <img src="https://flagpedia.net/data/flags/emoji/apple/160x160/it.png" alt="Итальянский флаг" class="flag-icon">
-    </span> Italiano
-</button>
-      <button class="lang-toggle-btn" id="btnRU" onclick="setLang('ru')">
-        <span class="lang-flag-ru">
-          <img src="https://flagpedia.net/data/flags/emoji/apple/160x160/ru.png" alt="Российский флаг" class="flag-icon">
-        </span>Русский
-      </button>
-    </div>
     <div class="search-wrapper">
+      <!-- Компактный переключатель направления перевода: заменил собой пару больших кнопок Italiano/Русский -->
+      <button class="lang-mini" id="langMini" onclick="toggleLangMini()" title="Переключить направление перевода">
+        <span id="langMiniLabel">IT → RU</span>
+      </button>
       <input
         type="text"
         class="search-input"

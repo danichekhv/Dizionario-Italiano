@@ -158,17 +158,6 @@
     position: relative;
   }
 
-  .header-ornament {
-    font-size: var(--fs-small);
-    letter-spacing: var(--ls-wide);
-    text-transform: uppercase;
-    color: var(--terracotta);
-    font-family: var(--font-text);
-    font-style: italic;
-    margin-bottom: 12px;
-    opacity: 0.8;
-  }
-
   h1 {
     font-family: var(--font-display);
     font-size: clamp(42px, 7vw, 72px);
@@ -176,19 +165,11 @@
     line-height: 1;
     color: var(--ink);
     letter-spacing: -0.02em;
-    margin-bottom: 8px;
   }
 
   h1 em {
     font-style: italic;
     color: var(--terracotta);
-  }
-
-  .subtitle {
-    font-size: var(--fs-body);
-    color: var(--muted);
-    font-style: italic;
-    letter-spacing: var(--ls-tight);
   }
 
   .header-rule {
@@ -219,36 +200,43 @@
     margin-bottom: 48px;
   }
 
+  /* Фон/рамка/тень раньше жили на .search-input — теперь на обёртке, чтобы компактный
+     переключатель языка (.lang-mini) мог встать внутрь того же поля, а не рядом отдельной кнопкой */
   .search-wrapper {
     position: relative;
     display: flex;
-    align-items: center;
-  }
-
-  .search-input {
-    width: 100%;
-    padding: 20px 64px 20px 28px;
-    font-family: var(--font-display);
-    font-size: var(--fs-h3);
-    font-style: italic;
+    align-items: stretch;
     background: var(--parchment);
     border: 1.5px solid var(--border);
     border-radius: var(--radius);
-    color: var(--ink);
     outline: none;
     transition: all var(--t-slow) ease;
     box-shadow: var(--shadow-sm);
   }
 
-  .search-input::placeholder {
-    color: var(--stone);
-    opacity: 0.6;
-  }
-
-  .search-input:focus {
+  .search-wrapper:focus-within {
     border-color: var(--terracotta);
     box-shadow: var(--shadow-md), var(--focus-ring);
     background: #f9f4ea;
+  }
+
+  .search-input {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+    padding: 20px 64px 20px 20px;
+    font-family: var(--font-display);
+    font-size: var(--fs-h3);
+    font-style: italic;
+    background: transparent;
+    border: none;
+    color: var(--ink);
+    outline: none;
+  }
+
+  .search-input::placeholder {
+    color: var(--stone);
+    opacity: 0.6;
   }
 
   .search-btn {
@@ -467,14 +455,6 @@
     display: flex;
     align-items: center;
     gap: 4px; 
-  }
-
-  .lang-flag img {
-    display: inline-block;
-    width: 18px;
-    height: 14px;
-    vertical-align: middle;
-    margin-right: 4px;
   }
 
   .lang-flag-ru img {
@@ -868,7 +848,6 @@
     .container { padding-top: 24px; }
     header { margin-bottom: 32px; }
     .app-nav { margin-bottom: 24px; }
-    .lang-toggle { margin-bottom: 16px; }
     .search-area { margin-bottom: 24px; }
     #initialMsg { padding: 20px 0 28px; }
   }
@@ -1443,8 +1422,6 @@
 
     /* Header */
     h1 { font-size: 38px; }
-    .subtitle { font-size: var(--fs-small); }
-    .header-ornament { font-size: var(--fs-caption); letter-spacing: var(--ls-caps); }
 
     /* Nav — равные кнопки в одну строку, без артиклей */
     .app-nav {
@@ -1459,15 +1436,12 @@
     /* Размеры самих кнопок задаются ниже, после общих правил навигации: там они не перебиваются */
     .app-nav-btn .nav-article { display: none; }
 
-    /* Lang toggle — full width */
-    .lang-toggle { width: auto; display: flex; margin-left: auto; margin-right: auto; }
-    .lang-toggle-btn { flex: 1; text-align: center; padding: 8px 12px; font-size: var(--fs-small); display: flex; align-items: center; justify-content: center; gap: 0; }
-    .lang-toggle-btn .lang-flag { display: none; }
+    .lang-mini { padding: 0 10px; font-size: var(--fs-caption); }
 
     /* Search — full width */
     .search-area { width: 100%; }
     .search-wrapper { width: 100%; }
-    .search-input { font-size: var(--fs-body); padding: 12px 48px 12px 16px; width: 100%; }
+    .search-input { font-size: var(--fs-body); padding: 12px 48px 12px 12px; }
 
     /* Result card — full width, no overflow */
     .result-card, .grammar-card, .ru-results, .fav-screen {
@@ -1526,44 +1500,27 @@
     .fav-header .view-toggle-btn { flex: 1; text-align: center; }
   }
 
-  /* Language toggle */
-  .lang-toggle {
+  /* Компактный переключатель направления перевода — живёт внутри строки поиска,
+     заменил собой пару больших кнопок Italiano/Русский */
+  .lang-mini {
+    flex-shrink: 0;
+    padding: 0 16px;
     display: flex;
-    gap: 0;
-    margin-bottom: 20px;
-    border: 1.5px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-    width: fit-content;
-    max-width: 100%;
-  }
-
-  .lang-toggle-btn {
-    font-style: normal;
-    padding: 12px 24px;
-    font-family: var(--font-cyr);
-    font-size: var(--fs-body);
-    font-style: italic;
-    cursor: pointer;
+    align-items: center;
+    font-family: var(--font-text);
+    font-weight: 600;
+    font-size: var(--fs-small);
+    letter-spacing: var(--ls-tight);
+    color: var(--ink-light);
     background: transparent;
     border: none;
-    color: var(--stone);
-    transition: all var(--t-base);
-    border-right: 1px solid var(--border);
-    font-size-adjust: 0.46;
+    border-right: 1.5px solid var(--border);
+    border-radius: var(--radius) 0 0 var(--radius);
+    cursor: pointer;
+    transition: color var(--t-base);
   }
 
-  .lang-toggle-btn:last-child { border-right: none; }
-
-  .lang-toggle-btn.active {
-    background: var(--terracotta);
-    color: white;
-      }
-
-  .lang-toggle-btn:hover:not(.active) {
-    background: var(--parchment);
-    color: var(--ink);
-  }
+  .lang-mini:hover { color: var(--terracotta); }
 
   /* Russian results list */
   .ru-results {
@@ -1695,33 +1652,28 @@
     color: var(--night-text);
   }
 
-  body.mode-grammar .header-ornament { color: var(--blue); }
   body.mode-grammar h1 { color: var(--night-text); }
   body.mode-grammar h1 em { color: var(--blue); }
-  body.mode-grammar .subtitle { color: var(--night-muted); }
   body.mode-grammar .header-rule::before,
   body.mode-grammar .header-rule::after { background: linear-gradient(to right, transparent, var(--blue-deep), transparent); }
   body.mode-grammar .rule-diamond { background: var(--blue); }
 
-  body.mode-grammar .search-input {
+  body.mode-grammar .search-wrapper {
     background: var(--night-surface);
     border-color: rgba(var(--blue-rgb),0.25);
-    color: var(--night-text);
     box-shadow: var(--shadow-sm);
   }
+  body.mode-grammar .search-input { color: var(--night-text); }
   body.mode-grammar .search-input::placeholder { color: var(--night-dim); }
-  body.mode-grammar .search-input:focus {
+  body.mode-grammar .search-wrapper:focus-within {
     border-color: var(--blue);
     box-shadow: var(--shadow-md), var(--focus-ring);
     background: #1e2d4e;
   }
+  body.mode-grammar .lang-mini { border-right-color: rgba(var(--blue-rgb),0.2); color: var(--night-muted); }
+  body.mode-grammar .lang-mini:hover { color: var(--blue); }
   body.mode-grammar .search-btn { background: var(--blue-deep); }
   body.mode-grammar .search-btn:hover { background: #2a4d9c; }
-
-  body.mode-grammar .lang-toggle { border-color: rgba(var(--blue-rgb),0.25); }
-  body.mode-grammar .lang-toggle-btn { color: var(--night-muted); border-right-color: rgba(var(--blue-rgb),0.2); }
-  body.mode-grammar .lang-toggle-btn.active { background: var(--blue-deep); color: white; }
-  body.mode-grammar .lang-toggle-btn:hover:not(.active) { background: var(--night-surface); color: var(--night-text); }
 
   body.mode-grammar .state-msg { color: var(--night-muted); }
   body.mode-grammar .loading-dots span { background: var(--blue); }

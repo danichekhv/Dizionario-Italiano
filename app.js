@@ -161,36 +161,26 @@ function applyModeUI(mode) {
   $('headerFavBtn').classList.toggle('active', isFav);
   updateFavFloat(mode);
   if (mode === 'pratica') {
-    $('headerOrnament').textContent = 'Разбор написанного';
     $('headerTitle').innerHTML = 'La Pra<em>tica</em>';
-    $('headerSubtitle').textContent = 'Свой текст · Ошибки · В колоду';
-    document.querySelector('.lang-toggle').style.display = 'none';
+    $('langMini').style.display = 'none';
     document.querySelector('.search-area').style.display = 'none';
   } else if (mode === 'cards') {
-    $('headerOrnament').textContent = 'Интервальные повторения';
     $('headerTitle').innerHTML = 'Le <em>Carte</em>';
-    $('headerSubtitle').textContent = 'Колоды · Карточки · Повторение';
-    document.querySelector('.lang-toggle').style.display = 'none';
+    $('langMini').style.display = 'none';
     document.querySelector('.search-area').style.display = 'none';
   } else if (isFav) {
-    $('headerOrnament').textContent = 'Сохранённые статьи';
     $('headerTitle').innerHTML = 'Pre<em>feriti</em>';
-    $('headerSubtitle').textContent = 'Словарь · Грамматика';
-    document.querySelector('.lang-toggle').style.display = 'none';
+    $('langMini').style.display = 'none';
     document.querySelector('.search-area').style.display = 'none';
   } else if (isGram) {
-    $('headerOrnament').textContent = 'Справочник правил';
     $('headerTitle').innerHTML = 'La Gram<em>matica</em>';
-    $('headerSubtitle').textContent = 'Правила итальянского языка на русском';
     $('searchInput').placeholder = 'Найти правило: pronomi, congiuntivo…';
-    document.querySelector('.lang-toggle').style.display = 'none';
+    $('langMini').style.display = 'none';
     document.querySelector('.search-area').style.display = 'block';
   } else {
-    $('headerOrnament').textContent = 'Vocabolario completo';
     $('headerTitle').innerHTML = 'Diziona<em>rio</em>';
-    $('headerSubtitle').textContent = 'Italiano · Russo · Inglese';
     $('searchInput').placeholder = currentLang === 'ru' ? 'Введите русское слово…' : 'Cerca una parola italiana…';
-    document.querySelector('.lang-toggle').style.display = 'flex';
+    $('langMini').style.display = 'flex';
     document.querySelector('.search-area').style.display = 'block';
   }
 }
@@ -236,10 +226,17 @@ function switchMode(mode, skipHistoryClear = false) {
 function updateInitialMsg() {}
 
 // ── Переключение языка в словаре ─────────────────────────────────────────────
+// Подпись компактного переключателя: направление, в котором сейчас ищем ("IT → RU" вводим
+// итальянское слово, "RU → IT" — русское). Дублирует то же currentLang, что и раньше btnIT/btnRU.
+function updateLangMini() {
+  const el = $('langMiniLabel');
+  if (el) el.textContent = currentLang === 'ru' ? 'RU → IT' : 'IT → RU';
+}
+function toggleLangMini() { setLang(currentLang === 'ru' ? 'it' : 'ru'); }
+
 function setLang(lang) {
   currentLang = lang;
-  $('btnIT').classList.toggle('active', lang === 'it');
-  $('btnRU').classList.toggle('active', lang === 'ru');
+  updateLangMini();
   $('searchInput').placeholder = lang === 'ru' ? 'Введите русское слово…' : 'Cerca una parola italiana…';
   updateInitialMsg();
   showState('initial');
@@ -305,8 +302,7 @@ function showState(state) {
         currentMode = m;
         currentLang = savedLang;
         applyModeUI(m);
-        $('btnIT').classList.toggle('active', savedLang === 'it');
-        $('btnRU').classList.toggle('active', savedLang === 'ru');
+        updateLangMini();
         renderEntry(e);
         _suppressHistory = true; showState('result'); _suppressHistory = false;
         currentDictEntry = e; currentDictWord = w;
@@ -332,9 +328,7 @@ function showState(state) {
         currentMode = m;
         currentLang = savedLang;
         applyModeUI(m);
-        // восстанавливаем кнопки языка
-        $('btnIT').classList.toggle('active', savedLang === 'it');
-        $('btnRU').classList.toggle('active', savedLang === 'ru');
+        updateLangMini(); // восстанавливаем переключатель языка
         $('searchInput').value = searchVal;
         renderRuResults(query, results, ruTitle);
         _suppressHistory = true; showState('rulist'); _suppressHistory = false;
@@ -2427,7 +2421,7 @@ function renderRuResults(query, results, titleText) {
     card.onclick = () => {
       // Переключаем язык без setLang: тот сбрасывает состояние на initial и кладёт лишний шаг в историю «Назад»
       currentLang = 'it';
-      $('btnIT').classList.add('active'); $('btnRU').classList.remove('active');
+      updateLangMini();
       $('searchInput').placeholder = 'Cerca una parola italiana…';
       $('searchInput').value = item.italian;
       // Человек уже выбрал слово в списке — открываем статью, а не спрашиваем ещё раз
@@ -3306,8 +3300,7 @@ function renderFavRows(rows, tab) {
           currentMode = 'dict';
           currentLang = 'it';
           applyModeUI('dict');
-          $('btnIT').classList.add('active');
-          $('btnRU').classList.remove('active');
+          updateLangMini();
           $('searchInput').value = key;
           currentDictEntry = row.data;
           currentDictWord = key;
