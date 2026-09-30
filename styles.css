@@ -32,6 +32,7 @@
     --font-display: 'Playfair Display', Georgia, serif;
     --font-text: 'Crimson Pro', Georgia, serif;
     --font-cyr: 'PT Serif', 'Crimson Pro', Georgia, serif;
+    --font-label: 'Literata', 'PT Serif', Georgia, serif;
     --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
     --font-ipa: 'Gentium Plus', 'Charis SIL', 'Doulos SIL', 'Noto Sans', 'DejaVu Sans', 'Segoe UI', serif;
     /* Акцент режима: словарь — терракота, грамматика — синий (см. body.mode-grammar ниже) */
@@ -3499,3 +3500,16 @@ body.mode-grammar .suggest-src { color: var(--night-muted); }
 .wg-toggle:hover { border-color: var(--terracotta); color: var(--terracotta); }
 .wg-toggle.on { background: var(--terracotta); border-color: var(--terracotta); color: white; }
 @media (max-width: 640px) { .wg-search { flex-basis: 100%; } }
+
+/* Подписи-ярлыки (плитки главной, разделы статьи, поля, статистика): обычным регистром
+   и обычной толщиной, отдельным «экранным» шрифтом. Бейджи, теги и шапки таблиц остаются капсом */
+.tile-label, .bento-label, .section-label, .grammar-section-label, .history-label,
+.lang-label, .plural-label, .plural-item-label, .mood-label, .word-aux-label,
+.study-box-label, .study-dir, .stat-label, .pr-box-label, .cards-field span,
+.apikey-label, .ru-results-title {
+  font-family: var(--font-label);
+  font-weight: 400;
+  font-size: 14px;
+  letter-spacing: normal;
+  text-transform: none;
+}
