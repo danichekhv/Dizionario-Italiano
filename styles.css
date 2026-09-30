@@ -618,7 +618,7 @@
   /* Экран учёбы: поверх всего, на всю высоту, кнопки ответа прижаты к низу */
   .study-overlay { position: fixed; inset: 0; z-index: 900; background: var(--cream); display: none; flex-direction: column; }
   .study-overlay.open { display: flex; }
-  body.study-open { overflow: hidden; }
+  body.study-open, html:has(body.study-open) { overflow: hidden; } /* у html стоит overflow-x: hidden, поэтому скролл документа надо гасить и на нём */
   body.study-open .fav-float-btn, body.study-open .settings-float-btn { display: none !important; }
   .study-topbar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top)); background: var(--parchment); border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .study-topbar .cards-head-deck { margin-left: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
