@@ -350,12 +350,9 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const actions = id ? `
         <button class="cards-btn" onclick="Cards.openAdd('${id}')">${svgIcon('plus')} Добавить слова</button>
         <button class="cards-btn" onclick="Cards.browse('${id}')">${svgIcon('list')} Карточки</button>
-        <button class="cards-btn" onclick="Cards.stats('${id}')">${svgIcon('chart')} Статистика</button>
         <button class="cards-btn" onclick="Cards.shareDeck('${id}')">${svgIcon('link')} Поделиться</button>
         <button class="cards-btn" onclick="Cards.renameDeck('${id}')">${svgIcon('edit')} Переименовать</button>
-        <button class="cards-btn danger" onclick="Cards.deleteDeck('${id}')">${svgIcon('trash')} Удалить</button>` : `
-        <button class="cards-btn" onclick="Cards.stats(null)">${svgIcon('chart')} Статистика</button>
-        <label class="cards-inline">новых в день <input type="number" min="0" max="500" value="${newPerDay()}" onchange="Cards.setNewPerDay(this.value)"></label>`;
+        <button class="cards-btn danger" onclick="Cards.deleteDeck('${id}')">${svgIcon('trash')} Удалить</button>` : '';
     el.innerHTML = `
       ${crumbsHtml(id)}
       <div class="cards-head">
@@ -367,13 +364,14 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
           ${head('layers', 'Сегодня')}
           <div class="tile-big">${due}</div>
           <div class="tile-sub">${due ? parts : (notes.length ? 'На сегодня всё повторено' : 'Слов пока нет — добавьте из статьи или списком')}</div>
-          <div class="tile-foot">${due ? `<button class="cards-btn primary" onclick="${id ? `Cards.study('${id}')` : 'Cards.studyAll()'}">Учить · ${due}</button>` : ''}${notes.length ? `<button class="cards-btn" onclick="${id ? `Cards.study('${id}')` : 'Cards.studyAll()'}" title="Учить, даже если на сегодня ничего не подошло">Учить всё равно</button>` : ''}</div>
+          <div class="tile-foot">${due ? `<button class="cards-btn primary" onclick="${id ? `Cards.study('${id}')` : 'Cards.studyAll()'}">Учить · ${due}</button>` : ''}${notes.length ? `<button class="cards-btn" onclick="${id ? `Cards.study('${id}')` : 'Cards.studyAll()'}" title="Учить, даже если на сегодня ничего не подошло">Учить всё равно</button>` : ''}${id ? '' : `<label class="cards-inline tile-setting">новых в день <input type="number" min="0" max="500" value="${newPerDay()}" onchange="Cards.setNewPerDay(this.value)"></label>`}</div>
         </div>
-        <div class="tile">
+        <button class="tile link" onclick="Cards.stats(${id ? `'${id}'` : 'null'})" title="Календарь, прогноз повторений, ответы">
           ${head('trending-up', 'Серия')}
           <div class="tile-big">${t.streak}</div>
           <div class="tile-sub">${pluralRu(t.streak, 'день', 'дня', 'дней')} · сегодня ${t.count} ${pluralRu(t.count, 'повторение', 'повторения', 'повторений')}${t.correct !== null ? `, ${t.correct}% верно` : ''}</div>
-        </div>
+          <div class="tile-foot tile-more">Статистика ${svgIcon('chevron-right')}</div>
+        </button>
         <div class="tile">
           ${head('book', 'Слова')}
           <div class="tile-big">${notes.length}</div>
@@ -381,7 +379,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
           <div class="tile-bar"><i style="width:${pct}%"></i></div>
         </div>
       </div>
-      <div class="cards-actions">${actions}</div>
+      ${actions ? `<div class="cards-actions">${actions}</div>` : ''}
       <div class="bento-label">${id ? 'Подколоды' : 'Колоды'}</div>
       <div class="bento">
         ${kids.map(deckTile).join('')}

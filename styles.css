@@ -3513,3 +3513,10 @@ body.mode-grammar .suggest-src { color: var(--night-muted); }
   letter-spacing: normal;
   text-transform: none;
 }
+
+/* Настройка «новых в день» — в подвале плитки «Сегодня», справа от кнопок */
+.tile-foot .tile-setting { margin-left: auto; font-size: var(--fs-small); }
+/* «Статистика ›» внизу плитки-ссылки */
+.tile-more { gap: 2px; font-size: var(--fs-small); color: var(--muted); }
+.tile-more .icon { width: 14px; height: 14px; }
+.tile.link:hover .tile-more { color: var(--accent); }
