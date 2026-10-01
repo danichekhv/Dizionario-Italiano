@@ -2741,6 +2741,8 @@ function renderMoodCards(group, conj) {
     card.appendChild(title);
     const body = document.createElement('div'); body.className = 'tense-card-body';
     const entries = Object.entries(conj[tense] || {}).sort((a, b) => rank(a[0]) - rank(b[0]));
+    // У императива нет формы для io — ставим прочерк, иначе пять строк ломают сетку 3 + 3
+    if (tense === 'Imperativo' && entries.length === 5 && !entries.some(([p]) => p === 'io')) entries.unshift(['io', '—']);
     body.style.setProperty('--rows', Math.max(1, Math.ceil(entries.length / 2)));
     entries.forEach(([pronoun, form]) => {
       const row = document.createElement('div'); row.className = 'conj-row';
