@@ -1129,6 +1129,10 @@ const FD_CLITICS = {
   si:   { pre: FD_REFLEXIVE, aux: 'essere', agree: 'subject' },
   ci:   { pre: ['ci', 'ci', 'ci', 'ci', 'ci', 'ci'], aux: null, agree: 'aux' },
 };
+// Хвост-клитика после -o причастия или герундия: andatosene, volutosi, mettendoci
+const FD_CLITIC_TAIL = /(?<=o)(sene|sela|cela|si|ci|ne|la|lo)$/;
+// Где Викисловарь ошибается во вспомогательном глаголе: ci è voluto, а не ci ha voluto
+const FD_AUX_FIX = { volerci: 'essere' };
 const fdClitic = infinitive => ((String(infinitive || '').toLowerCase().match(/r(sene|sela|cela|si|ci)$/) || [])[1] || '');
 // Клитика + вспомогательный глагол. Перед гласной ne/la/ci теряют гласную: se n'è, ce l'ho, c'è
 function fdJoin(pre, aux) {
@@ -1143,8 +1147,10 @@ function fdJoin(pre, aux) {
 function fdCompound(conj, infinitive, aux, participle) {
   const key = fdClitic(infinitive), cl = FD_CLITICS[key];
   if (cl && cl.aux) aux = cl.aux;
+  if (FD_AUX_FIX[infinitive]) aux = FD_AUX_FIX[infinitive];
   if (aux !== 'essere' && aux !== 'avere') aux = 'avere';
-  const pp = key ? participle.replace(new RegExp(key + '$'), '') : participle;
+  // Викисловарь местами лепит к формам чужую клитику (volerci → volutosi, volendosi): отрезаем любую
+  const pp = key ? participle.replace(FD_CLITIC_TAIL, '') : participle;
   const mode = cl && cl.agree !== 'aux' ? cl.agree : (aux === 'essere' ? 'subject' : 'none');
   const form = (i, sg) => mode === 'fem' ? pp.replace(/o$/, 'a') : mode === 'subject' ? pp.replace(/o$/, sg || i < 3 ? 'o/a' : 'i/e') : pp;
   FD_COMPOUND.forEach(([name, simple]) => {
@@ -1155,9 +1161,11 @@ function fdCompound(conj, infinitive, aux, participle) {
   const inf = conj['Infinito'] || {}, ger = conj['Gerundio'] || {};
   // Причастие настоящего с клитикой (mettenteci, andantesene) Викисловарь строит по шаблону, в языке его нет
   const part = conj['Participio'];
-  if (key && part && part.Presente && part.Presente.endsWith(key)) part.Presente = '—';
+  if (key && part && part.Presente && /(sene|sela|cela|si|ci|ne|la|lo)$/.test(part.Presente)) part.Presente = '—';
+  if (key && part && part.Passato && FD_CLITIC_TAIL.test(part.Passato)) part.Passato = pp + key;
+  const gerPres = key && ger.Presente && FD_CLITIC_TAIL.test(ger.Presente) ? ger.Presente.replace(FD_CLITIC_TAIL, '') + key : ger.Presente;
   conj['Infinito'] = { Presente: inf.Presente || infinitive, Passato: key ? `${aux === 'essere' ? 'esser' : 'aver'}${key} ${ppSg}` : `${aux} ${ppSg}` };
-  conj['Gerundio'] = { Presente: ger.Presente || '—', Passato: `${aux === 'essere' ? 'essendo' : 'avendo'}${key} ${ppSg}` };
+  conj['Gerundio'] = { Presente: gerPres || '—', Passato: `${aux === 'essere' ? 'essendo' : 'avendo'}${key} ${ppSg}` };
   return aux;
 }
 
