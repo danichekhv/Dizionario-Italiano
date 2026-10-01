@@ -368,6 +368,8 @@ grant execute on function llm_usage_bump_anon(text) to anon;`;
     if (!session || session.expires_at - Date.now() > 30000) return Promise.resolve();
     return refreshing || (refreshing = refresh().finally(() => { refreshing = null; }));
   }
+  // Сервер отверг токен, хотя по часам он живой (отозван, сбились часы): обновляем без условий
+  function forceRefresh() { return refreshing || (refreshing = refresh().finally(() => { refreshing = null; })); }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ensureFresh(); });
   function scheduleRefresh(inMs) {
     clearTimeout(refreshTimer); if (!session) return;
@@ -653,6 +655,6 @@ grant execute on function llm_usage_bump_anon(text) to anon;`;
     }
   } catch (e) {}
 
-  window.Auth = { user: () => session && session.user, isAdmin, require, ensureFresh, signIn, signUp, signOut, resetPassword, changePassword, pushProfile, pullProfile, logView, myWords, renderUi, signInUi, signUpUi, resetUi, changePasswordUi, showSql, copySql,
+  window.Auth = { user: () => session && session.user, isAdmin, require, ensureFresh, forceRefresh, signIn, signUp, signOut, resetPassword, changePassword, pushProfile, pullProfile, logView, myWords, renderUi, signInUi, signUpUi, resetUi, changePasswordUi, showSql, copySql,
     tagsFor, ownTags, applyTagsToNodes, renameTagUi, addTagUi, loadTags };
 })();

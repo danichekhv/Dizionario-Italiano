@@ -430,7 +430,7 @@ function anonTrialsUsed() { try { return parseInt(localStorage.getItem('dizionar
 function bumpAnonTrial() { try { localStorage.setItem('dizionario_anon_trials', String(anonTrialsUsed() + 1)); } catch (e) {} }
 function anonTrialsLeft() { return Math.max(0, ANON_TRIAL_LIMIT - anonTrialsUsed()); }
 
-async function backendApi(path, body) {
+async function backendApi(path, body, retried) {
   const loggedIn = !!(window.Auth && Auth.user());
   if (!loggedIn && anonTrialsLeft() <= 0) {
     const msg = 'Упс, бесплатные попытки закончились — зарегистрируйтесь, это меньше минуты';
@@ -444,6 +444,7 @@ async function backendApi(path, body) {
     body: JSON.stringify(body)
   });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && data.expired && loggedIn && !retried && Auth.forceRefresh) { await Auth.forceRefresh(); return backendApi(path, body, true); }
   if (res.status === 401) { if (window.Auth) Auth.require('Войдите, чтобы собирать новые статьи словаря'); throw new Error(data.error || 'Нужно войти в аккаунт'); }
   if (res.status === 403) throw new Error(data.error || 'Доступ ограничен');
   if (res.status === 429) { showToast('⏳ ' + (data.error || 'Дневной лимит исчерпан')); throw new Error(data.error || 'Дневной лимит исчерпан'); }

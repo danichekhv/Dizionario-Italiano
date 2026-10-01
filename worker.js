@@ -55,16 +55,26 @@ const ADMIN_EMAILS = ['danichek.hv@gmail.com'];
 // ── Кто вызывает и сколько ему ещё можно сегодня ────────────────────────────────────────────
 // Анонимный запрос больше не отбивается тут же: часть путей (см. ROUTES) ему открыта, только
 // под своим, более скупым потолком по IP. token остаётся null, если входа нет или он истёк.
+// Токен, уже подтверждённый Supabase, помним несколько минут: пакетная проверка словаря шлёт
+// сотни запросов подряд, и сверка каждого с /auth/v1/user упиралась в лимиты Supabase
+const TOKEN_CACHE = new Map();
 async function requireUser(request) {
   const ip = request.headers.get('cf-connecting-ip') || '0.0.0.0';
   const auth = request.headers.get('Authorization') || '';
   const token = auth.replace(/^Bearer\s+/i, '').trim();
   if (!token || token === SB_KEY) return { token: null, isAdmin: false, ip };
-  const res = await fetch(`${SB_URL}/auth/v1/user`, { headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` } });
-  if (!res.ok) return { token: null, isAdmin: false, ip };
+  const hit = TOKEN_CACHE.get(token);
+  if (hit && hit.until > Date.now()) return { token, isAdmin: hit.isAdmin, ip };
+  // Токен прислан, но не принят: это вошедший с протухшей сессией, а не аноним
+  const bad = { token: null, isAdmin: false, ip, rejected: true };
+  const res = await fetch(`${SB_URL}/auth/v1/user`, { headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` } }).catch(() => null);
+  if (!res || !res.ok) return bad;
   const user = await res.json().catch(() => null);
-  if (!user || !user.id) return { token: null, isAdmin: false, ip };
-  return { token, isAdmin: ADMIN_EMAILS.includes(String(user.email || '').toLowerCase()), ip };
+  if (!user || !user.id) return bad;
+  const isAdmin = ADMIN_EMAILS.includes(String(user.email || '').toLowerCase());
+  if (TOKEN_CACHE.size > 500) TOKEN_CACHE.clear();
+  TOKEN_CACHE.set(token, { isAdmin, until: Date.now() + 5 * 60 * 1000 });
+  return { token, isAdmin, ip };
 }
 
 // Атомарный инкремент в Supabase (RPC llm_usage_bump, security definer) — под тем же токеном
@@ -196,6 +206,7 @@ async function handleApi(request, env) {
   if (!route) return json({ error: 'not found' }, 404);
 
   const auth = await requireUser(request);
+  if (auth.rejected) return json({ error: 'Сессия истекла — обновите страницу', expired: true }, 401);
   const isAnon = !auth.token && !auth.isAdmin;
   if (route.access === 'admin' && !auth.isAdmin) return json({ error: 'Статьи грамматики создаёт только владелец сайта' }, 403);
   if (route.access === 'user' && !auth.token) return json({ error: 'Нужно войти в аккаунт' }, 401);
