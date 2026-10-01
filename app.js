@@ -437,6 +437,7 @@ async function backendApi(path, body) {
     if (window.Auth) Auth.require(msg);
     throw new Error(msg);
   }
+  if (loggedIn && Auth.ensureFresh) await Auth.ensureFresh();
   const res = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': SB_H['Authorization'] },
@@ -454,6 +455,7 @@ async function articleApi(path, body) { return backendApi(`/api/article/${path}`
 // Шторка: без всплывающих окон и тостов на 401/429 — вызывающий код уже ловит ошибки и молча
 // деградирует (fetchQuickRussian и т.п.), интрузивный попап на каждый промах наведения — это лишнее.
 async function previewApi(path, body) {
+  if (window.Auth && Auth.user() && Auth.ensureFresh) await Auth.ensureFresh();
   const res = await fetch(`/api/preview/${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': SB_H['Authorization'] },
@@ -471,6 +473,7 @@ async function streamArticleHybrid(base, ruHint, onText) {
     if (window.Auth) Auth.require(msg);
     throw new Error(msg);
   }
+  if (loggedIn && Auth.ensureFresh) await Auth.ensureFresh();
   const res = await fetch('/api/article/hybrid', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': SB_H['Authorization'] },

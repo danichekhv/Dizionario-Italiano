@@ -360,6 +360,15 @@ grant execute on function llm_usage_bump_anon(text) to anon;`;
     try { const d = await authFetch('POST', 'token?grant_type=refresh_token', { refresh_token: session.refresh_token }); setSession(d); }
     catch (e) { console.warn('auth refresh:', e.message); if (/invalid|expired|not found|revoked/i.test(e.message)) signOut(true); else scheduleRefresh(60000); }
   }
+  // Таймер обновления во сне устройства не срабатывает: проснувшись, вкладка шлёт запросы со
+  // старым токеном, и сервер принимает владельца за анонима («слишком много запросов без
+  // регистрации»). Поэтому перед запросом к своему API токен проверяется и при нужде обновляется.
+  let refreshing = null;
+  function ensureFresh() {
+    if (!session || session.expires_at - Date.now() > 30000) return Promise.resolve();
+    return refreshing || (refreshing = refresh().finally(() => { refreshing = null; }));
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ensureFresh(); });
   function scheduleRefresh(inMs) {
     clearTimeout(refreshTimer); if (!session) return;
     refreshTimer = setTimeout(refresh, inMs || Math.max(5000, session.expires_at - Date.now() - 60000));
@@ -644,6 +653,6 @@ grant execute on function llm_usage_bump_anon(text) to anon;`;
     }
   } catch (e) {}
 
-  window.Auth = { user: () => session && session.user, isAdmin, require, signIn, signUp, signOut, resetPassword, changePassword, pushProfile, pullProfile, logView, myWords, renderUi, signInUi, signUpUi, resetUi, changePasswordUi, showSql, copySql,
+  window.Auth = { user: () => session && session.user, isAdmin, require, ensureFresh, signIn, signUp, signOut, resetPassword, changePassword, pushProfile, pullProfile, logView, myWords, renderUi, signInUi, signUpUi, resetUi, changePasswordUi, showSql, copySql,
     tagsFor, ownTags, applyTagsToNodes, renameTagUi, addTagUi, loadTags };
 })();
