@@ -3512,6 +3512,14 @@ body.mode-grammar .suggest-src { color: var(--night-muted); }
   letter-spacing: normal;
   text-transform: none;
 }
+/* Подразделы статьи (Значения, Другие слова, Связанные слова) — заголовками в одну линию
+   со «Спряжением», а не мелкой подписью: в длинной статье по ним глаз находит раздел */
+.section-label {
+  font-family: var(--font-display);
+  font-size: var(--fs-lead);
+  color: var(--ink);
+  margin-bottom: 18px;
+}
 
 /* Настройка «новых в день» — в подвале плитки «Сегодня», справа от кнопок */
 .tile-foot .tile-setting { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: var(--fs-small); color: var(--muted); white-space: nowrap; }
