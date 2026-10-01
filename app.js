@@ -231,7 +231,8 @@ function updateInitialMsg() {}
 // итальянское слово, "RU → IT" — русское). Дублирует то же currentLang, что и раньше btnIT/btnRU.
 function updateLangMini() {
   const el = $('langMiniLabel');
-  if (el) el.textContent = currentLang === 'ru' ? 'RU → IT' : 'IT → RU';
+  // На телефоне вторая половина прячется стилями: остаётся только язык, на котором вводим
+  if (el) el.innerHTML = currentLang === 'ru' ? 'RU<span class="lang-mini-to"> → IT</span>' : 'IT<span class="lang-mini-to"> → RU</span>';
 }
 // Переключение не трогает фокус: клавиатура не поднимается, если была закрыта, и не прячется,
 // если была открыта (для второго в разметке у чипа onmousedown preventDefault — тап не уводит

@@ -1420,6 +1420,7 @@
     .app-nav-btn .nav-article { display: none; }
 
     .lang-mini { padding: 0 10px; font-size: var(--fs-caption); }
+    .lang-mini-to { display: none; }
 
     /* Search — full width */
     .search-area { width: 100%; }
