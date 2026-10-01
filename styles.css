@@ -1421,6 +1421,8 @@
 
     .lang-mini { padding: 0 10px; font-size: var(--fs-caption); }
     .lang-mini-to { display: none; }
+    /* IT и RU разной ширины: без фиксированной ширины кнопка дёргается при переключении */
+    .search-wrapper .lang-mini { width: 46px; padding: 0; justify-content: center; }
 
     /* Search — full width */
     .search-area { width: 100%; }
