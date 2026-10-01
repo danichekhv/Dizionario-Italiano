@@ -1153,6 +1153,9 @@ function fdCompound(conj, infinitive, aux, participle) {
   });
   const ppSg = form(0, true);
   const inf = conj['Infinito'] || {}, ger = conj['Gerundio'] || {};
+  // Причастие настоящего с клитикой (mettenteci, andantesene) Викисловарь строит по шаблону, в языке его нет
+  const part = conj['Participio'];
+  if (key && part && part.Presente && part.Presente.endsWith(key)) part.Presente = '—';
   conj['Infinito'] = { Presente: inf.Presente || infinitive, Passato: key ? `${aux === 'essere' ? 'esser' : 'aver'}${key} ${ppSg}` : `${aux} ${ppSg}` };
   conj['Gerundio'] = { Presente: ger.Presente || '—', Passato: `${aux === 'essere' ? 'essendo' : 'avendo'}${key} ${ppSg}` };
   return aux;
