@@ -160,7 +160,7 @@ russianMain: fill it ONLY when russian.main should be replaced — with the Russ
     return `You know Italian at native level. For a learner's dictionary, the Italian ${cleanPos(entry.partOfSpeech) || 'word'} "${entry.word}" was given these definitions:
 ${ms.map((m, i) => `${i + 1}. ${m.definition}`).join('\n')}
 
-For EACH definition say whether it describes a genuine sense of the word "${entry.word}" in Italian. Any register counts: standard, colloquial, figurative, technical, regional, dated. Judge from your own knowledge of Italian; there is no list to compare against. A definition is NOT genuine only if the word does not have that meaning at all, or the meaning belongs to a different word that merely looks the same.
+For EACH definition say whether it describes a genuine sense of the word "${entry.word}" in Italian. Any register counts: standard, colloquial, figurative, technical, regional, dated. Judge from your own knowledge of Italian; there is no list to compare against. A definition is NOT genuine only if the word does not have that meaning at all, or the meaning belongs to a different word that merely looks the same. The word itself comes from a dictionary: never question whether it exists or is "standard". Literary, poetic, archaic and variant forms are real words (beltà is the literary form of bellezza, desio of desiderio), and every sense they share with their common synonym is genuine for them too.
 Return ONLY valid JSON: { "verdicts": [ { "n": 1, "genuine": true/false, "note": "short reason in Russian, only when genuine is false" } ] }`;
   }
 
