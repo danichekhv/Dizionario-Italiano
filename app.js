@@ -1167,7 +1167,8 @@ function fdCompound(conj, infinitive, aux, participle) {
   // Причастие настоящего с клитикой (mettenteci, andantesene) Викисловарь строит по шаблону, в языке его нет
   const part = conj['Participio'];
   if (key && part && part.Presente && /(sene|sela|cela|si|ci|ne|la|lo)$/.test(part.Presente)) part.Presente = '—';
-  if (key && part && part.Passato && FD_CLITIC_TAIL.test(part.Passato)) part.Passato = pp + key;
+  // С la причастие отдельно и в женском роде: ce l'ho fatta, а не «fattocela»
+  if (key && part && part.Passato && FD_CLITIC_TAIL.test(part.Passato)) part.Passato = mode === 'fem' ? ppSg : pp + key;
   const gerPres = key && ger.Presente && FD_CLITIC_TAIL.test(ger.Presente) ? ger.Presente.replace(FD_CLITIC_TAIL, '') + key : ger.Presente;
   conj['Infinito'] = { Presente: inf.Presente || infinitive, Passato: key ? `${aux === 'essere' ? 'esser' : 'aver'}${key} ${ppSg}` : `${aux} ${ppSg}` };
   conj['Gerundio'] = { Presente: gerPres || '—', Passato: `${aux === 'essere' ? 'essendo' : 'avendo'}${key} ${ppSg}` };
