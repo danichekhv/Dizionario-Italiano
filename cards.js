@@ -713,6 +713,10 @@ alter table reviews add column if not exists applied boolean default false;`;
     const out = [];
     if (card.direction === 'it') {
       (n.translation || '').replace(/\([^)]*\)/g, '').split(/[;,\/]/).map(s => s.trim()).filter(Boolean).forEach(s => out.push(s));
+      // Пояснение, написанное целиком без скобок, тоже верно: «заниматься видом деятельности».
+      // Режем только по разделителям вне скобок, чтобы запятая внутри пояснения не рвала вариант
+      (n.translation || '').split(/[;,\/](?![^(]*\))/).map(s => s.replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim())
+        .filter(s => s && !out.includes(s)).forEach(s => out.push(s));
     } else {
       // Верен любой из синонимов карточки: «предприниматель» — это и imprenditore, и uomo d'affari
       wordVariants(n).forEach(v => {
