@@ -3750,7 +3750,9 @@ body.no-search .back-btn { margin-top: -32px; }
 .hard-row span { color: var(--muted); font-style: italic; overflow-wrap: anywhere; }
 .hard-row i { font-style: normal; font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--danger); white-space: nowrap; }
 .stat-section .drill-actions { justify-content: flex-start; margin-top: 14px; }
-/* Вторая задача дня: новые слова через заучивание — тихая кнопка рядом с главной */
-.today-new { padding: 9px 14px; border: 1.5px solid var(--border); border-radius: var(--radius); background: white; color: var(--ink); font-family: var(--font-text); font-size: var(--fs-small); cursor: pointer; white-space: nowrap; transition: border-color var(--t-base), color var(--t-base); }
-.today-new:hover { border-color: var(--terracotta); color: var(--terracotta); }
+/* Вторая задача дня — новые слова через заучивание: та же кнопка, что «Начать повторение», но контурная.
+   Контур — внутренней тенью, а не рамкой, чтобы обе кнопки были одной высоты */
+.today-go.alt { background: transparent; color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.today-go.alt:hover { filter: none; background: rgba(var(--terracotta-rgb), .07); }
+.today-go.alt b { margin-left: -2px; font-family: var(--font-mono); font-weight: 400; font-size: .85em; opacity: .8; }
 .fx-line { margin-top: 6px; }

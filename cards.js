@@ -536,7 +536,7 @@ alter table reviews add column if not exists applied boolean default false;`;
       : notes.length ? `<button class="today-go quiet" onclick="${go}">Учить всё равно${arrow}</button>` : '';
     // Новые слова лучше сначала разобрать заучиванием, чем встретить вслепую в повторении
     const newWords = new Set(newCardsToday(deckId).map(c => c.note_id)).size;
-    const learnBtn = newWords ? `<button class="today-new" onclick="Cards.learnNew(${deckId ? `'${deckId}'` : 'null'})">Новые слова: ${newWords}</button>` : '';
+    const learnBtn = newWords ? `<button class="today-go alt" onclick="Cards.learnNew(${deckId ? `'${deckId}'` : 'null'})">${svgIcon('plus')}Новые слова<b>${newWords}</b></button>` : '';
     const segs = [[done, 'var(--sage)', 'сделано'], [repeat, 'var(--accent)', 'повторить'], [fresh, 'rgba(var(--stone-rgb), .3)', 'новые']];
     const tot = done + left, R = 64, C = 2 * Math.PI * R, gap = segs.filter(x => x[0]).length > 1 ? 3 : 0;
     let off = 0;
