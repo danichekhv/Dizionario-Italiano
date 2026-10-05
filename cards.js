@@ -846,27 +846,70 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         <div class="study-footer"><div class="study-hint">Enter — следующий круг</div></div>`;
     }
     const it = d.queue[d.i], n = it.n;
-    const back = d.flipped ? `
-        <div class="study-rule"></div>
-        <div class="study-answer">${esc(ansText(n, it.dir))}</div>
-        ${n.phonetic ? `<div class="study-ipa">${esc(n.phonetic)}</div>` : ''}
-        ${n.example ? `<div class="study-box"><div class="study-box-label">Пример</div><div class="study-box-text italic">${esc(n.example)}</div></div>` : ''}`
-      : `<div class="drill-tap">нажмите, чтобы перевернуть</div>`;
+    // Итальянская сторона — слово с транскрипцией и примером, русская — перевод. Какая из них лицом, решает направление
+    const itFace = `<div class="flash-word">${esc(n.word)}</div>
+          ${n.phonetic ? `<div class="flash-ipa">${esc(n.phonetic)}</div>` : ''}
+          ${n.example ? `<div class="flash-ex">${esc(n.example)}</div>` : ''}`;
+    const ruFace = `<div class="flash-tr">${esc(n.translation)}</div>`;
+    const [front, back] = it.dir === 'it' ? [itFace, ruFace] : [ruFace, itFace];
     return head + `
-      <div class="study-body">
-        <div class="study-card flash-card ${it.dir}" role="button" tabindex="0" onclick="Cards.drillDo('flip')">
-          <div class="study-dir">${DIR_LABEL[it.dir]} · ${d.i + 1} из ${d.queue.length}</div>
-          <div class="study-front">${esc(askText(n, it.dir))}</div>
-          ${back}
+      <div class="study-body flash-body">
+        <div class="flash-stage">
+          <div class="flash-card${d.flipped ? ' flipped' : ''}" id="flashCard" role="button" tabindex="0" aria-label="Перевернуть карточку">
+            <div class="flash-inner">
+              <div class="flash-face front">${front}<div class="flash-side">${d.i + 1} из ${d.queue.length}</div></div>
+              <div class="flash-face back">${back}<div class="flash-side">${d.i + 1} из ${d.queue.length}</div></div>
+            </div>
+            <div class="flash-tag learn">ещё учу</div>
+            <div class="flash-tag know">знаю</div>
+          </div>
         </div>
       </div>
       <div class="study-footer">
         <div class="study-buttons two">
-          <button class="sb again" onclick="Cards.drillDo('know', 0)">Ещё учу</button>
-          <button class="sb good" onclick="Cards.drillDo('know', 1)">Знаю</button>
+          <button class="sb again" onclick="Cards.drillDo('swipe', 0)">Ещё учу</button>
+          <button class="sb good" onclick="Cards.drillDo('swipe', 1)">Знаю</button>
         </div>
-        <div class="study-hint">Пробел — перевернуть, ← — ещё учу, → — знаю, Z — вернуть карточку, Esc — выйти</div>
+        <div class="study-hint">Нажатие или пробел — перевернуть, свайп или ← → — ещё учу / знаю, Z — вернуть карточку, Esc — выйти</div>
       </div>`;
+  }
+  // Переворот и свайп идут по живому элементу, без перерисовки, иначе анимация оборвётся
+  const SWIPE_PX = 90;
+  function flashFlip(d) {
+    const card = document.getElementById('flashCard'); if (!card || d.leaving) return;
+    d.flipped = !d.flipped; card.classList.toggle('flipped', d.flipped);
+  }
+  function flashSwipe(d, known) {
+    const card = document.getElementById('flashCard');
+    if (d.leaving || !d.queue[d.i]) return;
+    if (!card) { drillDo('know', known); return; }
+    d.leaving = true;
+    card.classList.add(known ? 'to-know' : 'to-learn'); card.style.setProperty('--swipe', 1);
+    card.style.transform = `translateX(${known ? 130 : -130}vw) rotate(${known ? 24 : -24}deg)`;
+    setTimeout(() => { d.leaving = false; if (S.view === 'drill' && S.drill === d) drillDo('know', known); }, 230);
+  }
+  function bindFlash(d) {
+    const card = document.getElementById('flashCard'); if (!card) return;
+    let x0 = null, dx = 0, pid = null;
+    const drag = x => {
+      card.style.transform = x ? `translateX(${x}px) rotate(${x / 18}deg)` : '';
+      card.style.setProperty('--swipe', Math.min(1, Math.abs(x) / SWIPE_PX));
+      card.classList.toggle('to-know', x > 0); card.classList.toggle('to-learn', x < 0);
+    };
+    card.addEventListener('pointerdown', e => {
+      if (d.leaving || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      x0 = e.clientX; dx = 0; pid = e.pointerId; card.setPointerCapture(pid); card.classList.add('dragging');
+    });
+    card.addEventListener('pointermove', e => { if (x0 === null || e.pointerId !== pid) return; dx = e.clientX - x0; if (Math.abs(dx) > 4) drag(dx); });
+    const end = e => {
+      if (x0 === null || e.pointerId !== pid) return;
+      x0 = null; card.classList.remove('dragging');
+      if (Math.abs(dx) >= SWIPE_PX) { flashSwipe(d, dx > 0 ? 1 : 0); return; }
+      drag(0);
+      // Короткое нажатие без сдвига — переворот; отменённый жест (прокрутка страницы) ничего не делает
+      if (e.type === 'pointerup' && Math.abs(dx) < 6) flashFlip(d);
+    };
+    card.addEventListener('pointerup', end); card.addEventListener('pointercancel', end);
   }
 
   // ── Заучивание: круги по семь слов; каждое слово сначала угадать из четырёх, потом написать.
@@ -1116,6 +1159,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   function renderDrill(el) {
     const d = S.drill;
     el.innerHTML = ({ flash: renderFlash, learn: renderLearn, test: renderTest, match: renderMatch })[d.mode](d);
+    if (d.mode === 'flash') bindFlash(d);
     const inp = document.getElementById('drillInput');
     if (inp && !(typeof isTouchDevice === 'function' && isTouchDevice())) inp.focus();
   }
@@ -1133,7 +1177,8 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         if (d.mode === 'learn') { d.items.forEach(x => { if (x.level < 2) x.dir = pickDir(next); }); if (d.q && !d.q.answered) learnQ(d); }
         break;
       }
-      case 'flip': if (!it) return; d.flipped = !d.flipped; break;
+      case 'flip': if (it) flashFlip(d); return;
+      case 'swipe': flashSwipe(d, a); return;
       case 'know':
         if (!it) return;
         d.hist.push({ i: d.i, known: !!a });
@@ -1206,8 +1251,8 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     if (d.mode === 'flash') {
       if (d.i >= d.queue.length) { if (k === 'Enter' && d.known.size < d.pool.length) go('nextRound'); return; }
       if (k === ' ' || k === 'Enter' || k === 'ArrowUp' || k === 'ArrowDown') go('flip');
-      else if (k === 'ArrowLeft' || k === '1') go('know', 0);
-      else if (k === 'ArrowRight' || k === '2') go('know', 1);
+      else if (k === 'ArrowLeft' || k === '1') go('swipe', 0);
+      else if (k === 'ArrowRight' || k === '2') go('swipe', 1);
       else if (k === 'z' || k === 'Z' || k === 'я' || k === 'Я') go('undo');
     } else if (d.mode === 'learn') {
       if (d.summary) { if (k === 'Enter' || k === ' ') go('continue'); return; }
