@@ -414,7 +414,8 @@
   }
   /* «AUSILIARE avere»: подпись как у прочих ярлыков статьи, глагол — акцентом */
   .word-aux-label { font-family: var(--font-text); font-weight: 600; font-style: normal; font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); margin-right: 8px; vertical-align: 2px; }
-  .word-aux { color: var(--terracotta); font-weight: 600; }
+  /* Кегль и высота строчных — как у строки «также существительное» под ней (PT Serif 15px, font-size-adjust .46): раньше 18px жирного курсива выпирали */
+  .word-aux { color: var(--terracotta); font-weight: 600; font-size: var(--fs-body); font-size-adjust: 0.46; }
 
   /* Подсказка «также форма слова: portare» */
   .word-also {
