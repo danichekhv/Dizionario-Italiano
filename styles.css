@@ -696,9 +696,6 @@
   .stat-sub { font-size: var(--fs-small); color: var(--muted); margin-top: 4px; line-height: var(--lh-ui); }
   .stat-section { background: white; border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 16px; }
   .stat-title { font-family: var(--font-display); font-style: italic; font-size: var(--fs-lead); margin-bottom: 12px; }
-  .chart { width: 100%; height: 150px; display: block; }
-  .chart .ax { font-family: var(--font-mono); font-size: var(--fs-micro); fill: var(--muted); }
-  .chart .gl { stroke: rgba(var(--stone-rgb),.2); stroke-width: 1; }
   /* Календарь активности по месяцам */
   /* Календарь — единый блок по центру карточки: при фиксированных 44px он жался в левую
      половину, а стрелки с названием месяца разъезжались на всю ширину секции */
@@ -3719,3 +3716,28 @@ body.no-search .back-btn { margin-top: -32px; }
 .deck-tab b { margin-left: 5px; font-family: var(--font-mono); font-weight: 400; font-size: var(--fs-caption); color: var(--muted); }
 .words-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .words-count { margin-left: auto; font-size: var(--fs-small); color: var(--muted); }
+/* ── Статистика: столбики вёрсткой и подсказки по нажатию ─────────────────────── */
+.bars { display: flex; gap: 6px; height: 150px; margin-bottom: 22px; }
+.bars-axis { position: relative; width: 28px; flex-shrink: 0; }
+.bars-axis span { position: absolute; right: 0; transform: translateY(50%); font-family: var(--font-mono); font-size: var(--fs-micro); line-height: 1; color: var(--muted); }
+.bars-plot { position: relative; flex: 1; min-width: 0; display: flex; gap: 2px; }
+.bars-gl { position: absolute; left: 0; right: 0; height: 1px; background: rgba(var(--stone-rgb), .2); pointer-events: none; }
+.bar { position: relative; flex: 1; min-width: 0; display: flex; align-items: flex-end; justify-content: center; padding: 0; border: none; background: none; cursor: pointer; }
+.bar-fill { width: 70%; background: var(--bar); border-radius: 2px 2px 0 0; transition: opacity var(--t-fast); }
+.bar:hover .bar-fill { opacity: .8; }
+.bar-lbl { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); white-space: nowrap; font-family: var(--font-mono); font-size: var(--fs-micro); line-height: 1; color: var(--muted); }
+.bar.tip-sel .bar-lbl { color: var(--ink); }
+/* Выбранный элемент остаётся ярким, соседи по группе приглушаются */
+.has-sel .bar:not(.tip-sel) .bar-fill { opacity: .25; }
+.has-sel > .cal-cell:not(.tip-sel):not(.empty) { opacity: .35; }
+.cal-cell.tip-sel { box-shadow: inset 0 0 0 2px var(--ink); }
+.cal-cell[data-tip] { cursor: pointer; }
+.btn-bar span, .btn-row-name[data-tip] { cursor: pointer; transition: opacity var(--t-fast); }
+.has-sel > span:not(.tip-sel) { opacity: .3; }
+.btn-row-name.tip-sel { color: var(--ink); }
+.stat-card[data-tip] { cursor: pointer; transition: opacity var(--t-fast), border-color var(--t-fast); }
+.has-sel > .stat-card:not(.tip-sel) { opacity: .45; }
+.stat-card.tip-sel { border-color: var(--terracotta); }
+.stat-tip { position: fixed; z-index: 950; max-width: 260px; padding: 8px 12px; border-radius: var(--radius); background: var(--ink); color: var(--cream); font-family: var(--font-text); font-size: var(--fs-small); line-height: var(--lh-ui); white-space: pre-line; box-shadow: var(--shadow-md); pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity .15s, transform .15s; }
+.stat-tip.show { opacity: 1; transform: none; }
+@media (max-width: 640px) { .stat-section { padding: 14px 14px; } .bars { height: 130px; } .bars-axis { width: 22px; } }

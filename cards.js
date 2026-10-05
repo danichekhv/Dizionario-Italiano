@@ -281,6 +281,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   function closeOverlay() { const o = document.getElementById('studyOverlay'); if (o) { o.classList.remove('open'); o.innerHTML = ''; } document.body.classList.remove('study-open'); }
   function render() {
     const el = root(); if (!el) return;
+    hideStatTip();
     if (!S.loaded) { el.innerHTML = `<div class="cards-empty">Загрузка колод…</div>`; return; }
     if (S.missingTables) { closeOverlay(); renderSetup(el); return; }
     if (S.view === 'drill' && !S.drill) S.view = 'decks';
@@ -443,6 +444,38 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   }
 
   // ── Статистика ───────────────────────────────────────────────────────────────
+  // Подсказки: нажатие на столбик, день, долю ответов или сводку выделяет элемент, приглушает
+  // соседей по группе (data-tip-group) и показывает объяснение над ним. Повторное нажатие или
+  // нажатие мимо — снимает. Одна плавающая подсказка на всю страницу, позиция — от элемента.
+  function statTipEl() {
+    let t = document.getElementById('statTip');
+    if (!t) { t = document.createElement('div'); t.id = 'statTip'; t.className = 'stat-tip'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+    return t;
+  }
+  function hideStatTip() {
+    const t = document.getElementById('statTip'); if (t) t.classList.remove('show');
+    document.querySelectorAll('.tip-sel').forEach(x => x.classList.remove('tip-sel'));
+    document.querySelectorAll('.has-sel').forEach(x => x.classList.remove('has-sel'));
+  }
+  document.addEventListener('click', e => {
+    const target = e.target.closest('#cardsScreen [data-tip]');
+    const again = target && target.classList.contains('tip-sel');
+    hideStatTip();
+    if (!target || again) return;
+    target.classList.add('tip-sel');
+    const group = target.closest('[data-tip-group]'); if (group) group.classList.add('has-sel');
+    // Сначала в угол: на прежнем месте у края подсказка сузилась бы и перенеслась в другое число строк
+    const t = statTipEl(); t.style.left = '0px'; t.style.top = '0px'; t.style.width = ''; t.textContent = target.dataset.tip; t.classList.add('show');
+    // Ширину фиксируем по замеру: у правого края округление пикселей иначе переносило строку
+    t.style.width = Math.ceil(t.getBoundingClientRect().width) + 'px';
+    // У столбика подсказка встаёт над его верхом, а не над всей колонкой
+    const r = (target.querySelector('.bar-fill') || target).getBoundingClientRect(), tw = t.offsetWidth, th = t.offsetHeight;
+    const x = Math.max(8, Math.min(innerWidth - tw - 8, r.left + r.width / 2 - tw / 2));
+    const y = r.top - th - 8 >= 8 ? r.top - th - 8 : r.bottom + 8;
+    t.style.left = x + 'px'; t.style.top = y + 'px';
+  });
+  window.addEventListener('scroll', hideStatTip, { passive: true });
+
   const dayKey = ms => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   const startOfDay = ms => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
   const scopeNotes = deckId => deckId ? notesInDeck(deckId) : S.notes;
@@ -474,7 +507,9 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   function forecastItems(deckId, daysN = 30) {
     const t0 = startOfDay(Date.now()); const b = new Array(daysN).fill(0);
     cardsOfNotes(scopeNotes(deckId)).filter(c => c.state !== 'new').forEach(c => { const d = Math.max(0, Math.floor((c.dueMs - t0) / DAY)); if (d < daysN) b[d]++; });
-    return b.map((v, i) => ({ label: i === 0 ? 'сег.' : (i % 5 === 0 ? String(i) : ''), value: v, title: i === 0 ? `сегодня и просроченные: ${v}` : `через ${i} дн.: ${v}` }));
+    const cardsWord = v => pluralRu(v, 'карточка', 'карточки', 'карточек');
+    return b.map((v, i) => ({ label: i === 0 ? 'сег.' : (i % 5 === 0 ? String(i) : ''), value: v,
+      tip: i === 0 ? `Сегодня и просроченные: ${v} ${cardsWord(v)}` : `Через ${i} ${pluralRu(i, 'день', 'дня', 'дней')}: ${v} ${cardsWord(v)} к повторению` }));
   }
   // Плитка «Сегодня»: слева крупная кнопка, справа кольцо «сделано / повторить / новые»
   function todayHero(deckId, extra = '') {
@@ -511,42 +546,41 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   function reviewsPerDay(deckId, daysN = 30) {
     const t0 = startOfDay(Date.now()) - (daysN - 1) * DAY; const b = new Array(daysN).fill(0);
     scopeReviews(deckId).forEach(r => { const i = Math.floor((r.atMs - t0) / DAY); if (i >= 0 && i < daysN) b[i]++; });
-    return b.map((v, i) => { const d = new Date(t0 + i * DAY); return { label: (daysN - 1 - i) % 5 === 0 ? `${d.getDate()}.${d.getMonth() + 1}` : '', value: v, title: `${dayKey(t0 + i * DAY)}: ${v}` }; });
+    return b.map((v, i) => { const d = new Date(t0 + i * DAY); return { label: (daysN - 1 - i) % 5 === 0 ? `${d.getDate()}.${d.getMonth() + 1}` : '', value: v,
+      tip: `${dayName(d)}: ${v ? `${v} ${pluralRu(v, 'повторение', 'повторения', 'повторений')}` : 'без повторений'}` }; });
   }
   function intervalItems(deckId) {
     const edges = [1, 3, 7, 14, 30, 90, 180, 365, Infinity], labels = ['1 д', '2–3', '4–7', '8–14', '15–30', '1–3 м', '3–6 м', '6–12 м', '> 1 г'];
     const b = new Array(labels.length).fill(0);
     cardsOfNotes(scopeNotes(deckId)).filter(c => c.state === 'review').forEach(c => { const i = edges.findIndex(e => (c.interval_days || 0) <= e); b[i === -1 ? b.length - 1 : i]++; });
-    return b.map((v, i) => ({ label: labels[i], value: v }));
+    const long = ['1 день', '2–3 дня', '4–7 дней', '8–14 дней', '15–30 дней', '1–3 месяца', '3–6 месяцев', '6–12 месяцев', 'больше года'];
+    return b.map((v, i) => ({ label: labels[i], value: v,
+      tip: `Интервал ${long[i]}: ${v} ${pluralRu(v, 'карточка', 'карточки', 'карточек')}\nСтолько пройдёт до их следующего показа` }));
   }
   function easeItems(deckId) {
     const b = {};
     cardsOfNotes(scopeNotes(deckId)).filter(c => c.state === 'review').forEach(c => { const e = Math.round((c.ease || 2.5) * 10) * 10; b[e] = (b[e] || 0) + 1; });
-    return Object.keys(b).map(Number).sort((a, b2) => a - b2).map(k => ({ label: k + '%', value: b[k] }));
+    return Object.keys(b).map(Number).sort((a, b2) => a - b2).map(k => ({ label: k + '%', value: b[k],
+      tip: `Лёгкость ${k}%: ${b[k]} ${pluralRu(b[k], 'карточка', 'карточки', 'карточек')}\nПосле «Хорошо» интервал растёт в ${String(k / 100).replace('.', ',')} раза` }));
   }
   function buttonStats(deckId) {
     const g = { learning: [0, 0, 0, 0], young: [0, 0, 0, 0], mature: [0, 0, 0, 0] };
     scopeReviews(deckId).forEach(r => { const k = r.prev_state === 'review' ? ((r.prev_interval || 0) >= 21 ? 'mature' : 'young') : 'learning'; g[k][Math.min(4, Math.max(1, r.rating || 3)) - 1]++; });
     return g;
   }
-  // Столбчатая диаграмма без библиотек: SVG со строками
-  function svgBars(items, opts = {}) {
-    const { height = 150, color = 'var(--terracotta)' } = opts;
-    const w = 600, h = height, padL = 36, padB = 22, padT = 10;
+  // Столбчатая диаграмма вёрсткой, а не SVG: растянутый по ширине SVG сплющивал подписи на телефоне.
+  // Каждый столбик — кнопка с data-tip: нажатие выделяет его и показывает подсказку (см. statTip)
+  const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+  const dayName = d => `${d.getDate()} ${MONTHS_GEN[d.getMonth()]}`;
+  function barChart(items, opts = {}) {
+    const { color = 'var(--terracotta)' } = opts;
     const max = Math.max(1, ...items.map(i => i.value));
-    const bw = (w - padL) / Math.max(1, items.length);
-    const bars = items.map((it, i) => {
-      const bh = (h - padB - padT) * it.value / max, x = padL + i * bw, y = h - padB - bh;
-      return `<rect x="${(x + bw * 0.15).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw * 0.7).toFixed(1)}" height="${bh.toFixed(1)}" fill="${it.color || color}" rx="2"><title>${esc(it.title || `${it.label}: ${it.value}`)}</title></rect>`
-        + (it.label ? `<text x="${(x + bw / 2).toFixed(1)}" y="${h - 6}" text-anchor="middle" class="ax">${esc(it.label)}</text>` : '');
-    }).join('');
-    const seen = new Set();
-    const grid = [0, 0.5, 1].map(f => {
-      const y = h - padB - (h - padB - padT) * f, v = Math.round(max * f);
-      const label = seen.has(v) ? '' : String(v); seen.add(v); // на маленьких значениях подписи не дублируем
-      return `<line x1="${padL}" x2="${w}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="gl"/>${label ? `<text x="${padL - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end" class="ax">${label}</text>` : ''}`;
-    }).join('');
-    return `<svg viewBox="0 0 ${w} ${h}" class="chart" preserveAspectRatio="none">${grid}${bars}</svg>`;
+    const ticks = [...new Set([max, Math.round(max / 2), 0])];
+    return `<div class="bars" data-tip-group style="--bar:${color}">
+      <div class="bars-axis">${ticks.map(v => `<span style="bottom:${v / max * 100}%">${v}</span>`).join('')}</div>
+      <div class="bars-plot">${ticks.map(v => `<i class="bars-gl" style="bottom:${v / max * 100}%"></i>`).join('')}${items.map(it =>
+        `<button type="button" class="bar" data-tip="${esc(it.tip || `${it.label}: ${it.value}`)}"><span class="bar-fill" style="height:${it.value / max * 100}%"></span>${it.label ? `<span class="bar-lbl">${esc(it.label)}</span>` : ''}</button>`).join('')}</div>
+    </div>`;
   }
   // Календарь активности по месяцам: листается стрелками, в клетке число и количество повторений
   function calendarHtml(deckId) {
@@ -563,7 +597,8 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       const ms = new Date(y, m, d).getTime(), k = dayKey(ms), c = counts[k] || 0;
       if (c) { total += c; active++; }
       const lvl = c === 0 ? 0 : c < 10 ? 1 : c < 30 ? 2 : c < 60 ? 3 : 4;
-      cells += `<div class="cal-cell l${lvl}${k === todayKey ? ' today' : ''}${ms > Date.now() ? ' future' : ''}" title="${k}: ${c}">${d}${c ? `<small>${c}</small>` : ''}</div>`;
+      const tip = ms > Date.now() ? '' : ` data-tip="${d} ${MONTHS_GEN[m]}: ${c ? `${c} ${pluralRu(c, 'повторение', 'повторения', 'повторений')}` : 'без повторений'}"`;
+      cells += `<div class="cal-cell l${lvl}${k === todayKey ? ' today' : ''}${ms > Date.now() ? ' future' : ''}"${tip}>${d}${c ? `<small>${c}</small>` : ''}</div>`;
     }
     return `<div class="cal-head">
         <button class="cards-btn" onclick="Cards.statsMonth(-1)" title="Предыдущий месяц">${svgIcon('chevron-left')}</button>
@@ -571,7 +606,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         <button class="cards-btn" onclick="Cards.statsMonth(1)" ${off >= 0 ? 'disabled' : ''} title="Следующий месяц">${svgIcon('chevron-right')}</button>
       </div>
       <div class="cal-week">${['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'].map(d => `<span>${d}</span>`).join('')}</div>
-      <div class="cal-grid">${cells}</div>
+      <div class="cal-grid" data-tip-group>${cells}</div>
       <div class="cards-p">${total} повторений за месяц · ${active} активных дней · текущая серия ${streak(deckId)} дн.</div>`;
   }
   function renderStats(el) {
@@ -583,24 +618,25 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const btnRow = (name, arr) => {
       const s = arr.reduce((a, b) => a + b, 0); const p = s ? arr.map(v => Math.round(v / s * 100)) : [0, 0, 0, 0];
       const names = ['Снова', 'Трудно', 'Хорошо', 'Легко'], cls = ['again', 'hard', 'good', 'easy'];
-      return `<div class="btn-row"><div class="btn-row-name">${name} <small>${s}</small></div><div class="btn-bar">${arr.map((v, i) => v ? `<span class="${cls[i]}" style="width:${p[i]}%" title="${names[i]}: ${v} (${p[i]}%)">${p[i] >= 10 ? p[i] + '%' : ''}</span>` : '').join('')}</div></div>`;
+      return `<div class="btn-row"><div class="btn-row-name" data-tip="${esc(GROUP_TIP[name])}">${name} <small>${s}</small></div><div class="btn-bar" data-tip-group>${arr.map((v, i) => v ? `<span class="${cls[i]}" style="width:${p[i]}%" data-tip="${name} · «${names[i]}»: ${v} ${pluralRu(v, 'ответ', 'ответа', 'ответов')} (${p[i]}%)">${p[i] >= 10 ? p[i] + '%' : ''}</span>` : '').join('')}</div></div>`;
     };
+    const GROUP_TIP = { 'Заучивание': 'Ответы на новые и ещё не выученные карточки', 'Молодые': 'Выученные карточки с интервалом до 21 дня', 'Зрелые': 'Выученные карточки с интервалом от 21 дня' };
     const ease = easeItems(deckId);
     el.innerHTML = `
       ${deckId && deckById(deckId) ? deckHeader(deckId, 'stats') : `<div class="cards-head"><div class="cards-title small">Статистика</div><div class="cards-head-deck">${esc(title)}</div></div>`}
       ${S.reviewsMissing ? `<div class="cards-note">История ответов не пишется: в Supabase нет таблицы <b>reviews</b>. ${isAdmin() ? 'Выполните SQL ещё раз, он добавит только недостающее. <button class="cards-btn" onclick="Cards.showSql()">Показать SQL</button>' : 'Обратитесь к владельцу сайта.'}</div>` : ''}
-      <div class="stats-grid">
-        <div class="stat-card"><div class="stat-label">Сегодня</div><div class="stat-big">${t.count}</div><div class="stat-sub">повторений · ${t.timeMin} мин${t.correct !== null ? ` · ${t.correct}% верно` : ''} · новых ${t.learned}</div></div>
-        <div class="stat-card"><div class="stat-label">Серия</div><div class="stat-big">${t.streak}</div><div class="stat-sub">дней подряд · активных дней ${activeDays}</div></div>
-        <div class="stat-card"><div class="stat-label">Карточки</div><div class="stat-big">${totalCards}</div><div class="stat-sub"><span class="c-new">${st.new} новых</span> · <span class="c-learn">${st.learning} учатся</span> · ${st.young} молодых · ${st.mature} зрелых</div></div>
-        <div class="stat-card"><div class="stat-label">Всего повторений</div><div class="stat-big">${rs.length}</div><div class="stat-sub">${activeDays ? Math.round(rs.length / activeDays) : 0} в активный день</div></div>
+      <div class="stats-grid" data-tip-group>
+        <div class="stat-card" data-tip="Сколько карточек вы повторили сегодня, сколько минут это заняло и какая доля ответов не «Снова»"><div class="stat-label">Сегодня</div><div class="stat-big">${t.count}</div><div class="stat-sub">повторений · ${t.timeMin} мин${t.correct !== null ? ` · ${t.correct}% верно` : ''} · новых ${t.learned}</div></div>
+        <div class="stat-card" data-tip="Сколько дней подряд вы повторяли хотя бы одну карточку. Пропуск дня обнуляет серию"><div class="stat-label">Серия</div><div class="stat-big">${t.streak}</div><div class="stat-sub">дней подряд · активных дней ${activeDays}</div></div>
+        <div class="stat-card" data-tip="Новые ещё ни разу не показывались, учатся — на шагах заучивания, молодые выучены с интервалом до 21 дня, зрелые — от 21 дня"><div class="stat-label">Карточки</div><div class="stat-big">${totalCards}</div><div class="stat-sub"><span class="c-new">${st.new} новых</span> · <span class="c-learn">${st.learning} учатся</span> · ${st.young} молодых · ${st.mature} зрелых</div></div>
+        <div class="stat-card" data-tip="Все ответы за всё время и среднее число повторений в день, когда вы занимались"><div class="stat-label">Всего повторений</div><div class="stat-big">${rs.length}</div><div class="stat-sub">${activeDays ? Math.round(rs.length / activeDays) : 0} в активный день</div></div>
       </div>
       <div class="stat-section"><div class="stat-title">Активность</div>${calendarHtml(deckId)}</div>
-      <div class="stat-section"><div class="stat-title">Повторения за 30 дней</div>${svgBars(reviewsPerDay(deckId))}</div>
-      <div class="stat-section"><div class="stat-title">Прогноз на 30 дней: сколько карточек подойдёт к повторению</div>${svgBars(forecastItems(deckId), { color: 'var(--sage)' })}</div>
+      <div class="stat-section"><div class="stat-title">Повторения за 30 дней</div>${barChart(reviewsPerDay(deckId))}</div>
+      <div class="stat-section"><div class="stat-title">Прогноз на 30 дней: сколько карточек подойдёт к повторению</div>${barChart(forecastItems(deckId), { color: 'var(--sage)' })}</div>
       <div class="stat-section"><div class="stat-title">Кнопки ответов</div>${btnRow('Заучивание', btn.learning)}${btnRow('Молодые', btn.young)}${btnRow('Зрелые', btn.mature)}<div class="cards-p">Молодые — выученные карточки с интервалом до 21 дня, зрелые — от 21 дня.</div></div>
-      <div class="stat-section"><div class="stat-title">Интервалы выученных карточек</div>${svgBars(intervalItems(deckId), { color: '#3b64b4' })}</div>
-      <div class="stat-section"><div class="stat-title">Лёгкость</div>${ease.length ? svgBars(ease, { color: 'var(--gold)' }) : '<div class="cards-empty">Пока нет выученных карточек</div>'}</div>`;
+      <div class="stat-section"><div class="stat-title">Интервалы выученных карточек</div>${barChart(intervalItems(deckId), { color: '#3b64b4' })}</div>
+      <div class="stat-section"><div class="stat-title">Лёгкость</div>${ease.length ? barChart(ease, { color: 'var(--gold)' }) : '<div class="cards-empty">Пока нет выученных карточек</div>'}</div>`;
   }
 
   function cardFaces(card) {
