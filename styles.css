@@ -1,5 +1,30 @@
 /* Dizionario · стили. Токены дизайна в :root, дальше компоненты по разделам.
    Порядок разделов важен: поздние правила перекрывают ранние. */
+
+/* Кириллица для Crimson Pro. В самом Crimson Pro её нет, и русские буквы брались из запасного
+   шрифта с более высокими строчными — латиница рядом выглядела мельче. Здесь к семейству
+   «Crimson Pro» добавлены кириллические начертания PT Serif (только диапазон кириллицы), уменьшенные
+   так, чтобы высота строчных совпала: x у Crimson Pro 0,42 em, х у PT Serif 0,50 em → 84%.
+   Латинские буквы по-прежнему из Google-шрифта Crimson Pro: его начертания этот диапазон не покрывают */
+/* Веса — отдельными значениями, а не диапазоном: при точном совпадении веса у Google-начертания
+   Chrome диапазон пропускал, и кириллица уходила в запасной шрифт */
+@font-face { font-family: 'Crimson Pro'; font-style: normal; font-weight: 300; font-display: swap; size-adjust: 84%;
+  src: url(https://fonts.gstatic.com/s/ptserif/v19/EJRVQgYoZZY2vCFuvAFSzr-tdg.woff2) format('woff2'); unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'Crimson Pro'; font-style: normal; font-weight: 400; font-display: swap; size-adjust: 84%;
+  src: url(https://fonts.gstatic.com/s/ptserif/v19/EJRVQgYoZZY2vCFuvAFSzr-tdg.woff2) format('woff2'); unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'Crimson Pro'; font-style: normal; font-weight: 600; font-display: swap; size-adjust: 84%;
+  src: url(https://fonts.gstatic.com/s/ptserif/v19/EJRSQgYoZZY2vCFuvAnt66qWVyvHpA.woff2) format('woff2'); unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'Crimson Pro'; font-style: normal; font-weight: 700; font-display: swap; size-adjust: 84%;
+  src: url(https://fonts.gstatic.com/s/ptserif/v19/EJRSQgYoZZY2vCFuvAnt66qWVyvHpA.woff2) format('woff2'); unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'Crimson Pro'; font-style: italic; font-weight: 300; font-display: swap; size-adjust: 84%;
+  src: url(https://fonts.gstatic.com/s/ptserif/v19/EJRTQgYoZZY2vCFuvAFT_rm1chb-.woff2) format('woff2'); unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'Crimson Pro'; font-style: italic; font-weight: 400; font-display: swap; size-adjust: 84%;
+  src: url(https://fonts.gstatic.com/s/ptserif/v19/EJRTQgYoZZY2vCFuvAFT_rm1chb-.woff2) format('woff2'); unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'Crimson Pro'; font-style: italic; font-weight: 600; font-display: swap; size-adjust: 84%;
+  src: url(https://fonts.gstatic.com/s/ptserif/v19/EJRQQgYoZZY2vCFuvAFT9gaQZy3foPNB.woff2) format('woff2'); unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'Crimson Pro'; font-style: italic; font-weight: 700; font-display: swap; size-adjust: 84%;
+  src: url(https://fonts.gstatic.com/s/ptserif/v19/EJRQQgYoZZY2vCFuvAFT9gaQZy3foPNB.woff2) format('woff2'); unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+
   :root {
     --cream: #f5f0e8;
     --parchment: #ede5d0;
