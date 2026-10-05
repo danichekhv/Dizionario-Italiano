@@ -822,6 +822,7 @@ alter table reviews add column if not exists applied boolean default false;`;
     }
     const { n, front, answer } = cardFaces(S.current);
     const isIt = S.current.direction === 'it';
+    // Слова фразы на лицевой стороне кликабельны только после ответа: шторка по наведению показала бы перевод
     const tokens = clozeTokens(n.example, n.word);
     // Лицевая сторона: пример с пропуском (RU→IT) или с выделенным словом (IT→RU); слова примера кликабельны
     const sentence = tokens ? `<div class="study-box study-sentence"><div class="study-box-label">Пример</div><div class="study-box-text italic">${sentenceHtml(tokens, S.revealed || isIt ? 'mark' : 'gap')}</div></div>`
@@ -860,7 +861,7 @@ alter table reviews add column if not exists applied boolean default false;`;
       <div class="study-body">
         <div class="study-card ${S.current.direction}">
           <div class="study-dir">${isIt ? 'IT → RU' : 'RU → IT'}${S.current.state === 'new' ? ' · новая' : ''}</div>
-          <div class="study-front">${isIt && isPhrase(front) ? phraseHtml(front) : esc(front)}</div>
+          <div class="study-front">${isIt && isPhrase(front) && S.revealed ? phraseHtml(front) : esc(front)}</div>
           ${back}
         </div>
       </div>
