@@ -894,7 +894,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   }
   function bindFlash(d) {
     const card = document.getElementById('flashCard'); if (!card) return;
-    let x0 = null, dx = 0, pid = null, moved = false;
+    let x0 = null, dx = 0, pid = null, moved = false, t0 = 0;
     const drag = x => {
       card.style.transform = x ? `translateX(${x}px) rotate(${x / 18}deg)` : '';
       card.style.setProperty('--swipe', Math.min(1, Math.abs(x) / SWIPE_PX));
@@ -902,7 +902,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     };
     card.addEventListener('pointerdown', e => {
       if (d.leaving || (e.pointerType === 'mouse' && e.button !== 0)) return;
-      x0 = e.clientX; dx = 0; pid = e.pointerId; moved = false; card.classList.add('dragging');
+      x0 = e.clientX; dx = 0; t0 = Date.now(); pid = e.pointerId; moved = false; card.classList.add('dragging');
     });
     card.addEventListener('pointermove', e => {
       if (x0 === null || e.pointerId !== pid) return;
@@ -912,7 +912,9 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const end = e => {
       if (x0 === null || e.pointerId !== pid) return;
       x0 = null; card.classList.remove('dragging'); moved = Math.abs(dx) >= 8;
-      if (Math.abs(dx) >= SWIPE_PX) { flashSwipe(d, dx > 0 ? 1 : 0); return; }
+      // Засчитываем и длинную протяжку, и короткий быстрый бросок
+      const fling = Math.abs(dx) >= 40 && Math.abs(dx) / Math.max(1, Date.now() - t0) > 0.5;
+      if (Math.abs(dx) >= SWIPE_PX || fling) { flashSwipe(d, dx > 0 ? 1 : 0); return; }
       drag(0);
     };
     card.addEventListener('pointerup', end); card.addEventListener('pointercancel', end);
