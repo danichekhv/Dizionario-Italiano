@@ -3691,3 +3691,25 @@ body.no-search .back-btn { margin-top: -32px; }
 .flash-tag.know { right: 18px; color: var(--sage); transform: rotate(8deg); }
 .flash-card.to-learn .flash-tag.learn, .flash-card.to-know .flash-tag.know { opacity: var(--swipe, 0); }
 .study-body.flash-body { overflow-x: hidden; }
+/* ── Шапка колоды: вкладки Учить / Слова / Статистика и меню действий ─────────── */
+.deck-head { flex-wrap: nowrap; margin-bottom: 12px; }
+.deck-head .cards-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.deck-menu-wrap { position: relative; flex-shrink: 0; }
+/* Три точки без рамки и фона: тихая кнопка, как ссылки в хлебных крошках */
+.deck-more { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; margin-right: -8px; padding: 0; border: none; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; transition: color var(--t-base), background var(--t-base); }
+.deck-more .icon { width: 22px; height: 22px; stroke-width: 2.4; }
+.deck-more:hover { color: var(--ink); background: rgba(var(--stone-rgb), .12); }
+.deck-menu { display: none; position: absolute; right: -4px; top: calc(100% + 6px); z-index: 20; min-width: 220px; padding: 6px 0; background: white; border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-md); }
+.deck-menu.open { display: block; }
+.deck-menu button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 16px; border: none; background: none; font-family: var(--font-text); font-size: var(--fs-body); color: var(--ink); text-align: left; cursor: pointer; white-space: nowrap; }
+.deck-menu button:hover { background: var(--parchment); }
+.deck-menu .icon { width: 16px; height: 16px; color: var(--muted); }
+.deck-menu hr { border: none; border-top: 1px solid var(--border); margin: 6px 0; }
+.deck-menu .danger, .deck-menu .danger .icon { color: var(--danger); }
+.deck-tabs { display: flex; gap: 24px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
+.deck-tab { padding: 8px 0 10px; margin-bottom: -1px; border: none; border-bottom: 2px solid transparent; background: none; font-family: var(--font-text); font-size: var(--fs-body); color: var(--muted); cursor: pointer; transition: color var(--t-base); }
+.deck-tab:hover { color: var(--ink); }
+.deck-tab.on { color: var(--ink); border-bottom-color: var(--terracotta); }
+.deck-tab b { margin-left: 5px; font-family: var(--font-mono); font-weight: 400; font-size: var(--fs-caption); color: var(--muted); }
+.words-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.words-count { margin-left: auto; font-size: var(--fs-small); color: var(--muted); }

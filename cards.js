@@ -339,6 +339,46 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         <div class="tile-bar" title="выучено ${pct}%"><i style="width:${pct}%"></i></div>
       </div>`;
   }
+  // ── Шапка колоды: название, меню «⋯» и вкладки Учить / Слова / Статистика ─────
+  // Управление колодой убрано с первого экрана: учёба — вкладка по умолчанию, список слов
+  // и статистика — соседние вкладки, а переименовать, поделиться и удалить — в меню.
+  // Вкладки переключаются без записи в историю: «Назад» из любой ведёт к родительской колоде.
+  function deckHeader(id, tab) {
+    const d = deckById(id), c = counts(cardsOfNotes(notesInDeck(id))), n = notesInDeck(id).length;
+    const tabBtn = (key, label) => `<button class="deck-tab${tab === key ? ' on' : ''}" onclick="Cards.deckTab('${key}')">${label}</button>`;
+    return `${crumbsHtml(id)}
+      <div class="cards-head deck-head">
+        <div class="cards-title">${esc(d.name)}</div>
+        <div class="cards-head-counts" title="новые · заучиваемые · к повторению"><span class="c-new">${c.new}</span><span class="c-learn">${c.learn}</span><span class="c-due">${c.due}</span></div>
+        <div class="deck-menu-wrap">
+          <button class="deck-more" onclick="event.stopPropagation();Cards.deckMenu()" title="Действия с колодой" aria-label="Действия с колодой">${svgIcon('more')}</button>
+          <div class="deck-menu" id="deckMenu">
+            <button onclick="Cards.deckMenu(false);Cards.openAdd('${id}')">${svgIcon('plus')} Добавить слова</button>
+            <button onclick="Cards.deckMenu(false);Cards.newDeck('${id}')">${svgIcon('folder')} Новая подколода</button>
+            <button onclick="Cards.deckMenu(false);Cards.shareDeck('${id}')">${svgIcon('link')} Поделиться</button>
+            <button onclick="Cards.deckMenu(false);Cards.renameDeck('${id}')">${svgIcon('edit')} Переименовать</button>
+            <hr>
+            <button class="danger" onclick="Cards.deckMenu(false);Cards.deleteDeck('${id}')">${svgIcon('trash')} Удалить колоду</button>
+          </div>
+        </div>
+      </div>
+      <div class="deck-tabs">${tabBtn('learn', 'Учить')}${tabBtn('words', `Слова<b>${n}</b>`)}${tabBtn('stats', 'Статистика')}</div>`;
+  }
+  const currentDeckId = () => S.view === 'browse' ? S.deckId : S.view === 'stats' ? S.statsDeckId : S.folder;
+  function deckTab(tab) {
+    const id = currentDeckId(); if (!id) return;
+    S.browseSelected.clear();
+    if (tab === 'learn') { S.view = 'decks'; S.folder = id; }
+    if (tab === 'words') { S.view = 'browse'; S.deckId = id; S.tagFilter = ''; S.browseQuery = ''; }
+    if (tab === 'stats') { S.view = 'stats'; S.statsDeckId = id; S.statsMonth = 0; }
+    render();
+  }
+  function deckMenu(open) {
+    const m = document.getElementById('deckMenu'); if (!m) return;
+    m.classList.toggle('open', open === undefined ? !m.classList.contains('open') : open);
+  }
+  document.addEventListener('click', e => { if (!e.target.closest('.deck-menu-wrap')) deckMenu(false); });
+
   // Режимы тренировки на словах этой колоды (в корне — на всех словах)
   function drillTiles(id, notes) {
     if (!notes.some(n => n.word && n.translation)) return '';
@@ -361,12 +401,18 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const fresh = Math.min(c.new, newPerDay()), repeat = c.learn + c.due, due = repeat + fresh;
     const parts = [repeat ? `${repeat} к повторению` : '', fresh ? `${fresh} новых` : ''].filter(Boolean).join(' · ');
     const head = (icon, label) => `<div class="tile-head"><div class="tile-icon">${svgIcon(icon)}</div><span class="tile-label">${label}</span></div>`;
-    const actions = id ? `
-        <button class="cards-btn" onclick="Cards.openAdd('${id}')">${svgIcon('plus')} Добавить слова</button>
-        <button class="cards-btn" onclick="Cards.browse('${id}')">${svgIcon('list')} Карточки</button>
-        <button class="cards-btn" onclick="Cards.shareDeck('${id}')">${svgIcon('link')} Поделиться</button>
-        <button class="cards-btn" onclick="Cards.renameDeck('${id}')">${svgIcon('edit')} Переименовать</button>
-        <button class="cards-btn danger" onclick="Cards.deleteDeck('${id}')">${svgIcon('trash')} Удалить</button>` : '';
+    // Внутри колоды — шапка с вкладками; на вкладке «Учить» только учёба и подколоды
+    if (id) {
+      el.innerHTML = `${deckHeader(id, 'learn')}
+      <div class="bento"><div class="tile w6 today-tile">${todayHero(id)}</div></div>
+      ${drillTiles(id, notes)}
+      <div class="bento-label">Подколоды</div>
+      <div class="bento">
+        ${kids.map(deckTile).join('')}
+        <button class="tile dashed link" onclick="Cards.newDeck('${id}')">${svgIcon('plus')} Подколода</button>
+      </div>`;
+      return;
+    }
     el.innerHTML = `
       ${crumbsHtml(id)}
       <div class="cards-head">
@@ -388,7 +434,6 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
           <div class="tile-bar"><i style="width:${pct}%"></i></div>
         </div>
       </div>
-      ${actions ? `<div class="cards-actions">${actions}</div>` : ''}
       ${drillTiles(id, notes)}
       <div class="bento-label">${id ? 'Подколоды' : 'Колоды'}</div>
       <div class="bento">
@@ -543,7 +588,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     };
     const ease = easeItems(deckId);
     el.innerHTML = `
-      <div class="cards-head"><div class="cards-title small">Статистика</div><div class="cards-head-deck">${esc(title)}</div></div>
+      ${deckId && deckById(deckId) ? deckHeader(deckId, 'stats') : `<div class="cards-head"><div class="cards-title small">Статистика</div><div class="cards-head-deck">${esc(title)}</div></div>`}
       ${S.reviewsMissing ? `<div class="cards-note">История ответов не пишется: в Supabase нет таблицы <b>reviews</b>. ${isAdmin() ? 'Выполните SQL ещё раз, он добавит только недостающее. <button class="cards-btn" onclick="Cards.showSql()">Показать SQL</button>' : 'Обратитесь к владельцу сайта.'}</div>` : ''}
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-label">Сегодня</div><div class="stat-big">${t.count}</div><div class="stat-sub">повторений · ${t.timeMin} мин${t.correct !== null ? ` · ${t.correct}% верно` : ''} · новых ${t.learned}</div></div>
@@ -1359,8 +1404,9 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const tags = [...new Set(notes.flatMap(n => n.tags || []))].sort();
     const filtered = currentNotes();
     el.innerHTML = `
-      <div class="cards-head"><div class="cards-title small">Карточки</div><div class="cards-head-deck">${esc(deckPath(S.deckId))} · <span id="browseCount">${filtered.length}</span></div></div>
+      ${deckById(S.deckId) ? deckHeader(S.deckId, 'words') : `<div class="cards-head"><div class="cards-title small">Карточки</div><div class="cards-head-deck">${esc(deckPath(S.deckId))}</div></div>`}
       <div class="cards-panel">
+        <div class="words-top"><button class="cards-btn primary" onclick="Cards.openAdd('${S.deckId}')">${svgIcon('plus')} Добавить слова</button><span class="words-count"><span id="browseCount">${filtered.length}</span> из ${notes.length}</span></div>
         <div class="cards-search-wrap">
           <input class="cards-search" id="browseSearch" type="text" value="${esc(S.browseQuery)}" placeholder="Поиск по колоде: слово или перевод"
             autocomplete="off" spellcheck="false" oninput="Cards.setBrowseQuery(this.value)">
@@ -1941,7 +1987,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     },
     todayHero: () => S.loaded && !S.missingTables ? todayHero(null) : '',
     reveal, answer, undo,
-    drill: startDrill, drillDo,
+    drill: startDrill, drillDo, deckTab, deckMenu,
     openAdd(id) { pushView('add'); S.deckId = id; S.view = 'add'; S.build = null; render(); },
     buildFromText, importFile, saveBuild,
     toggleItem(i, v) { S.build.items[i].include = v; render(); },
