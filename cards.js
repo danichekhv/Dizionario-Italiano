@@ -15,7 +15,7 @@
     queue: [], current: null, revealed: false, undo: null,
     loaded: false, missingTables: false,
     build: null, browseSelected: new Set(), browseQuery: '',
-    reviews: [], reviewsMissing: false, shownAt: 0, statsDeckId: null, hasAlt: true
+    drill: null, reviews: [], reviewsMissing: false, shownAt: 0, statsDeckId: null, hasAlt: true
   };
 
   // ── Supabase REST ────────────────────────────────────────────────────────────
@@ -283,7 +283,8 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const el = root(); if (!el) return;
     if (!S.loaded) { el.innerHTML = `<div class="cards-empty">Загрузка колод…</div>`; return; }
     if (S.missingTables) { closeOverlay(); renderSetup(el); return; }
-    if (S.view === 'study') { renderDecks(el); const o = overlay(); renderStudy(o); o.classList.add('open'); document.body.classList.add('study-open'); return; }
+    if (S.view === 'drill' && !S.drill) S.view = 'decks';
+    if (S.view === 'study' || S.view === 'drill') { renderDecks(el); const o = overlay(); (S.view === 'study' ? renderStudy : renderDrill)(o); o.classList.add('open'); document.body.classList.add('study-open'); return; }
     closeOverlay();
     if (S.view === 'sql') { renderSetup(el); return; }
     ({ decks: renderDecks, add: renderAdd, browse: renderBrowse, stats: renderStats })[S.view](el);
@@ -338,6 +339,19 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         <div class="tile-bar" title="выучено ${pct}%"><i style="width:${pct}%"></i></div>
       </div>`;
   }
+  // Режимы тренировки на словах этой колоды (в корне — на всех словах)
+  function drillTiles(id, notes) {
+    if (!notes.some(n => n.word && n.translation)) return '';
+    const arg = id ? `'${id}'` : 'null', best = lsGet(MATCH_BEST_KEY, {})[matchKey(id)];
+    return `<div class="bento-label">Тренировка</div>
+      <div class="bento drill-modes">${DRILL_MODES.map(m => `
+        <button class="tile link" onclick="Cards.drill('${m.key}', ${arg})">
+          <div class="tile-head"><div class="tile-icon">${svgIcon(m.icon)}</div></div>
+          <div class="tile-title">${m.name}</div>
+          <div class="tile-sub">${m.key === 'match' && best ? `Рекорд ${fmtSec(best)}` : m.sub}</div>
+        </button>`).join('')}
+      </div>`;
+  }
   function renderDecks(el) {
     const id = S.folder || null, d = id ? deckById(id) : null;
     if (id && !d) { S.folder = null; renderDecks(el); return; } // колоду удалили или её нет в этом аккаунте
@@ -375,6 +389,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         </div>
       </div>
       ${actions ? `<div class="cards-actions">${actions}</div>` : ''}
+      ${drillTiles(id, notes)}
       <div class="bento-label">${id ? 'Подколоды' : 'Колоды'}</div>
       <div class="bento">
         ${kids.map(deckTile).join('')}
@@ -691,7 +706,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         <div class="cards-head-deck">${esc(deck ? deck.name : 'все колоды')}${S.tagFilter ? ` · #${esc(S.tagFilter)}` : ''}</div>
         <button class="cards-undo ${S.undo ? '' : 'disabled'}" onclick="Cards.undo()" title="Отменить ответ">${svgIcon('undo')}</button>
         <button class="cards-edit ${S.current ? '' : 'disabled'}" onclick="Cards.editCurrent()" title="Редактировать карточку (E)">${svgIcon('edit')}</button>
-      </div>`;
+      </div>` + progressHtml((S.session || {}).n || 0, ((S.session || {}).n || 0) + S.queue.length + (S.current ? 1 : 0));
     if (!S.current) {
       // Итог сессии: сколько прошли, доля верных, когда подойдут следующие
       const s = S.session || { start: Date.now(), n: 0, again: 0 };
@@ -752,6 +767,454 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     // На компьютере курсор сразу в поле ответа; на телефоне клавиатуру не поднимаем, пока не тронут поле
     const inp = document.getElementById('studyInput');
     if (inp && !(typeof isTouchDevice === 'function' && isTouchDevice())) inp.focus();
+  }
+
+  // ── Тренировка: режимы как в Quizlet ─────────────────────────────────────────
+  // Карточки, заучивание, тест и подбор — упражнения на тех же словах. Расписание повторений
+  // они не трогают: промах в игре на скорость не должен сбрасывать выученное слово.
+  const DRILL_DIR_KEY = 'dizionario_drill_dir', TEST_OPTS_KEY = 'dizionario_test_opts', MATCH_BEST_KEY = 'dizionario_match_best';
+  const DRILL_MODES = [
+    { key: 'flash', name: 'Карточки', icon: 'layers', sub: 'Листать и переворачивать' },
+    { key: 'learn', name: 'Заучивание', icon: 'zap', sub: 'Сначала выбор, потом письмо' },
+    { key: 'test', name: 'Тест', icon: 'list', sub: 'Вопросы разных видов с оценкой' },
+    { key: 'match', name: 'Подбор', icon: 'shuffle', sub: 'Пары на время' },
+  ];
+  const DIR_LABEL = { it: 'IT → RU', ru: 'RU → IT', mix: 'вперемешку' };
+  const LEARN_ROUND = 7, MATCH_PAIRS = 6;
+  const lsGet = (k, def) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? def : v; } catch (e) { return def; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+  const drillDir = () => { const d = lsGet(DRILL_DIR_KEY, 'it'); return DIR_LABEL[d] ? d : 'it'; };
+  const pickDir = (d = drillDir()) => d === 'mix' ? (Math.random() < .5 ? 'it' : 'ru') : d;
+  function shuffle(arr) { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  const drillPool = deckId => scopeNotes(deckId).filter(n => n.word && n.translation);
+  // Направление it — показываем слово, ждём перевод; ru — наоборот. На лицо идёт главный перевод, без пояснений
+  const mainRu = n => trVariants(n.translation)[0] || n.translation || '';
+  const askText = (n, dir) => dir === 'it' ? n.word : mainRu(n);
+  const ansText = (n, dir) => dir === 'it' ? n.translation : n.word;
+  const ruSet = n => new Set(trVariants(n.translation).map(normAns));
+  // Отвлекающие варианты: слова, чей перевод не пересекается с переводом загаданного, иначе
+  // в выборе окажутся два верных ответа (casa и abitazione — оба «дом»). Мало слов в колоде — добираем из остальных
+  function distractors(n, dir, pool, k) {
+    const mine = ruSet(n), seen = new Set([normAns(ansText(n, dir))]), out = [];
+    const ok = x => {
+      if (x === n || !x.word || !x.translation || out.includes(x) || normAns(x.word) === normAns(n.word)) return false;
+      if ([...ruSet(x)].some(v => mine.has(v))) return false;
+      const key = normAns(ansText(x, dir)); if (!key || seen.has(key)) return false;
+      seen.add(key); return true;
+    };
+    for (const x of [...shuffle(pool), ...shuffle(S.notes)]) { if (out.length >= k) break; if (ok(x)) out.push(x); }
+    return out;
+  }
+  const checkWritten = (n, dir, typed) => checkTyped(typed, answerVariants({ direction: dir }, n, clozeTokens(n.example, n.word)), dir === 'ru');
+  const progressHtml = (done, total) => `<div class="drill-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}"><i style="width:${total ? Math.min(100, Math.round(done / total * 100)) : 0}%"></i></div>`;
+  const fmtSec = ms => (ms / 1000).toFixed(1).replace('.', ',') + ' с';
+  const matchKey = deckId => deckId || 'all';
+
+  function newDrill(mode, deckId, pool = drillPool(deckId)) {
+    const d = { mode, deckId, pool };
+    if (mode === 'flash') Object.assign(d, { queue: shuffle(pool).map(n => ({ n, dir: pickDir() })), i: 0, flipped: false, known: new Set(), round: 1, roundKnown: 0, hist: [] });
+    if (mode === 'learn') {
+      // Выбор из вариантов возможен, только если есть хотя бы ещё одно слово; иначе сразу письмо
+      const level = S.notes.length > 1 ? 0 : 1;
+      Object.assign(d, { items: shuffle(pool).map(n => ({ n, dir: pickDir(), level, miss: 0 })), roundNo: 0 });
+      learnRound(d);
+    }
+    if (mode === 'test') Object.assign(d, { phase: 'setup', opts: { count: 20, dir: drillDir(), types: { tf: true, mc: true, write: true }, ...lsGet(TEST_OPTS_KEY, {}) } });
+    if (mode === 'match') Object.assign(d, { phase: 'ready' });
+    return d;
+  }
+  function startDrill(mode, deckId) {
+    const pool = drillPool(deckId);
+    if (!pool.length) { showToast('В колоде пока нет слов'); return; }
+    if (mode !== 'flash' && pool.length < 2) { showToast('Для этого режима нужно хотя бы два слова'); return; }
+    pushView('drill');
+    S.deckId = deckId; S.view = 'drill'; S.drill = newDrill(mode, deckId, pool); render();
+  }
+
+  // ── Карточки: перевернуть, отметить «знаю» или «ещё учу»; неотмеченные идут на следующий круг
+  function renderFlash(d) {
+    const total = d.pool.length, done = d.known.size;
+    const head = drillTop(d, `${done} / ${total}`, true) + progressHtml(done, total);
+    if (done >= total) return head + doneHtml(`Все ${total} ${pluralRu(total, 'слово', 'слова', 'слов')} отмечены «знаю»`,
+      `${d.round} ${pluralRu(d.round, 'круг', 'круга', 'кругов')}`,
+      `<button class="cards-btn primary" onclick="Cards.drillDo('restart')">Пройти заново</button><button class="cards-btn" onclick="Cards.drillDo('mode', 'learn')">Заучивание</button>`);
+    if (d.i >= d.queue.length) {
+      const left = total - done;
+      return head + `<div class="study-body"><div class="cards-done"><div>Круг ${d.round}: знаю ${d.roundKnown} из ${d.queue.length}</div>
+        <div class="study-summary">Осталось ${left} ${pluralRu(left, 'слово', 'слова', 'слов')}</div>
+        <div class="drill-actions"><button class="cards-btn primary" onclick="Cards.drillDo('nextRound')">Следующий круг</button><button class="cards-btn" onclick="Cards.drillDo('restart')">Начать сначала</button></div></div></div>
+        <div class="study-footer"><div class="study-hint">Enter — следующий круг</div></div>`;
+    }
+    const it = d.queue[d.i], n = it.n;
+    const back = d.flipped ? `
+        <div class="study-rule"></div>
+        <div class="study-answer">${esc(ansText(n, it.dir))}</div>
+        ${n.phonetic ? `<div class="study-ipa">${esc(n.phonetic)}</div>` : ''}
+        ${n.example ? `<div class="study-box"><div class="study-box-label">Пример</div><div class="study-box-text italic">${esc(n.example)}</div></div>` : ''}`
+      : `<div class="drill-tap">нажмите, чтобы перевернуть</div>`;
+    return head + `
+      <div class="study-body">
+        <div class="study-card flash-card ${it.dir}" role="button" tabindex="0" onclick="Cards.drillDo('flip')">
+          <div class="study-dir">${DIR_LABEL[it.dir]} · ${d.i + 1} из ${d.queue.length}</div>
+          <div class="study-front">${esc(askText(n, it.dir))}</div>
+          ${back}
+        </div>
+      </div>
+      <div class="study-footer">
+        <div class="study-buttons two">
+          <button class="sb again" onclick="Cards.drillDo('know', 0)">Ещё учу</button>
+          <button class="sb good" onclick="Cards.drillDo('know', 1)">Знаю</button>
+        </div>
+        <div class="study-hint">Пробел — перевернуть, ← — ещё учу, → — знаю, Z — вернуть карточку, Esc — выйти</div>
+      </div>`;
+  }
+
+  // ── Заучивание: круги по семь слов; каждое слово сначала угадать из четырёх, потом написать.
+  // Ошибка возвращает слово в конец круга, освоено — когда пройдены обе ступени
+  function learnRound(d) {
+    const left = d.items.filter(x => x.level < 2);
+    if (!left.length) { d.q = null; d.summary = false; return; }
+    // Начатые слова доучиваем раньше новых, чтобы круги не расползались по всей колоде
+    const started = left.filter(x => x.level > 0 || x.miss), fresh = left.filter(x => !(x.level > 0 || x.miss));
+    d.round = shuffle([...started, ...fresh].slice(0, LEARN_ROUND)); d.round.forEach(x => { x.requeued = false; });
+    d.ri = 0; d.roundNo++; d.roundRes = { ok: 0, n: 0 }; d.summary = false; learnQ(d);
+  }
+  function learnQ(d) {
+    const it = d.round[d.ri];
+    const type = it.level === 0 ? 'mc' : 'write';
+    d.q = { it, type, options: type === 'mc' ? shuffle([it.n, ...distractors(it.n, it.dir, d.pool, 3)]) : null, picked: null, check: null, answered: false, ok: false };
+  }
+  function learnFinish(d, ok) {
+    const q = d.q, it = q.it;
+    q.answered = true; q.ok = ok; d.roundRes.n++;
+    if (ok) { it.level++; d.roundRes.ok++; }
+    else { it.miss++; if (!it.requeued) { it.requeued = true; q.requeuedNow = true; d.round.push(it); } }
+    // Верный ответ уходит сам, как в Quizlet; на ошибке ждём «Дальше», чтобы успели прочитать правильный
+    if (ok) setTimeout(() => { if (S.view === 'drill' && S.drill === d && d.q === q) { learnNext(d); render(); } }, q.type === 'mc' ? 700 : 1100);
+  }
+  function learnNext(d) {
+    if (!d.q || !d.q.answered) return;
+    d.ri++;
+    if (d.items.every(x => x.level >= 2)) { d.q = null; return; }
+    if (d.ri >= d.round.length) { d.q = null; d.summary = true; return; }
+    learnQ(d);
+  }
+  function renderLearn(d) {
+    const N = d.items.length, mastered = d.items.filter(x => x.level >= 2).length;
+    const head = drillTop(d, `${mastered} / ${N}`, !!d.q && !d.q.answered) + progressHtml(d.items.reduce((s, x) => s + Math.min(2, x.level), 0), N * 2);
+    if (!d.q && !d.summary) {
+      const hard = d.items.filter(x => x.miss).sort((a, b) => b.miss - a.miss).slice(0, 8);
+      const misses = d.items.reduce((s, x) => s + x.miss, 0);
+      const list = hard.length ? `<div class="drill-list"><div class="study-box-label">Труднее всего</div>${hard.map(x => `<div class="drill-list-row"><b>${esc(x.n.word)}</b><span>${esc(mainRu(x.n))}</span><i>${x.miss} ${pluralRu(x.miss, 'ошибка', 'ошибки', 'ошибок')}</i></div>`).join('')}</div>` : '';
+      return head + doneHtml(`Все ${N} ${pluralRu(N, 'слово', 'слова', 'слов')} освоены`, misses ? `${misses} ${pluralRu(misses, 'ошибка', 'ошибки', 'ошибок')} по пути` : 'Без единой ошибки',
+        `<button class="cards-btn primary" onclick="Cards.drillDo('restart')">Пройти заново</button><button class="cards-btn" onclick="Cards.drillDo('mode', 'test')">Тест</button>`, list);
+    }
+    if (d.summary) {
+      return head + `<div class="study-body"><div class="cards-done"><div>Круг ${d.roundNo} пройден</div>
+        <div class="study-summary">Верно ${d.roundRes.ok} из ${d.roundRes.n} · освоено ${mastered} из ${N}</div>
+        <div class="drill-actions"><button class="cards-btn primary" onclick="Cards.drillDo('continue')">Продолжить</button></div></div></div>
+        <div class="study-footer"><div class="study-hint">Enter — продолжить</div></div>`;
+    }
+    const q = d.q, it = q.it, n = it.n;
+    const prompt = q.type === 'mc' ? (it.dir === 'it' ? 'Выберите перевод' : 'Выберите слово') : (it.dir === 'it' ? 'Напишите перевод' : 'Напишите по-итальянски');
+    let body = '';
+    if (q.type === 'mc') {
+      body = `<div class="drill-opts">${q.options.map((o, k) => {
+        const cls = !q.answered ? '' : o === n ? ' right' : k === q.picked ? ' wrong' : ' dim';
+        return `<button class="drill-opt${cls}" onclick="Cards.drillDo('pick', ${k})" ${q.answered ? 'disabled' : ''}><span class="drill-key">${k + 1}</span>${esc(ansText(o, it.dir))}</button>`;
+      }).join('')}</div>`;
+    } else {
+      const tokens = it.dir === 'ru' ? clozeTokens(n.example, n.word) : null;
+      const sentence = tokens ? `<div class="study-box study-sentence"><div class="study-box-label">Пример</div><div class="study-box-text italic">${sentenceHtml(tokens, q.answered ? 'mark' : 'gap')}</div></div>` : '';
+      if (!q.answered) body = `${sentence}
+        <div class="study-input-wrap"><input class="study-input" id="drillInput" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"
+          placeholder="${it.dir === 'it' ? 'перевод' : 'слово по-итальянски'}" onkeydown="if(event.key==='Enter'){event.preventDefault();Cards.drillDo('write', this.value)}else if(event.key==='Escape'){this.blur()}"></div>`;
+      else {
+        const c = q.check;
+        const typed = c ? `<div class="study-typed ${c.ok ? 'ok' : c.near ? 'near' : 'bad'}"><div class="study-typed-line">${diffHtml(c.typedOut)}</div>
+          <div class="study-typed-arrow">${c.ok ? '✓ верно' : c.near ? '≈ почти' : '✗'}</div></div>` : '';
+        body = `<div class="study-rule"></div>${typed}<div class="study-answer">${esc(ansText(n, it.dir))}</div>${n.phonetic && it.dir === 'ru' ? `<div class="study-ipa">${esc(n.phonetic)}</div>` : ''}${sentence}`;
+      }
+    }
+    const note = q.answered && !q.ok ? `<div class="drill-note">Слово вернётся в конце круга</div>` : '';
+    const near = q.answered && !q.ok && q.check && q.check.near;
+    let foot;
+    if (!q.answered) foot = q.type === 'mc'
+      ? `<div class="study-hint">Клавиши 1–${q.options.length} — ответ, Esc — выйти</div>`
+      : `<div class="study-buttons two"><button class="sb again" onclick="Cards.drillDo('giveUp')">Не знаю</button><button class="sb good" onclick="Cards.drillDo('write', document.getElementById('drillInput').value)">Ответить</button></div><div class="study-hint">Enter — ответить, Esc — выйти</div>`;
+    else foot = `<div class="study-buttons ${near ? 'two' : 'one'}">${near ? `<button class="sb hard" onclick="Cards.drillDo('override')">Засчитать</button>` : ''}<button class="sb show" onclick="Cards.drillDo('next')">Дальше</button></div><div class="study-hint">Enter — дальше</div>`;
+    return head + `
+      <div class="study-body">
+        <div class="study-card ${it.dir}">
+          <div class="study-dir">${prompt}</div>
+          <div class="study-front">${esc(askText(n, it.dir))}</div>
+          ${body}${note}
+        </div>
+      </div>
+      <div class="study-footer">${foot}</div>`;
+  }
+
+  // ── Тест: один лист из вопросов трёх видов — верно/неверно, выбор, письмо; оценка в конце
+  const TEST_TYPES = [['tf', 'Верно или неверно'], ['mc', 'Выбор ответа'], ['write', 'Письменный ответ']];
+  function testBuild(d) {
+    const o = d.opts, types = TEST_TYPES.map(t => t[0]).filter(t => o.types[t]);
+    const count = o.count === 'all' ? d.pool.length : Math.min(o.count, d.pool.length);
+    const qs = shuffle(d.pool).slice(0, count).map((n, i) => {
+      const dir = pickDir(o.dir); let type = types[i % types.length];
+      const others = type === 'write' ? [] : distractors(n, dir, d.pool, type === 'mc' ? 3 : 1);
+      if (type !== 'write' && !others.length) type = 'write'; // не из чего составить варианты
+      const q = { n, dir, type };
+      if (type === 'mc') q.options = shuffle([n, ...others]);
+      if (type === 'tf') { q.truth = Math.random() < .5; q.shown = q.truth ? n : others[0]; }
+      return q;
+    });
+    d.qs = TEST_TYPES.flatMap(([t]) => qs.filter(q => q.type === t)); // вопросы одного вида идут подряд, как в Quizlet
+    d.ans = new Array(d.qs.length).fill(null); d.res = null; d.phase = 'run';
+  }
+  const testAnswered = d => d.ans.filter(a => a !== null && String(a).trim() !== '').length;
+  function testGrade(d) {
+    d.res = d.qs.map((q, i) => {
+      const a = d.ans[i];
+      if (a === null || String(a).trim() === '') return { ok: false, empty: true };
+      if (q.type === 'mc') return { ok: q.options[a] === q.n };
+      if (q.type === 'tf') return { ok: a === q.truth };
+      const c = checkWritten(q.n, q.dir, a); return { ok: !!(c && c.ok), near: !!(c && c.near), check: c };
+    });
+    d.phase = 'result';
+  }
+  function renderTest(d) {
+    if (d.phase === 'setup') {
+      const o = d.opts, N = d.pool.length;
+      const counts = [5, 10, 20].filter(c => c < N).concat(['all']);
+      const chip = (on, act, arg, label) => `<button class="drill-chip${on ? ' on' : ''}" onclick="Cards.drillDo('${act}', '${arg}')">${label}</button>`;
+      return drillTop(d) + `<div class="study-body"><div class="study-card drill-setup">
+        <div class="study-front">Тест</div>
+        <div class="drill-field"><div class="study-box-label">Вопросов</div><div class="drill-chips">${counts.map(c => chip(String(o.count) === String(c) || (c === 'all' && o.count >= N), 'tcount', c, c === 'all' ? `все ${N}` : c)).join('')}</div></div>
+        <div class="drill-field"><div class="study-box-label">Направление</div><div class="drill-chips">${Object.keys(DIR_LABEL).map(k => chip(o.dir === k, 'tdir', k, DIR_LABEL[k])).join('')}</div></div>
+        <div class="drill-field"><div class="study-box-label">Виды вопросов</div><div class="drill-chips">${TEST_TYPES.map(([k, l]) => chip(o.types[k], 'ttype', k, l)).join('')}</div></div>
+        <div class="drill-actions"><button class="cards-btn primary" onclick="Cards.drillDo('tstart')">Начать тест</button></div>
+      </div></div>`;
+    }
+    const total = d.qs.length;
+    if (d.phase === 'run') {
+      const done = testAnswered(d);
+      return drillTop(d, `<span id="testCount">${done}</span> / ${total}`) + progressHtml(done, total) + `
+        <div class="study-body"><div class="test-sheet">${testSheet(d)}
+          <div class="drill-actions"><button class="cards-btn primary" onclick="Cards.drillDo('tsubmit')">Проверить</button></div>
+        </div></div>`;
+    }
+    const ok = d.res.filter(r => r.ok).length, pct = Math.round(ok / total * 100);
+    return drillTop(d, `${ok} / ${total}`) + progressHtml(ok, total) + `
+      <div class="study-body"><div class="test-sheet">
+        <div class="test-score"><div class="test-score-big">${pct}%</div><div class="study-summary">верно ${ok} из ${total}</div>
+          <div class="drill-actions"><button class="cards-btn primary" onclick="Cards.drillDo('tnew')">Новый тест</button>${ok < total ? `<button class="cards-btn" onclick="Cards.drillDo('learnWrong')">Учить ошибки</button>` : ''}</div></div>
+        ${testSheet(d)}
+      </div></div>`;
+  }
+  function testSheet(d) {
+    const graded = d.phase === 'result';
+    let html = '', lastType = '';
+    d.qs.forEach((q, i) => {
+      if (q.type !== lastType) { lastType = q.type; html += `<div class="study-box-label test-section">${TEST_TYPES.find(t => t[0] === q.type)[1]}</div>`; }
+      const r = graded ? d.res[i] : null, a = d.ans[i];
+      const mark = r ? `<span class="test-mark ${r.ok ? 'ok' : 'bad'}">${r.ok ? '✓' : '✗'}</span>` : '';
+      let inner;
+      if (q.type === 'tf') {
+        inner = `<div class="test-q-text">${esc(askText(q.n, q.dir))} <span class="test-dash">—</span> ${esc(ansText(q.shown, q.dir))}</div>
+          <div class="drill-opts two">${[[true, 'Верно'], [false, 'Неверно']].map(([v, l]) => {
+            const cls = (a === v ? ' sel' : '') + (r ? (v === q.truth ? ' right' : a === v ? ' wrong' : ' dim') : '');
+            return `<button class="drill-opt${cls}" data-v="${v}" onclick="Cards.drillDo('tpick', '${i}:${v}')" ${r ? 'disabled' : ''}>${l}</button>`;
+          }).join('')}</div>
+          ${r && !q.truth ? `<div class="test-correct">${esc(askText(q.n, q.dir))} — ${esc(ansText(q.n, q.dir))}</div>` : ''}`;
+      } else if (q.type === 'mc') {
+        inner = `<div class="test-q-text">${esc(askText(q.n, q.dir))}</div>
+          <div class="drill-opts">${q.options.map((o, k) => {
+            const cls = (a === k ? ' sel' : '') + (r ? (o === q.n ? ' right' : a === k ? ' wrong' : ' dim') : '');
+            return `<button class="drill-opt${cls}" data-v="${k}" onclick="Cards.drillDo('tpick', '${i}:${k}')" ${r ? 'disabled' : ''}>${esc(ansText(o, q.dir))}</button>`;
+          }).join('')}</div>`;
+      } else {
+        const typed = r && r.check ? `<div class="study-typed ${r.ok ? 'ok' : r.near ? 'near' : 'bad'}"><div class="study-typed-line">${diffHtml(r.check.typedOut)}</div></div>` : '';
+        inner = `<div class="test-q-text">${esc(askText(q.n, q.dir))}</div>
+          ${r ? `${typed || '<div class="test-empty">без ответа</div>'}${r.ok ? '' : `<div class="test-correct">${esc(ansText(q.n, q.dir))}</div>`}`
+            : `<input class="study-input test-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${q.dir === 'it' ? 'перевод' : 'слово по-итальянски'}" value="${esc(a || '')}" oninput="Cards.drillDo('tinput', ${i}, this.value)">`}`;
+      }
+      html += `<div class="test-q${r ? (r.ok ? ' ok' : ' bad') : ''}" data-q="${i}"><div class="test-q-num">${i + 1}${mark}</div><div class="test-q-body">${inner}</div></div>`;
+    });
+    return html;
+  }
+
+  // ── Подбор: двенадцать плиток, соединить слово с переводом; ошибка — секунда штрафа
+  function matchStart(d) {
+    const seenW = new Set(), seenR = new Set(), pairs = [];
+    for (const n of shuffle(d.pool)) {
+      if (pairs.length >= MATCH_PAIRS) break;
+      const w = normAns(n.word), r = normAns(mainRu(n));
+      if (!w || !r || seenW.has(w) || seenR.has(r)) continue; // две одинаковые плитки сделали бы пару неоднозначной
+      seenW.add(w); seenR.add(r); pairs.push(n);
+    }
+    d.tiles = shuffle(pairs.flatMap((n, p) => [{ p, side: 'it', text: n.word }, { p, side: 'ru', text: mainRu(n) }]));
+    Object.assign(d, { pairs: pairs.length, gone: new Set(), sel: null, bad: null, penalty: 0, start: Date.now(), end: 0, phase: 'run', record: false });
+    matchTick(d);
+  }
+  // Секундомер обновляет только своё поле, без перерисовки плиток
+  function matchTick(d) {
+    clearInterval(d.timer);
+    d.timer = setInterval(() => {
+      if (S.view !== 'drill' || S.drill !== d || d.phase !== 'run') { clearInterval(d.timer); return; }
+      const el = document.getElementById('matchClock'); if (el) el.textContent = fmtSec(Date.now() - d.start + d.penalty);
+    }, 100);
+  }
+  function matchClick(d, t) {
+    const tile = d.tiles[t];
+    if (d.phase !== 'run' || !tile || d.gone.has(tile.p)) return;
+    if (d.sel === null || d.sel === t || d.tiles[d.sel].side === tile.side) { d.sel = d.sel === t ? null : t; d.bad = null; return; }
+    if (d.tiles[d.sel].p === tile.p) {
+      d.gone.add(tile.p); d.sel = null;
+      if (d.gone.size === d.pairs) {
+        d.end = Date.now(); d.phase = 'done'; clearInterval(d.timer);
+        const best = lsGet(MATCH_BEST_KEY, {}), key = matchKey(d.deckId), time = d.end - d.start + d.penalty;
+        d.prevBest = best[key] || 0; d.record = !best[key] || time < best[key];
+        if (d.record) { best[key] = time; lsSet(MATCH_BEST_KEY, best); }
+      }
+    } else {
+      d.bad = [d.sel, t]; d.sel = null; d.penalty += 1000;
+      const bad = d.bad; setTimeout(() => { if (d.bad === bad) { d.bad = null; if (S.view === 'drill' && S.drill === d) render(); } }, 500);
+    }
+  }
+  function renderMatch(d) {
+    const best = lsGet(MATCH_BEST_KEY, {})[matchKey(d.deckId)];
+    if (d.phase === 'ready') return drillTop(d) + `<div class="study-body"><div class="study-card drill-setup">
+        <div class="study-front">Подбор</div>
+        <div class="study-summary">Соедините каждое слово с переводом как можно быстрее. Ошибка добавляет секунду.</div>
+        ${best ? `<div class="study-summary sub">Рекорд: ${fmtSec(best)}</div>` : ''}
+        <div class="drill-actions"><button class="cards-btn primary" onclick="Cards.drillDo('mstart')">Начать игру</button></div>
+      </div></div>`;
+    const head = drillTop(d, d.phase === 'run' ? `<span id="matchClock">${fmtSec(Date.now() - d.start + d.penalty)}</span>` : '') + progressHtml(d.gone.size, d.pairs);
+    if (d.phase === 'done') {
+      const time = d.end - d.start + d.penalty;
+      return head + doneHtml(fmtSec(time), `${d.record ? (d.prevBest ? `Новый рекорд! Прежний — ${fmtSec(d.prevBest)}` : 'Первый рекорд') : `Рекорд: ${fmtSec(best)}`}${d.penalty ? ` · штраф ${d.penalty / 1000} с` : ''}`,
+        `<button class="cards-btn primary" onclick="Cards.drillDo('mstart')">Ещё раз</button>`);
+    }
+    return head + `<div class="study-body"><div class="match-grid">${d.tiles.map((t, i) => {
+      const cls = d.gone.has(t.p) ? ' gone' : d.bad && d.bad.includes(i) ? ' bad' : d.sel === i ? ' sel' : '';
+      return `<button class="match-tile ${t.side}${cls}" onclick="Cards.drillDo('mclick', ${i})" ${d.gone.has(t.p) ? 'disabled tabindex="-1"' : ''}>${esc(t.text)}</button>`;
+    }).join('')}</div></div>`;
+  }
+
+  // ── Общее для режимов
+  function drillTop(d, counter = '', dirToggle = false) {
+    const deck = deckById(d.deckId), m = DRILL_MODES.find(x => x.key === d.mode);
+    return `<div class="study-topbar">
+        <button class="cards-back" onclick="goBack()" title="К колоде">←</button>
+        <div class="cards-head-deck">${m.name} · ${esc(deck ? deck.name : 'все колоды')}</div>
+        ${counter ? `<div class="drill-count">${counter}</div>` : ''}
+        ${dirToggle ? `<button class="drill-chip" onclick="Cards.drillDo('dir')" title="Сменить направление">${DIR_LABEL[drillDir()]}</button>` : ''}
+      </div>`;
+  }
+  const doneHtml = (title, sub, buttons, extra = '') => `<div class="study-body"><div class="cards-done"><div class="cards-done-mark">✓</div><div>${title}</div>
+    ${sub ? `<div class="study-summary">${sub}</div>` : ''}<div class="drill-actions">${buttons}<button class="cards-btn" onclick="goBack()">К колоде</button></div>${extra}</div></div>`;
+  function renderDrill(el) {
+    const d = S.drill;
+    el.innerHTML = ({ flash: renderFlash, learn: renderLearn, test: renderTest, match: renderMatch })[d.mode](d);
+    const inp = document.getElementById('drillInput');
+    if (inp && !(typeof isTouchDevice === 'function' && isTouchDevice())) inp.focus();
+  }
+  function drillDo(act, a, b) {
+    const d = S.drill; if (!d || S.view !== 'drill') return;
+    const it = d.mode === 'flash' ? d.queue[d.i] : null;
+    switch (act) {
+      case 'restart': S.drill = newDrill(d.mode, d.deckId, d.pool); break;
+      case 'mode': S.drill = newDrill(a, d.deckId); break;
+      // Направление меняется на ходу: у карточек и у ещё не освоенных слов заучивания
+      case 'dir': {
+        const order = Object.keys(DIR_LABEL), next = order[(order.indexOf(drillDir()) + 1) % order.length];
+        lsSet(DRILL_DIR_KEY, next);
+        if (d.mode === 'flash') { d.queue.forEach(x => { x.dir = pickDir(next); }); d.flipped = false; }
+        if (d.mode === 'learn') { d.items.forEach(x => { if (x.level < 2) x.dir = pickDir(next); }); if (d.q && !d.q.answered) learnQ(d); }
+        break;
+      }
+      case 'flip': if (!it) return; d.flipped = !d.flipped; break;
+      case 'know':
+        if (!it) return;
+        d.hist.push({ i: d.i, known: !!a });
+        if (a) { d.known.add(it.n); d.roundKnown++; }
+        d.i++; d.flipped = false; break;
+      case 'undo': {
+        const h = d.mode === 'flash' && d.hist.pop(); if (!h) return;
+        d.i = h.i; d.flipped = false;
+        if (h.known) { d.known.delete(d.queue[h.i].n); d.roundKnown--; }
+        break;
+      }
+      case 'nextRound':
+        d.queue = shuffle(d.queue.filter(x => !d.known.has(x.n))); d.i = 0; d.round++; d.roundKnown = 0; d.hist = []; break;
+      case 'pick': if (!d.q || d.q.answered || d.q.type !== 'mc' || !d.q.options[a]) return; d.q.picked = a; learnFinish(d, d.q.options[a] === d.q.it.n); break;
+      case 'write':
+        if (!d.q || d.q.answered || d.q.type !== 'write' || !String(a || '').trim()) return;
+        d.q.check = checkWritten(d.q.it.n, d.q.it.dir, a); learnFinish(d, !!(d.q.check && d.q.check.ok)); break;
+      case 'giveUp': if (!d.q || d.q.answered) return; learnFinish(d, false); break;
+      // «Почти» — это опечатка, и человек вправе решить, что ошибки не было
+      case 'override': {
+        const q = d.q; if (!q || !q.answered || q.ok) return;
+        q.ok = true; q.it.level++; q.it.miss--; d.roundRes.ok++;
+        if (q.requeuedNow) { d.round.splice(d.round.lastIndexOf(q.it), 1); q.it.requeued = false; }
+        learnNext(d); break;
+      }
+      case 'next': learnNext(d); break;
+      case 'continue': learnRound(d); break;
+      case 'tcount': d.opts.count = a === 'all' ? 'all' : parseInt(a); lsSet(TEST_OPTS_KEY, d.opts); break;
+      case 'tdir': d.opts.dir = a; lsSet(TEST_OPTS_KEY, d.opts); break;
+      case 'ttype': {
+        const types = { ...d.opts.types, [a]: !d.opts.types[a] };
+        if (!Object.values(types).some(Boolean)) return; // хотя бы один вид вопросов
+        d.opts.types = types; lsSet(TEST_OPTS_KEY, d.opts); break;
+      }
+      case 'tstart': testBuild(d); break;
+      // Ответы теста меняют только свою строку: перерисовка листа сбила бы прокрутку и фокус
+      case 'tinput': if (d.phase === 'run') { d.ans[a] = b; testCount(d); } return;
+      case 'tpick': {
+        if (d.phase !== 'run') return;
+        const [i, v] = String(a).split(':'), q = d.qs[+i];
+        d.ans[+i] = q.type === 'tf' ? v === 'true' : +v;
+        document.querySelectorAll(`.test-q[data-q="${i}"] .drill-opt`).forEach(btn => btn.classList.toggle('sel', btn.dataset.v === v));
+        testCount(d); return;
+      }
+      case 'tsubmit': {
+        const left = d.qs.length - testAnswered(d);
+        if (left && !confirm(`Без ответа ${left} ${pluralRu(left, 'вопрос', 'вопроса', 'вопросов')}. Завершить тест?`)) return;
+        testGrade(d); render();
+        const body = document.querySelector('#studyOverlay .study-body'); if (body) body.scrollTop = 0;
+        return;
+      }
+      case 'tnew': d.phase = 'setup'; break;
+      case 'learnWrong': S.drill = newDrill('learn', d.deckId, [...new Set(d.qs.filter((q, i) => !d.res[i].ok).map(q => q.n))]); break;
+      case 'mstart': matchStart(d); break;
+      case 'mclick': matchClick(d, a); break;
+      default: return;
+    }
+    render();
+  }
+  function testCount(d) {
+    const done = testAnswered(d), el = document.getElementById('testCount'), bar = document.querySelector('#studyOverlay .drill-progress i');
+    if (el) el.textContent = done;
+    if (bar) bar.style.width = Math.round(done / d.qs.length * 100) + '%';
+  }
+  // Клавиатура в режимах: у каждого свои клавиши, Esc везде выходит
+  function drillKey(e) {
+    const d = S.drill, k = e.key;
+    if (k === 'Escape') { goBack(); return; }
+    const go = (act, arg) => { e.preventDefault(); drillDo(act, arg); };
+    if (d.mode === 'flash') {
+      if (d.i >= d.queue.length) { if (k === 'Enter' && d.known.size < d.pool.length) go('nextRound'); return; }
+      if (k === ' ' || k === 'Enter' || k === 'ArrowUp' || k === 'ArrowDown') go('flip');
+      else if (k === 'ArrowLeft' || k === '1') go('know', 0);
+      else if (k === 'ArrowRight' || k === '2') go('know', 1);
+      else if (k === 'z' || k === 'Z' || k === 'я' || k === 'Я') go('undo');
+    } else if (d.mode === 'learn') {
+      if (d.summary) { if (k === 'Enter' || k === ' ') go('continue'); return; }
+      if (!d.q) return;
+      if (d.q.answered) { if (k === 'Enter' || k === ' ') go('next'); }
+      else if (d.q.type === 'mc' && /^[1-9]$/.test(k) && d.q.options[+k - 1]) go('pick', +k - 1);
+    }
   }
 
   function renderAdd(el) {
@@ -1354,6 +1817,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
 
   // ── Клавиатура в режиме учёбы ────────────────────────────────────────────────
   document.addEventListener('keydown', e => {
+    if (_currentState === 'cards' && S.view === 'drill' && S.drill && !modalOpen() && !/^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '')) { drillKey(e); return; }
     if (_currentState !== 'cards' || S.view !== 'study' || !S.current) return;
     if (modalOpen()) return; // открыто окно редактирования: клавиши — ему, а не карточке
     if (/^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '')) return;
@@ -1416,6 +1880,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     },
     todayHero: () => S.loaded && !S.missingTables ? todayHero(null) : '',
     reveal, answer, undo,
+    drill: startDrill, drillDo,
     openAdd(id) { pushView('add'); S.deckId = id; S.view = 'add'; S.build = null; render(); },
     buildFromText, importFile, saveBuild,
     toggleItem(i, v) { S.build.items[i].include = v; render(); },

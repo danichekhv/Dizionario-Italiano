@@ -3597,3 +3597,75 @@ body.mode-grammar .back-btn { color: var(--night-muted); }
 body.mode-grammar .back-btn:hover { color: var(--blue); }
 /* Где нет строки поиска (колоды, практика, избранное) — ссылку подтягиваем вплотную к разделам */
 body.no-search .back-btn { margin-top: -32px; }
+/* ── Тренировка: карточки, заучивание, тест, подбор ─────────────────────────────── */
+.drill-modes { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.drill-modes .tile { grid-column: span 1; min-height: 116px; }
+.drill-progress { flex-shrink: 0; height: 4px; background: rgba(var(--stone-rgb), .15); }
+.drill-progress i { display: block; height: 100%; background: var(--sage); transition: width var(--t-slow); }
+.drill-count { font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--muted); white-space: nowrap; }
+.drill-chip { padding: 5px 12px; border: 1.5px solid var(--border); border-radius: var(--radius); background: white; color: var(--ink); font-family: var(--font-text); font-size: var(--fs-small); cursor: pointer; white-space: nowrap; transition: border-color var(--t-base), color var(--t-base); }
+.drill-chip:hover { border-color: var(--terracotta); color: var(--terracotta); }
+.drill-chip.on { background: var(--terracotta); border-color: var(--terracotta); color: white; }
+.drill-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.drill-field { margin-top: 20px; }
+.drill-field .study-box-label { margin-bottom: 8px; }
+.drill-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 20px; }
+.drill-actions .cards-btn { margin-top: 0; }
+.cards-done .drill-actions { margin-top: 20px; }
+.drill-setup .study-summary { margin-top: 12px; }
+.drill-tap { margin-top: 28px; font-size: var(--fs-small); color: var(--stone); }
+.flash-card { cursor: pointer; user-select: none; }
+.drill-note { margin-top: 16px; font-size: var(--fs-small); color: var(--muted); }
+.study-buttons.two { grid-template-columns: repeat(2, 1fr); }
+.study-buttons.one { grid-template-columns: 1fr; }
+/* Варианты ответа: в заучивании и в тесте одна и та же кнопка */
+.drill-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 24px auto 0; max-width: 560px; text-align: left; }
+.drill-opt { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: var(--radius); background: white; color: var(--ink); font-family: var(--font-text); font-size: var(--fs-body); line-height: var(--lh-ui); cursor: pointer; text-align: left; transition: border-color var(--t-base); }
+.drill-opt:hover:not(:disabled) { border-color: var(--terracotta); }
+.drill-opt:disabled { cursor: default; opacity: 1; }
+.drill-opt.sel { border-color: var(--terracotta); background: rgba(var(--terracotta-rgb), .06); }
+.drill-opt.right { border-color: var(--sage); background: rgba(var(--sage-rgb), .14); color: var(--sage); font-weight: 600; }
+.drill-opt.wrong { border-color: var(--danger); background: rgba(var(--danger-rgb), .08); color: var(--danger); }
+.drill-opt.dim, .drill-opt.dim:disabled { opacity: .45; }
+.drill-key { flex-shrink: 0; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: var(--radius); font-family: var(--font-mono); font-size: var(--fs-micro); color: var(--muted); }
+/* Самые трудные слова в итоге заучивания */
+.drill-list { margin: 28px auto 0; max-width: 460px; text-align: left; }
+.drill-list-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: var(--fs-body); color: var(--ink); }
+.drill-list-row span { color: var(--muted); font-style: italic; }
+.drill-list-row i { font-style: normal; font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--danger); }
+/* Тест: лист вопросов */
+.test-sheet { width: 100%; max-width: 680px; padding-bottom: 24px; }
+.test-section { margin: 24px 0 8px; }
+.test-section:first-child { margin-top: 0; }
+.test-q { display: flex; gap: 14px; padding: 18px 20px; margin-bottom: 10px; background: white; border: 1.5px solid var(--border); border-radius: var(--radius); }
+.test-q.ok { border-color: rgba(var(--sage-rgb), .5); }
+.test-q.bad { border-color: rgba(var(--danger-rgb), .45); }
+.test-q-num { flex-shrink: 0; width: 28px; font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--muted); padding-top: 4px; display: flex; flex-direction: column; gap: 4px; }
+.test-mark.ok { color: var(--sage); } .test-mark.bad { color: var(--danger); }
+.test-q-body { flex: 1; min-width: 0; }
+.test-q-text { font-family: var(--font-display); font-size: var(--fs-h3); color: var(--ink); line-height: var(--lh-tight); }
+.test-dash { color: var(--stone); }
+.test-q .drill-opts { margin: 14px 0 0; max-width: none; }
+.test-q .study-input { margin-top: 14px; text-align: left; }
+.test-q .study-typed { margin: 12px 0 0; }
+.test-correct { margin-top: 10px; color: var(--sage); font-size: var(--fs-body); }
+.test-empty { margin-top: 10px; color: var(--muted); font-size: var(--fs-small); }
+.test-score { text-align: center; padding: 8px 0 20px; }
+.test-score-big { font-family: var(--font-display); font-size: 56px; line-height: 1; color: var(--ink); }
+/* Подбор: поле плиток */
+.match-grid { width: 100%; max-width: 760px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.match-tile { min-height: 96px; padding: 12px; border: 1.5px solid var(--border); border-radius: var(--radius); background: white; color: var(--ink); font-family: var(--font-display); font-size: var(--fs-lead); line-height: var(--lh-tight); overflow-wrap: anywhere; cursor: pointer; box-shadow: var(--shadow-sm); transition: border-color var(--t-fast), background var(--t-fast), opacity var(--t-base); }
+.match-tile.ru { font-family: var(--font-text); }
+.match-tile:hover { border-color: var(--terracotta); }
+.match-tile.sel { border-color: var(--terracotta); background: rgba(var(--terracotta-rgb), .08); }
+.match-tile.bad { border-color: var(--danger); background: rgba(var(--danger-rgb), .1); }
+.match-tile.gone { visibility: hidden; }
+@media (max-width: 640px) {
+  .drill-modes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .drill-opts { grid-template-columns: 1fr; }
+  .test-q .drill-opts.two { grid-template-columns: repeat(2, 1fr); }
+  .test-q { padding: 14px; gap: 10px; }
+  .match-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .match-tile { min-height: 76px; padding: 8px; font-size: var(--fs-body); }
+  .study-topbar .drill-chip { padding: 4px 8px; font-size: var(--fs-caption); }
+}
