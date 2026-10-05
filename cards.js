@@ -181,6 +181,14 @@ alter table reviews add column if not exists applied boolean default false;`;
     });
     return c;
   }
+  // Новые на сегодня: лимит считается в словах, а не в карточках. У слова две карточки (IT→RU и RU→IT),
+  // и при счёте по карточкам «+5 в день» давало два-три новых слова. Порядок — по дате добавления
+  function freshCards(cards) {
+    const fresh = cards.filter(c => c.state === 'new').sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+    const limit = newPerDay(), notes = new Set();
+    for (const c of fresh) { if (notes.size >= limit) break; notes.add(c.note_id); }
+    return fresh.filter(c => notes.has(c.note_id));
+  }
   const newPerDay = () => { try { return parseInt(localStorage.getItem(NEW_PER_DAY_KEY)) || 20; } catch (e) { return 20; } };
 
   // ── Расписание (SM-2 в духе Anki) ────────────────────────────────────────────
@@ -227,7 +235,7 @@ alter table reviews add column if not exists applied boolean default false;`;
     const cards = cardsOfNotes(notes); const now = Date.now();
     const learn = cards.filter(c => (c.state === 'learning' || c.state === 'relearning') && c.dueMs <= now).sort((a, b) => a.dueMs - b.dueMs);
     const review = cards.filter(c => c.state === 'review' && c.dueMs <= now).sort((a, b) => a.dueMs - b.dueMs);
-    const fresh = cards.filter(c => c.state === 'new').sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)).slice(0, newPerDay());
+    const fresh = freshCards(cards);
     // Парные карточки одного слова разводим: сначала все итальянские, потом русские,
     // чтобы ответ на первую не подсказывал вторую через минуту
     const freshOrdered = [...fresh.filter(c => c.direction === 'it'), ...fresh.filter(c => c.direction !== 'it')];
@@ -407,7 +415,7 @@ alter table reviews add column if not exists applied boolean default false;`;
     const kids = childrenOf(id);
     const notes = id ? notesInDeck(id) : S.notes, cards = id ? cardsOfNotes(notes) : S.cards;
     const c = counts(cards), t = todayStats(id), pct = learnedPct(cards);
-    const fresh = Math.min(c.new, newPerDay()), repeat = c.learn + c.due, due = repeat + fresh;
+    const fresh = freshCards(cards).length, repeat = c.learn + c.due, due = repeat + fresh;
     const parts = [repeat ? `${repeat} к повторению` : '', fresh ? `${fresh} новых` : ''].filter(Boolean).join(' · ');
     const head = (icon, label) => `<div class="tile-head"><div class="tile-icon">${svgIcon(icon)}</div><span class="tile-label">${label}</span></div>`;
     // Внутри колоды — шапка с вкладками; на вкладке «Учить» только учёба и подколоды
@@ -527,7 +535,7 @@ alter table reviews add column if not exists applied boolean default false;`;
   // Плитка «Сегодня»: слева крупная кнопка, справа кольцо «сделано / повторить / новые»
   function todayHero(deckId, extra = '') {
     const notes = scopeNotes(deckId), c = counts(cardsOfNotes(notes)), done = todayStats(deckId).count;
-    const repeat = c.learn + c.due, fresh = Math.min(c.new, newPerDay()), left = repeat + fresh;
+    const repeat = c.learn + c.due, fresh = freshCards(cardsOfNotes(notes)).length, left = repeat + fresh;
     const rs = srsReviews(deckId).slice(-200); // темп — по последним ответам, иначе ~8 секунд на карточку
     const avgMs = rs.length ? rs.reduce((sum, r) => sum + Math.min(r.took_ms || 8000, 60000), 0) / rs.length : 8000;
     const mins = Math.max(1, Math.round(left * avgMs / 60000));
@@ -1665,8 +1673,7 @@ alter table reviews add column if not exists applied boolean default false;`;
   }
   // Новые слова на сегодня — в пределах дневного лимита, в том же порядке, что их дало бы повторение
   function newCardsToday(deckId) {
-    return cardsOfNotes(scopeNotes(deckId)).filter(c => c.state === 'new')
-      .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)).slice(0, newPerDay());
+    return freshCards(cardsOfNotes(scopeNotes(deckId)));
   }
   async function undo() {
     if (!S.undo) return;
@@ -2158,7 +2165,7 @@ alter table reviews add column if not exists applied boolean default false;`;
       if (!S.loaded) await loadAll();
       if (S.missingTables) return null;
       const c = counts(S.cards), t = todayStats(null);
-      return { learn: c.learn, due: c.due, newToday: Math.min(c.new, newPerDay()), streak: t.streak, todayCount: t.count, notes: S.notes.length, learnedPct: learnedPct(S.cards) };
+      return { learn: c.learn, due: c.due, newToday: freshCards(S.cards).length, streak: t.streak, todayCount: t.count, notes: S.notes.length, learnedPct: learnedPct(S.cards) };
     },
     todayHero: () => S.loaded && !S.missingTables ? todayHero(null) : '',
     reveal, answer, undo,
