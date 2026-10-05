@@ -741,6 +741,13 @@ alter table reviews add column if not exists applied boolean default false;`;
     return { typedOut, correctOut };
   }
   function checkTyped(typed, variants, italian) {
+    // Пояснение в скобках не часть ответа: варианты перевода сравниваются без скобок, значит и ответ тоже.
+    // Иначе «заниматься (видом деятельности)», написанное слово в слово, не совпадало с «заниматься»
+    const bare = String(typed || '').replace(/\([^)]*\)?/g, ' ').replace(/\s+/g, ' ').trim();
+    if (bare && bare !== String(typed).trim()) {
+      const r = checkTyped(bare, variants, italian);
+      if (r && r.ok) return { ...r, ...charDiff(String(typed).trim(), String(typed).trim()) };
+    }
     let t = normAns(typed);
     if (!t) return null;
     // Артикль перед итальянским словом не ошибка: убираем его и из проверки, и из показа
