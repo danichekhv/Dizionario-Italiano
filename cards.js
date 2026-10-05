@@ -546,7 +546,7 @@ alter table reviews add column if not exists applied boolean default false;`;
       off += len; return el;
     }).join('') : `<circle cx="75" cy="75" r="${R}" stroke="rgba(var(--stone-rgb), .15)"/>`;
     return `<div class="today-body">
-      <div class="today-hero"><div class="today-kick">Сегодня</div><div class="today-title">${title}</div><div class="today-sub">${sub}</div><div class="today-foot">${btn}${learnBtn}</div></div>
+      <div class="today-hero"><div class="today-kick">Сегодня</div><div class="today-title">${title}</div><div class="today-sub">${sub}</div><div class="today-foot${learnBtn ? ' two' : ''}">${btn}${learnBtn}</div></div>
       <div class="today-sep"></div>
       <div class="today-side">
         <div class="today-ring"><svg viewBox="0 0 150 150">${arcs}</svg><div class="today-ring-t"><b>${left}</b><span>${left ? 'осталось' : 'готово'}</span></div></div>
