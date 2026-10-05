@@ -894,31 +894,37 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   }
   function bindFlash(d) {
     const card = document.getElementById('flashCard'); if (!card) return;
-    let x0 = null, dx = 0, pid = null, moved = false, t0 = 0;
+    let x0 = null, dx = 0, t0 = 0, moved = false;
     const drag = x => {
       card.style.transform = x ? `translateX(${x}px) rotate(${x / 18}deg)` : '';
       card.style.setProperty('--swipe', Math.min(1, Math.abs(x) / SWIPE_PX));
       card.classList.toggle('to-know', x > 0); card.classList.toggle('to-learn', x < 0);
     };
-    card.addEventListener('pointerdown', e => {
-      if (d.leaving || (e.pointerType === 'mouse' && e.button !== 0)) return;
-      x0 = e.clientX; dx = 0; t0 = Date.now(); pid = e.pointerId; moved = false; card.classList.add('dragging');
-    });
-    card.addEventListener('pointermove', e => {
-      if (x0 === null || e.pointerId !== pid) return;
-      dx = e.clientX - x0;
-      if (Math.abs(dx) > 4) { if (!card.hasPointerCapture(pid)) try { card.setPointerCapture(pid); } catch (err) {} drag(dx); }
-    });
-    const end = e => {
-      if (x0 === null || e.pointerId !== pid) return;
+    const start = x => { if (d.leaving) return; x0 = x; dx = 0; t0 = Date.now(); moved = false; card.classList.add('dragging'); };
+    const move = x => { if (x0 === null) return; dx = x - x0; if (Math.abs(dx) > 4) drag(dx); };
+    const finish = () => {
+      if (x0 === null) return;
       x0 = null; card.classList.remove('dragging'); moved = Math.abs(dx) >= 8;
       // Засчитываем и длинную протяжку, и короткий быстрый бросок
       const fling = Math.abs(dx) >= 40 && Math.abs(dx) / Math.max(1, Date.now() - t0) > 0.5;
       if (Math.abs(dx) >= SWIPE_PX || fling) { flashSwipe(d, dx > 0 ? 1 : 0); return; }
       drag(0);
     };
-    card.addEventListener('pointerup', end); card.addEventListener('pointercancel', end);
-    // Переворот — по обычному клику: его браузер сам отличает от прокрутки и протяжки. После свайпа клик не считаем
+    // Палец — через touch-события: в pointer-событиях мобильный браузер забирал жест себе и слал pointercancel
+    // через пару пикселей. Здесь прокрутку глушим сами (preventDefault на touchmove), и жест остаётся у карточки
+    card.addEventListener('touchstart', e => { if (e.touches.length === 1) start(e.touches[0].clientX); else finish(); }, { passive: true });
+    card.addEventListener('touchmove', e => { if (x0 === null) return; e.preventDefault(); move(e.touches[0].clientX); }, { passive: false });
+    card.addEventListener('touchend', finish);
+    card.addEventListener('touchcancel', finish);
+    // Мышь — через pointer-события с захватом, чтобы протяжка не рвалась за краем карточки
+    card.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'touch' || e.button !== 0) return;
+      start(e.clientX); try { card.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    card.addEventListener('pointermove', e => { if (e.pointerType !== 'touch') move(e.clientX); });
+    card.addEventListener('pointerup', e => { if (e.pointerType !== 'touch') finish(); });
+    card.addEventListener('pointercancel', e => { if (e.pointerType !== 'touch') finish(); });
+    // Переворот — по обычному клику. После протяжки клик не считаем
     card.addEventListener('click', () => { if (moved) { moved = false; return; } flashFlip(d); });
   }
 
