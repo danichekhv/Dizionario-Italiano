@@ -379,16 +379,15 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   }
   document.addEventListener('click', e => { if (!e.target.closest('.deck-menu-wrap')) deckMenu(false); });
 
-  // Режимы тренировки на словах этой колоды (в корне — на всех словах)
+  // Режимы тренировки на словах этой колоды (в корне — на всех словах): плашки «иконка + название»,
+  // описание режима — во всплывающей подсказке, чтобы блок не съедал полэкрана
   function drillTiles(id, notes) {
     if (!notes.some(n => n.word && n.translation)) return '';
     const arg = id ? `'${id}'` : 'null', best = lsGet(MATCH_BEST_KEY, {})[matchKey(id)];
     return `<div class="bento-label">Тренировка</div>
       <div class="bento drill-modes">${DRILL_MODES.map(m => `
-        <button class="tile link" onclick="Cards.drill('${m.key}', ${arg})">
-          <div class="tile-head"><div class="tile-icon">${svgIcon(m.icon)}</div></div>
-          <div class="tile-title">${m.name}</div>
-          <div class="tile-sub">${m.key === 'match' && best ? `Рекорд ${fmtSec(best)}` : m.sub}</div>
+        <button class="tile link drill-mode" onclick="Cards.drill('${m.key}', ${arg})" title="${m.key === 'match' && best ? `Рекорд ${fmtSec(best)}` : m.sub}">
+          <span class="tile-icon">${svgIcon(m.icon)}</span><span class="drill-mode-name">${m.name}</span>
         </button>`).join('')}
       </div>`;
   }
