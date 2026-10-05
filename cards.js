@@ -531,9 +531,10 @@ alter table reviews add column if not exists applied boolean default false;`;
     const title = left ? 'Повторение слов' : notes.length ? 'На сегодня всё' : 'Слов пока нет';
     const sub = left ? `${left} ${pluralRu(left, 'карточка', 'карточки', 'карточек')} · ≈ ${mins} мин`
       : notes.length ? 'Всё повторено — можно пройти ещё раз' : 'Добавьте слова из статьи или списком';
-    const arrow = '<svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
-    const btn = left ? `<button class="today-go" onclick="${go}"><svg class="icon play" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg>Начать повторение${arrow}</button>`
-      : notes.length ? `<button class="today-go quiet" onclick="${go}">Учить всё равно${arrow}</button>` : '';
+    // Одна иконка — треугольник «играть»: стрелка справа дублировала его и только шумела
+    const play = '<svg class="icon play" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg>';
+    const btn = left ? `<button class="today-go" onclick="${go}">${play}Начать повторение</button>`
+      : notes.length ? `<button class="today-go quiet" onclick="${go}">${play}Учить всё равно</button>` : '';
     // Новые слова лучше сначала разобрать заучиванием, чем встретить вслепую в повторении
     const newWords = new Set(newCardsToday(deckId).map(c => c.note_id)).size;
     const learnBtn = newWords ? `<button class="today-go alt" onclick="Cards.learnNew(${deckId ? `'${deckId}'` : 'null'})">${svgIcon('plus')}Новые слова<b>${newWords}</b></button>` : '';

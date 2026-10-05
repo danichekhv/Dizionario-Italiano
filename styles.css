@@ -3567,7 +3567,6 @@ body.mode-grammar .suggest-src { color: var(--night-muted); }
   .today-sub { margin: 2px 0 10px; font-size: var(--fs-small); }
   .today-go { padding: 7px 14px; gap: 8px; font-size: var(--fs-small); box-shadow: none; }
   .today-go .icon { width: 13px; height: 13px; }
-  .today-go .icon:last-child { display: none; }
   .today-ring { width: 76px; height: 76px; margin-right: 6px; }
   .today-ring svg { stroke-width: 14; }
   .today-ring-t b { font-size: 22px; }
@@ -3760,6 +3759,5 @@ body.no-search .back-btn { margin-top: -32px; }
    Класс, а не :has(): его поддерживают не все мобильные браузеры */
 .today-foot.two { display: grid; grid-template-columns: 1fr; width: max-content; max-width: 100%; gap: 10px; }
 .today-foot.two .today-go { justify-content: flex-start; align-self: stretch; justify-self: stretch; width: 100%; box-sizing: border-box; }
-/* Иконки слева встают столбиком (треугольник над плюсом), стрелка главной кнопки — к правому краю */
+/* Иконки слева встают столбиком: треугольник над плюсом */
 .today-foot.two .today-go > .icon:first-child { flex: 0 0 auto; }
-.today-foot.two .today-go > .icon:last-child:not(:first-child) { margin-left: auto; }
