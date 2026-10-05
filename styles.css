@@ -3759,4 +3759,7 @@ body.no-search .back-btn { margin-top: -32px; }
 /* Две задачи дня — кнопки одна под другой и одной ширины: по самой широкой.
    Класс, а не :has(): его поддерживают не все мобильные браузеры */
 .today-foot.two { display: grid; grid-template-columns: 1fr; width: max-content; max-width: 100%; gap: 10px; }
-.today-foot.two .today-go { justify-content: center; align-self: stretch; justify-self: stretch; width: 100%; box-sizing: border-box; }
+.today-foot.two .today-go { justify-content: flex-start; align-self: stretch; justify-self: stretch; width: 100%; box-sizing: border-box; }
+/* Иконки слева встают столбиком (треугольник над плюсом), стрелка главной кнопки — к правому краю */
+.today-foot.two .today-go > .icon:first-child { flex: 0 0 auto; }
+.today-foot.two .today-go > .icon:last-child:not(:first-child) { margin-left: auto; }
