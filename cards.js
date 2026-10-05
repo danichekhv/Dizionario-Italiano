@@ -557,11 +557,15 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     return b.map((v, i) => ({ label: labels[i], value: v,
       tip: `Интервал ${long[i]}: ${v} ${pluralRu(v, 'карточка', 'карточки', 'карточек')}\nСтолько пройдёт до их следующего показа` }));
   }
-  function easeItems(deckId) {
-    const b = {};
-    cardsOfNotes(scopeNotes(deckId)).filter(c => c.state === 'review').forEach(c => { const e = Math.round((c.ease || 2.5) * 10) * 10; b[e] = (b[e] || 0) + 1; });
-    return Object.keys(b).map(Number).sort((a, b2) => a - b2).map(k => ({ label: k + '%', value: b[k],
-      tip: `Лёгкость ${k}%: ${b[k]} ${pluralRu(b[k], 'карточка', 'карточки', 'карточек')}\nПосле «Хорошо» интервал растёт в ${String(k / 100).replace('.', ',')} раза` }));
+  // Трудные слова: сколько раз на слове нажали «Снова» по истории ответов плюс срывы выученных карточек
+  // (на случай, если истории нет). Вместо графика лёгкости: из него не понять, что делать, а из списка — понятно
+  function hardNotes(deckId, limit = 8) {
+    const again = {};
+    scopeReviews(deckId).forEach(r => { if (r.rating === 1) again[r.note_id] = (again[r.note_id] || 0) + 1; });
+    const lapses = {};
+    cardsOfNotes(scopeNotes(deckId)).forEach(c => { if (c.lapses) lapses[c.note_id] = (lapses[c.note_id] || 0) + c.lapses; });
+    return scopeNotes(deckId).map(n => ({ n, misses: Math.max(again[n.id] || 0, lapses[n.id] || 0) }))
+      .filter(x => x.misses > 0).sort((x, y) => y.misses - x.misses).slice(0, limit);
   }
   function buttonStats(deckId) {
     const g = { learning: [0, 0, 0, 0], young: [0, 0, 0, 0], mature: [0, 0, 0, 0] };
@@ -621,7 +625,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       return `<div class="btn-row"><div class="btn-row-name" data-tip="${esc(GROUP_TIP[name])}">${name} <small>${s}</small></div><div class="btn-bar" data-tip-group>${arr.map((v, i) => v ? `<span class="${cls[i]}" style="width:${p[i]}%" data-tip="${name} · «${names[i]}»: ${v} ${pluralRu(v, 'ответ', 'ответа', 'ответов')} (${p[i]}%)">${p[i] >= 10 ? p[i] + '%' : ''}</span>` : '').join('')}</div></div>`;
     };
     const GROUP_TIP = { 'Заучивание': 'Ответы на новые и ещё не выученные карточки', 'Молодые': 'Выученные карточки с интервалом до 21 дня', 'Зрелые': 'Выученные карточки с интервалом от 21 дня' };
-    const ease = easeItems(deckId);
+    const hard = hardNotes(deckId);
     el.innerHTML = `
       ${deckId && deckById(deckId) ? deckHeader(deckId, 'stats') : `<div class="cards-head"><div class="cards-title small">Статистика</div><div class="cards-head-deck">${esc(title)}</div></div>`}
       ${S.reviewsMissing ? `<div class="cards-note">История ответов не пишется: в Supabase нет таблицы <b>reviews</b>. ${isAdmin() ? 'Выполните SQL ещё раз, он добавит только недостающее. <button class="cards-btn" onclick="Cards.showSql()">Показать SQL</button>' : 'Обратитесь к владельцу сайта.'}</div>` : ''}
@@ -636,7 +640,10 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       <div class="stat-section"><div class="stat-title">Прогноз на 30 дней: сколько карточек подойдёт к повторению</div>${barChart(forecastItems(deckId), { color: 'var(--sage)' })}</div>
       <div class="stat-section"><div class="stat-title">Кнопки ответов</div>${btnRow('Заучивание', btn.learning)}${btnRow('Молодые', btn.young)}${btnRow('Зрелые', btn.mature)}<div class="cards-p">Молодые — выученные карточки с интервалом до 21 дня, зрелые — от 21 дня.</div></div>
       <div class="stat-section"><div class="stat-title">Интервалы выученных карточек</div>${barChart(intervalItems(deckId), { color: '#3b64b4' })}</div>
-      <div class="stat-section"><div class="stat-title">Лёгкость</div>${ease.length ? barChart(ease, { color: 'var(--gold)' }) : '<div class="cards-empty">Пока нет выученных карточек</div>'}</div>`;
+      <div class="stat-section"><div class="stat-title">Трудные слова</div>${hard.length ? `
+        <div class="hard-list">${hard.map(x => `<button type="button" class="hard-row" onclick="Cards.editNote('${x.n.id}')"><b>${esc(x.n.word)}</b><span>${esc(mainRu(x.n))}</span><i>${x.misses} ${pluralRu(x.misses, 'ошибка', 'ошибки', 'ошибок')}</i></button>`).join('')}</div>
+        <div class="drill-actions"><button class="cards-btn primary" onclick="Cards.drillHard(${deckId ? `'${deckId}'` : 'null'})">Учить их сейчас</button></div>`
+        : '<div class="cards-empty">Пока ни одной ошибки — так держать</div>'}</div>`;
   }
 
   function cardFaces(card) {
@@ -902,6 +909,13 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     if (mode === 'test') Object.assign(d, { phase: 'setup', opts: { count: 20, dir: drillDir(), types: { tf: true, mc: true, write: true }, ...lsGet(TEST_OPTS_KEY, {}) } });
     if (mode === 'match') Object.assign(d, { phase: 'ready' });
     return d;
+  }
+  // Заучивание по трудным словам из статистики
+  function drillHard(deckId) {
+    const pool = hardNotes(deckId).map(x => x.n).filter(n => n.word && n.translation);
+    if (!pool.length) return;
+    pushView('drill');
+    S.deckId = deckId; S.view = 'drill'; S.drill = newDrill('learn', deckId, pool); render();
   }
   function startDrill(mode, deckId) {
     const pool = drillPool(deckId);
@@ -2022,7 +2036,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     },
     todayHero: () => S.loaded && !S.missingTables ? todayHero(null) : '',
     reveal, answer, undo,
-    drill: startDrill, drillDo, deckTab, deckMenu,
+    drill: startDrill, drillDo, drillHard, deckTab, deckMenu,
     openAdd(id) { pushView('add'); S.deckId = id; S.view = 'add'; S.build = null; render(); },
     buildFromText, importFile, saveBuild,
     toggleItem(i, v) { S.build.items[i].include = v; render(); },

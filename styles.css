@@ -3741,3 +3741,12 @@ body.no-search .back-btn { margin-top: -32px; }
 .stat-tip { position: fixed; z-index: 950; max-width: 260px; padding: 8px 12px; border-radius: var(--radius); background: var(--ink); color: var(--cream); font-family: var(--font-text); font-size: var(--fs-small); line-height: var(--lh-ui); white-space: pre-line; box-shadow: var(--shadow-md); pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity .15s, transform .15s; }
 .stat-tip.show { opacity: 1; transform: none; }
 @media (max-width: 640px) { .stat-section { padding: 14px 14px; } .bars { height: 130px; } .bars-axis { width: 22px; } }
+/* Трудные слова в статистике: строка — слово, перевод, число ошибок; нажатие открывает карточку */
+.hard-list { display: flex; flex-direction: column; }
+.hard-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 12px; align-items: baseline; padding: 10px 2px; border: none; border-bottom: 1px solid var(--border); background: none; font-family: var(--font-text); font-size: var(--fs-body); color: var(--ink); text-align: left; cursor: pointer; }
+.hard-row:last-child { border-bottom: none; }
+.hard-row:hover b { color: var(--terracotta); }
+.hard-row b { font-weight: 600; overflow-wrap: anywhere; }
+.hard-row span { color: var(--muted); font-style: italic; overflow-wrap: anywhere; }
+.hard-row i { font-style: normal; font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--danger); white-space: nowrap; }
+.stat-section .drill-actions { justify-content: flex-start; margin-top: 14px; }
