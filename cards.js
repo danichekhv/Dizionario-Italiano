@@ -306,6 +306,7 @@ alter table reviews add column if not exists applied boolean default false;`;
     closeOverlay();
     if (S.view === 'sql') { renderSetup(el); return; }
     ({ decks: renderDecks, add: renderAdd, browse: renderBrowse, stats: renderStats })[S.view](el);
+    syncTabs();
   }
   // Переход на внутренний экран с записью в историю: «Назад» вернёт прежний вид.
   // Уровень колод (S.folder) — тоже экран: спуск в подколоду и подъём обратно идут через историю
@@ -380,11 +381,18 @@ alter table reviews add column if not exists applied boolean default false;`;
           </div>
         </div>
       </div>
-      <div class="deck-tabs">${tabBtn('learn', 'Учить')}${tabBtn('words', `Слова<b>${n}</b>`)}${tabBtn('stats', 'Статистика')}</div>`;
+      <div class="deck-tabs">${tabBtn('learn', 'Учить')}${tabBtn('words', `Слова<b>${n}</b>`)}${tabBtn('stats', 'Статистика')}<i class="deck-tab-ink"></i></div>`;
   }
   const currentDeckId = () => S.view === 'browse' ? S.deckId : S.view === 'stats' ? S.statsDeckId : S.folder;
+  const DECK_TABS = ['learn', 'words', 'stats'];
+  const tabOf = () => S.view === 'browse' ? 'words' : S.view === 'stats' ? 'stats' : 'learn';
   function deckTab(tab) {
     const id = currentDeckId(); if (!id) return;
+    const from = DECK_TABS.indexOf(tabOf()), to = DECK_TABS.indexOf(tab);
+    if (from === to) return;
+    // Запоминаем, где стояла полоска, и куда листаем — syncTabs проиграет переход после перерисовки
+    const on = document.querySelector('#cardsScreen .deck-tab.on');
+    S.tabFx = { dir: to > from ? 1 : -1, ink: on ? { left: on.offsetLeft, width: on.offsetWidth } : null };
     S.browseSelected.clear();
     if (tab === 'learn') { S.view = 'decks'; S.folder = id; }
     if (tab === 'words') { S.view = 'browse'; S.deckId = id; S.tagFilter = ''; S.browseQuery = ''; }
@@ -396,6 +404,40 @@ alter table reviews add column if not exists applied boolean default false;`;
     m.classList.toggle('open', open === undefined ? !m.classList.contains('open') : open);
   }
   document.addEventListener('click', e => { if (!e.target.closest('.deck-menu-wrap')) deckMenu(false); });
+  // После перерисовки: полоска встаёт под активную вкладку (при переключении — переезжает со старого
+  // места), а содержимое под вкладками въезжает с той стороны, куда листнули
+  function syncTabs() {
+    const fx = S.tabFx; S.tabFx = null;
+    const tabs = document.querySelector('#cardsScreen .deck-tabs'); if (!tabs) return;
+    const on = tabs.querySelector('.deck-tab.on'), ink = tabs.querySelector('.deck-tab-ink');
+    if (on && ink) {
+      if (fx && fx.ink) { ink.style.transition = 'none'; ink.style.transform = `translateX(${fx.ink.left}px)`; ink.style.width = fx.ink.width + 'px'; ink.getBoundingClientRect(); ink.style.transition = ''; }
+      else ink.style.transition = 'none';
+      ink.style.transform = `translateX(${on.offsetLeft}px)`; ink.style.width = on.offsetWidth + 'px';
+      if (!fx) { ink.getBoundingClientRect(); ink.style.transition = ''; }
+    }
+    if (!fx) return;
+    for (let n = tabs.nextElementSibling; n; n = n.nextElementSibling) n.classList.add(fx.dir > 0 ? 'tab-in-next' : 'tab-in-prev');
+  }
+  // Свайп по экрану колоды на телефоне листает вкладки: влево — следующая, вправо — предыдущая.
+  // Только уверенный горизонтальный жест: короткий, быстрый и в полтора раза шире, чем выше,
+  // чтобы не путать с прокруткой. Поля ввода и открытое меню жест не ловят
+  let swipe0 = null;
+  document.addEventListener('touchstart', e => {
+    swipe0 = null;
+    if (_currentState !== 'cards' || e.touches.length !== 1 || S.view === 'study' || S.view === 'drill') return;
+    if (!e.target.closest('#cardsScreen') || !document.querySelector('#cardsScreen .deck-tabs')) return;
+    if (e.target.closest('input, textarea, select, .deck-menu.open')) return;
+    const t = e.touches[0]; swipe0 = { x: t.clientX, y: t.clientY, at: Date.now() };
+  }, { passive: true });
+  document.addEventListener('touchend', e => {
+    if (!swipe0) return;
+    const t = e.changedTouches[0], dx = t.clientX - swipe0.x, dy = t.clientY - swipe0.y, dt = Date.now() - swipe0.at;
+    swipe0 = null;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5 || dt > 700) return;
+    const j = DECK_TABS.indexOf(tabOf()) + (dx < 0 ? 1 : -1);
+    if (j >= 0 && j < DECK_TABS.length) deckTab(DECK_TABS[j]);
+  }, { passive: true });
 
   // Режимы тренировки на словах этой колоды (в корне — на всех словах): плашки «иконка + название»,
   // описание режима — во всплывающей подсказке, чтобы блок не съедал полэкрана

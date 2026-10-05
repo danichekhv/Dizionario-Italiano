@@ -3788,3 +3788,13 @@ body.no-search .back-btn { margin-top: -32px; }
 .today-foot.two .today-go > .icon:first-child { flex: 0 0 auto; }
 /* Синонимы на итальянской стороне Карточек — тише слова и транскрипции */
 .flash-face .study-alt { margin-top: 0; font-size: var(--fs-small); }
+/* Переключение вкладок колоды: полоска переезжает, содержимое въезжает с той стороны, куда листнули */
+.deck-tabs { position: relative; }
+.deck-tab.on { border-bottom-color: transparent; }
+.deck-tab-ink { position: absolute; left: 0; bottom: -1px; width: 0; height: 2px; background: var(--terracotta); transition: transform .28s cubic-bezier(.3, .7, .3, 1), width .28s cubic-bezier(.3, .7, .3, 1); }
+@keyframes tab-in-next { from { opacity: 0; transform: translateX(32px); } }
+@keyframes tab-in-prev { from { opacity: 0; transform: translateX(-32px); } }
+.tab-in-next { animation: tab-in-next .26s cubic-bezier(.3, .7, .3, 1); }
+.tab-in-prev { animation: tab-in-prev .26s cubic-bezier(.3, .7, .3, 1); }
+@media (prefers-reduced-motion: reduce) { .tab-in-next, .tab-in-prev { animation: none; } .deck-tab-ink { transition: none; } }
+#cardsScreen { overflow-x: clip; } /* въезжающее сбоку содержимое не даёт горизонтальной прокрутки */
