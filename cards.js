@@ -875,9 +875,13 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   }
   // Переворот и свайп идут по живому элементу, без перерисовки, иначе анимация оборвётся
   const SWIPE_PX = 90;
+  // Поворот до ребра, смена стороны, поворот обратно: без backface-visibility, которую часть мобильных браузеров не держит
   function flashFlip(d) {
-    const card = document.getElementById('flashCard'); if (!card || d.leaving) return;
-    d.flipped = !d.flipped; card.classList.toggle('flipped', d.flipped);
+    const card = document.getElementById('flashCard'); if (!card || d.leaving || d.turning) return;
+    const inner = card.querySelector('.flash-inner');
+    d.turning = true; inner.classList.add('turn');
+    setTimeout(() => { d.flipped = !d.flipped; card.classList.toggle('flipped', d.flipped); }, 140);
+    setTimeout(() => { inner.classList.remove('turn'); d.turning = false; }, 290);
   }
   function flashSwipe(d, known) {
     const card = document.getElementById('flashCard');
@@ -890,7 +894,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   }
   function bindFlash(d) {
     const card = document.getElementById('flashCard'); if (!card) return;
-    let x0 = null, dx = 0, pid = null;
+    let x0 = null, dx = 0, pid = null, moved = false;
     const drag = x => {
       card.style.transform = x ? `translateX(${x}px) rotate(${x / 18}deg)` : '';
       card.style.setProperty('--swipe', Math.min(1, Math.abs(x) / SWIPE_PX));
@@ -898,18 +902,22 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     };
     card.addEventListener('pointerdown', e => {
       if (d.leaving || (e.pointerType === 'mouse' && e.button !== 0)) return;
-      x0 = e.clientX; dx = 0; pid = e.pointerId; card.setPointerCapture(pid); card.classList.add('dragging');
+      x0 = e.clientX; dx = 0; pid = e.pointerId; moved = false; card.classList.add('dragging');
     });
-    card.addEventListener('pointermove', e => { if (x0 === null || e.pointerId !== pid) return; dx = e.clientX - x0; if (Math.abs(dx) > 4) drag(dx); });
+    card.addEventListener('pointermove', e => {
+      if (x0 === null || e.pointerId !== pid) return;
+      dx = e.clientX - x0;
+      if (Math.abs(dx) > 4) { if (!card.hasPointerCapture(pid)) try { card.setPointerCapture(pid); } catch (err) {} drag(dx); }
+    });
     const end = e => {
       if (x0 === null || e.pointerId !== pid) return;
-      x0 = null; card.classList.remove('dragging');
+      x0 = null; card.classList.remove('dragging'); moved = Math.abs(dx) >= 8;
       if (Math.abs(dx) >= SWIPE_PX) { flashSwipe(d, dx > 0 ? 1 : 0); return; }
       drag(0);
-      // Короткое нажатие без сдвига — переворот; отменённый жест (прокрутка страницы) ничего не делает
-      if (e.type === 'pointerup' && Math.abs(dx) < 6) flashFlip(d);
     };
     card.addEventListener('pointerup', end); card.addEventListener('pointercancel', end);
+    // Переворот — по обычному клику: его браузер сам отличает от прокрутки и протяжки. После свайпа клик не считаем
+    card.addEventListener('click', () => { if (moved) { moved = false; return; } flashFlip(d); });
   }
 
   // ── Заучивание: круги по семь слов; каждое слово сначала угадать из четырёх, потом написать.
