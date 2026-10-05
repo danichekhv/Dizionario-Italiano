@@ -80,6 +80,9 @@ alter table notes add column if not exists user_id uuid default auth.uid();
 alter table notes add column if not exists alt text[] default '{}';
 alter table cards add column if not exists user_id uuid default auth.uid();
 alter table reviews add column if not exists user_id uuid default auth.uid();
+-- Откуда ответ: srs — обычное повторение, learn / test / flash / match — тренировка; applied — сдвинул ли он расписание
+alter table reviews add column if not exists source text default 'srs';
+alter table reviews add column if not exists applied boolean default false;
 create index if not exists cards_note_idx on cards(note_id);
 create index if not exists notes_deck_idx on notes(deck_id);
 create index if not exists reviews_at_idx on reviews(reviewed_at);

@@ -15,7 +15,7 @@
     queue: [], current: null, revealed: false, undo: null,
     loaded: false, missingTables: false,
     build: null, browseSelected: new Set(), browseQuery: '',
-    drill: null, reviews: [], reviewsMissing: false, shownAt: 0, statsDeckId: null, hasAlt: true
+    drill: null, reviews: [], reviewsMissing: false, shownAt: 0, statsDeckId: null, hasAlt: true, hasSource: false
   };
 
   // ── Supabase REST ────────────────────────────────────────────────────────────
@@ -103,7 +103,10 @@ create table if not exists reviews (
   took_ms int default 0,
   reviewed_at timestamptz default now()
 );
-create index if not exists reviews_at_idx on reviews(reviewed_at);`;
+create index if not exists reviews_at_idx on reviews(reviewed_at);
+-- Откуда ответ: srs — обычное повторение, learn / test / flash / match — тренировка; applied — сдвинул ли он расписание
+alter table reviews add column if not exists source text default 'srs';
+alter table reviews add column if not exists applied boolean default false;`;
 
   async function loadAll() {
     try {
@@ -131,6 +134,8 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         const rv = await sb('reviews?select=*&order=reviewed_at');
         S.reviews = (rv || []).map(r => ({ ...r, atMs: Date.parse(r.reviewed_at) || 0 }));
         S.reviewsMissing = false;
+        // Без колонки source тренировку в истории не отличить от повторения — тогда она в базу не пишется
+        try { await sb('reviews?select=source,applied&limit=1'); S.hasSource = true; } catch (e) { S.hasSource = false; }
       } catch (e) { if (isMissingTable(e)) S.reviewsMissing = true; else console.warn('reviews load:', e); }
     }
     await migrateAltOnce();
@@ -484,6 +489,10 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const ids = new Set(scopeNotes(deckId).map(n => n.id));
     return S.reviews.filter(r => ids.has(r.note_id));
   }
+  // Графики и счётчики повторений — только обычное повторение: тренировка их не раздувает.
+  // Серия и трудные слова — по всем занятиям (см. streak, hardNotes)
+  const isSrs = r => (r.source || 'srs') === 'srs';
+  const srsReviews = deckId => scopeReviews(deckId).filter(isSrs);
   function streak(deckId) {
     const days = new Set(scopeReviews(deckId).map(r => dayKey(r.atMs)));
     let n = 0, d = startOfDay(Date.now());
@@ -493,7 +502,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   }
   function todayStats(deckId) {
     const t0 = startOfDay(Date.now());
-    const rs = scopeReviews(deckId).filter(r => r.atMs >= t0);
+    const rs = srsReviews(deckId).filter(r => r.atMs >= t0);
     const again = rs.filter(r => r.rating === 1).length;
     const time = rs.reduce((s, r) => s + Math.min(r.took_ms || 0, 60000), 0);
     return { count: rs.length, again, correct: rs.length ? Math.round((1 - again / rs.length) * 100) : null,
@@ -515,7 +524,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   function todayHero(deckId, extra = '') {
     const notes = scopeNotes(deckId), c = counts(cardsOfNotes(notes)), done = todayStats(deckId).count;
     const repeat = c.learn + c.due, fresh = Math.min(c.new, newPerDay()), left = repeat + fresh;
-    const rs = scopeReviews(deckId).slice(-200); // темп — по последним ответам, иначе ~8 секунд на карточку
+    const rs = srsReviews(deckId).slice(-200); // темп — по последним ответам, иначе ~8 секунд на карточку
     const avgMs = rs.length ? rs.reduce((sum, r) => sum + Math.min(r.took_ms || 8000, 60000), 0) / rs.length : 8000;
     const mins = Math.max(1, Math.round(left * avgMs / 60000));
     const go = deckId ? `Cards.study('${deckId}')` : 'Cards.studyAll()';
@@ -525,6 +534,9 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const arrow = '<svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
     const btn = left ? `<button class="today-go" onclick="${go}"><svg class="icon play" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg>Начать повторение${arrow}</button>`
       : notes.length ? `<button class="today-go quiet" onclick="${go}">Учить всё равно${arrow}</button>` : '';
+    // Новые слова лучше сначала разобрать заучиванием, чем встретить вслепую в повторении
+    const newWords = new Set(newCardsToday(deckId).map(c => c.note_id)).size;
+    const learnBtn = newWords ? `<button class="today-new" onclick="Cards.learnNew(${deckId ? `'${deckId}'` : 'null'})">Новые слова: ${newWords}</button>` : '';
     const segs = [[done, 'var(--sage)', 'сделано'], [repeat, 'var(--accent)', 'повторить'], [fresh, 'rgba(var(--stone-rgb), .3)', 'новые']];
     const tot = done + left, R = 64, C = 2 * Math.PI * R, gap = segs.filter(x => x[0]).length > 1 ? 3 : 0;
     let off = 0;
@@ -534,7 +546,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       off += len; return el;
     }).join('') : `<circle cx="75" cy="75" r="${R}" stroke="rgba(var(--stone-rgb), .15)"/>`;
     return `<div class="today-body">
-      <div class="today-hero"><div class="today-kick">Сегодня</div><div class="today-title">${title}</div><div class="today-sub">${sub}</div><div class="today-foot">${btn}</div></div>
+      <div class="today-hero"><div class="today-kick">Сегодня</div><div class="today-title">${title}</div><div class="today-sub">${sub}</div><div class="today-foot">${btn}${learnBtn}</div></div>
       <div class="today-sep"></div>
       <div class="today-side">
         <div class="today-ring"><svg viewBox="0 0 150 150">${arcs}</svg><div class="today-ring-t"><b>${left}</b><span>${left ? 'осталось' : 'готово'}</span></div></div>
@@ -545,7 +557,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   }
   function reviewsPerDay(deckId, daysN = 30) {
     const t0 = startOfDay(Date.now()) - (daysN - 1) * DAY; const b = new Array(daysN).fill(0);
-    scopeReviews(deckId).forEach(r => { const i = Math.floor((r.atMs - t0) / DAY); if (i >= 0 && i < daysN) b[i]++; });
+    srsReviews(deckId).forEach(r => { const i = Math.floor((r.atMs - t0) / DAY); if (i >= 0 && i < daysN) b[i]++; });
     return b.map((v, i) => { const d = new Date(t0 + i * DAY); return { label: (daysN - 1 - i) % 5 === 0 ? `${d.getDate()}.${d.getMonth() + 1}` : '', value: v,
       tip: `${dayName(d)}: ${v ? `${v} ${pluralRu(v, 'повторение', 'повторения', 'повторений')}` : 'без повторений'}` }; });
   }
@@ -561,7 +573,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   // (на случай, если истории нет). Вместо графика лёгкости: из него не понять, что делать, а из списка — понятно
   function hardNotes(deckId, limit = 8) {
     const again = {};
-    scopeReviews(deckId).forEach(r => { if (r.rating === 1) again[r.note_id] = (again[r.note_id] || 0) + 1; });
+    scopeReviews(deckId).forEach(r => { if (r.rating === 1 && r.source !== 'flash') again[r.note_id] = (again[r.note_id] || 0) + 1; });
     const lapses = {};
     cardsOfNotes(scopeNotes(deckId)).forEach(c => { if (c.lapses) lapses[c.note_id] = (lapses[c.note_id] || 0) + c.lapses; });
     return scopeNotes(deckId).map(n => ({ n, misses: Math.max(again[n.id] || 0, lapses[n.id] || 0) }))
@@ -569,7 +581,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   }
   function buttonStats(deckId) {
     const g = { learning: [0, 0, 0, 0], young: [0, 0, 0, 0], mature: [0, 0, 0, 0] };
-    scopeReviews(deckId).forEach(r => { const k = r.prev_state === 'review' ? ((r.prev_interval || 0) >= 21 ? 'mature' : 'young') : 'learning'; g[k][Math.min(4, Math.max(1, r.rating || 3)) - 1]++; });
+    srsReviews(deckId).forEach(r => { const k = r.prev_state === 'review' ? ((r.prev_interval || 0) >= 21 ? 'mature' : 'young') : 'learning'; g[k][Math.min(4, Math.max(1, r.rating || 3)) - 1]++; });
     return g;
   }
   // Столбчатая диаграмма вёрсткой, а не SVG: растянутый по ширине SVG сплющивал подписи на телефоне.
@@ -588,7 +600,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   }
   // Календарь активности по месяцам: листается стрелками, в клетке число и количество повторений
   function calendarHtml(deckId) {
-    const counts = {}; scopeReviews(deckId).forEach(r => { const k = dayKey(r.atMs); counts[k] = (counts[k] || 0) + 1; });
+    const counts = {}; srsReviews(deckId).forEach(r => { const k = dayKey(r.atMs); counts[k] = (counts[k] || 0) + 1; });
     const now = new Date(), off = S.statsMonth || 0;
     const first = new Date(now.getFullYear(), now.getMonth() + off, 1);
     const y = first.getFullYear(), m = first.getMonth(), daysIn = new Date(y, m + 1, 0).getDate();
@@ -615,7 +627,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   }
   function renderStats(el) {
     const deckId = S.statsDeckId; const title = deckId ? deckPath(deckId) : 'Все колоды';
-    const t = todayStats(deckId), st = cardStates(deckId), rs = scopeReviews(deckId);
+    const t = todayStats(deckId), st = cardStates(deckId), rs = srsReviews(deckId);
     const totalCards = st.new + st.learning + st.young + st.mature;
     const activeDays = new Set(rs.map(r => dayKey(r.atMs))).size;
     const btn = buttonStats(deckId);
@@ -628,6 +640,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const hard = hardNotes(deckId);
     el.innerHTML = `
       ${deckId && deckById(deckId) ? deckHeader(deckId, 'stats') : `<div class="cards-head"><div class="cards-title small">Статистика</div><div class="cards-head-deck">${esc(title)}</div></div>`}
+      ${!S.reviewsMissing && !S.hasSource && isAdmin() ? '<div class="cards-note">Тренировка пока не пишется в историю: в таблице <b>reviews</b> нет колонки source. Выполните SQL ещё раз. <button class="cards-btn" onclick="Cards.showSql()">Показать SQL</button></div>' : ''}
       ${S.reviewsMissing ? `<div class="cards-note">История ответов не пишется: в Supabase нет таблицы <b>reviews</b>. ${isAdmin() ? 'Выполните SQL ещё раз, он добавит только недостающее. <button class="cards-btn" onclick="Cards.showSql()">Показать SQL</button>' : 'Обратитесь к владельцу сайта.'}</div>` : ''}
       <div class="stats-grid" data-tip-group>
         <div class="stat-card" data-tip="Сколько карточек вы повторили сегодня, сколько минут это заняло и какая доля ответов не «Снова»"><div class="stat-label">Сегодня</div><div class="stat-big">${t.count}</div><div class="stat-sub">повторений · ${t.timeMin} мин${t.correct !== null ? ` · ${t.correct}% верно` : ''} · новых ${t.learned}</div></div>
@@ -803,7 +816,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       const mins = Math.max(1, Math.round((now - s.start) / 60000));
       const summary = s.n ? `<div class="study-summary">${s.n} ${pluralRu(s.n, 'карточка', 'карточки', 'карточек')} за ${mins} мин · верно ${Math.round((1 - s.again / s.n) * 100)}%</div>` : '';
       const nextTxt = isFinite(next) ? `Следующие подойдут через ${fmtInterval(next - now)}` : (scopeNotes.length ? '' : 'Здесь пока нет карточек');
-      el.innerHTML = head + `<div class="study-body"><div class="cards-done"><div class="cards-done-mark">✓</div><div>На сегодня ${S.deckId ? 'в этой колоде' : 'по всем колодам'} всё.</div>${summary}${nextTxt ? `<div class="study-summary sub">${nextTxt}</div>` : ''}<button class="cards-btn" onclick="goBack()">К колодам</button></div></div>`;
+      el.innerHTML = head + `<div class="study-body"><div class="cards-done"><div class="cards-done-mark">✓</div><div>На сегодня ${S.deckId ? 'в этой колоде' : 'по всем колодам'} всё.</div>${summary}${nextTxt ? `<div class="study-summary sub">${nextTxt}</div>` : ''}<div class="drill-actions">${relearnBtn(s)}<button class="cards-btn" onclick="goBack()">К колодам</button></div></div></div>`;
       return;
     }
     const { n, front, answer } = cardFaces(S.current);
@@ -892,18 +905,86 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     for (const x of [...shuffle(pool), ...shuffle(S.notes)]) { if (out.length >= k) break; if (ok(x)) out.push(x); }
     return out;
   }
+  // ── Тренировка → расписание ─────────────────────────────────────────────────
+  // Карточка в расписании — единственная память о слове, упражнения дают о ней сведения разной силы:
+  // recall — написал сам, recognize — выбрал или узнал, self — сам себе сказал «ещё учу».
+  // Продвинуть карточку может только recall, сигнал тревоги — любое упражнение:
+  //  · написал по карточке, которой подошёл срок (прошло ≥ 80% интервала, у заучиваемых — срок наступил),
+  //    — ответ как в повторении: верно «Хорошо», опечатка «Трудно», ошибка «Снова»;
+  //  · ошибся по выученной в остальных случаях — слово шаткое: остаток срока пополам, но не раньше
+  //    завтра, лёгкость не трогаем (провал узнавания — не провал памяти);
+  //  · новые слова продвигает только заучивание, пройденное до конца (graduateNew);
+  //  · не больше одного сдвига расписания на карточку в день; Подбор расписание не трогает вовсе:
+  //    там ошибаются от спешки
+  const DUE_SHARE = 0.8;
+  const cardFor = (n, dir) => S.cards.find(c => c.note_id === n.id && c.direction === dir);
+  const trainedToday = card => { const t0 = startOfDay(Date.now()); return S.reviews.some(r => r.card_id === card.id && r.applied && r.atMs >= t0); };
+  function cardIsDue(card) {
+    const now = Date.now();
+    if (card.state === 'review') { const iv = Math.max(1, card.interval_days || 1) * DAY; return card.dueMs - now <= iv * (1 - DUE_SHARE); }
+    return card.dueMs <= now + LEARN_AHEAD_MIN * MIN;
+  }
+  function saveCard(card) {
+    const body = { state: card.state, step: card.step, due: card.due, interval_days: card.interval_days, ease: card.ease, reps: card.reps, lapses: card.lapses };
+    sb(`cards?id=eq.${card.id}`, { method: 'PATCH', body }).catch(e => showToast('⚠ Не сохранилось: ' + e.message));
+  }
+  function logTraining(card, before, rating, source, applied) {
+    const note = noteById(card.note_id);
+    const rev = { card_id: card.id, note_id: card.note_id, deck_id: note ? note.deck_id : null, rating, prev_state: before.state, new_state: card.state,
+      prev_interval: before.interval_days || 0, interval_days: card.interval_days || 0, took_ms: 0, source, applied };
+    const local = { ...rev, atMs: Date.now(), reviewed_at: new Date().toISOString() };
+    S.reviews.push(local);
+    if (S.hasSource && !S.reviewsMissing) sb('reviews', { method: 'POST', body: rev }).then(rows => { if (rows && rows[0]) local.id = rows[0].id; }).catch(e => console.warn('training log:', e));
+  }
+  // result: 'ok' | 'near' | 'miss'. Возвращает, что стало с карточкой: 'advanced' | 'lapsed' | 'shaky' | null
+  function trainEvidence(d, n, dir, kind, result) {
+    const card = cardFor(n, dir); if (!card) return null;
+    const source = d.source || d.mode, before = { ...card }, rating = result === 'ok' ? 3 : result === 'near' ? 2 : 1;
+    let effect = null;
+    if (card.state !== 'new' && source !== 'match' && !trainedToday(card)) {
+      if (kind === 'recall' && cardIsDue(card)) { Object.assign(card, schedule(card, rating)); effect = rating === 1 ? 'lapsed' : 'advanced'; }
+      else if (result === 'miss' && card.state === 'review') {
+        const now = Date.now(), due = Math.max(startOfDay(now) + DAY, now + (card.dueMs - now) / 2);
+        if (due < card.dueMs) { card.dueMs = due; card.due = new Date(due).toISOString(); effect = 'shaky'; }
+      }
+      if (effect) saveCard(card);
+    }
+    // «Знаю» в Карточках ничего не доказывает — его в историю не пишем
+    if (!(kind === 'self' && result === 'ok')) logTraining(card, before, rating, source, !!effect);
+    if (effect) { d.fx = d.fx || {}; (d.fx[effect] = d.fx[effect] || new Set()).add(n.id); if (window.refreshHomeDue) refreshHomeDue(); }
+    return effect;
+  }
+  // Новое слово прошло заучивание до конца: чисто — сразу в повторение через день, с ошибками —
+  // на второй шаг заучивания, и повторение покажет его минут через десять
+  function graduateNew(d, n, dir, clean) {
+    const card = cardFor(n, dir); if (!card || card.state !== 'new') return;
+    const before = { ...card };
+    let after = schedule(card, 3); if (clean) after = schedule(after, 3);
+    Object.assign(card, after); saveCard(card); logTraining(card, before, 3, d.source || d.mode, true);
+    d.fx = d.fx || {}; (d.fx.started = d.fx.started || new Set()).add(n.id);
+    if (window.refreshHomeDue) refreshHomeDue();
+  }
+  // Строка итога: что тренировка сделала с расписанием. Пусто — тоже ответ, с объяснением почему
+  function fxLine(d) {
+    const f = d.fx || {}, c = k => (f[k] ? f[k].size : 0);
+    const parts = [c('started') && `новых в повторении: ${c('started')}`, c('advanced') && `продвинуто: ${c('advanced')}`,
+      c('shaky') && `покажутся раньше: ${c('shaky')}`, c('lapsed') && `вернулось на заучивание: ${c('lapsed')}`].filter(Boolean);
+    return `<div class="study-summary sub fx-line">${parts.length ? 'Расписание: ' + parts.join(' · ') : 'Расписание не изменилось: этим словам ещё рано на повторение'}</div>`;
+  }
   const checkWritten = (n, dir, typed) => checkTyped(typed, answerVariants({ direction: dir }, n, clozeTokens(n.example, n.word)), dir === 'ru');
   const progressHtml = (done, total) => `<div class="drill-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}"><i style="width:${total ? Math.min(100, Math.round(done / total * 100)) : 0}%"></i></div>`;
   const fmtSec = ms => (ms / 1000).toFixed(1).replace('.', ',') + ' с';
   const matchKey = deckId => deckId || 'all';
 
-  function newDrill(mode, deckId, pool = drillPool(deckId)) {
-    const d = { mode, deckId, pool };
+  // opts.items — заучивание по конкретным карточкам: направление закреплено, его переключатель скрыт
+  function newDrill(mode, deckId, pool = drillPool(deckId), opts = {}) {
+    const d = { mode, deckId, pool, opts, source: opts.source || mode, fixedDir: !!opts.items, fx: {} };
     if (mode === 'flash') Object.assign(d, { queue: shuffle(pool).map(n => ({ n, dir: pickDir() })), i: 0, flipped: false, known: new Set(), round: 1, roundKnown: 0, hist: [] });
     if (mode === 'learn') {
       // Выбор из вариантов возможен, только если есть хотя бы ещё одно слово; иначе сразу письмо
       const level = S.notes.length > 1 ? 0 : 1;
-      Object.assign(d, { items: shuffle(pool).map(n => ({ n, dir: pickDir(), level, miss: 0 })), roundNo: 0 });
+      const items = opts.items ? opts.items.map(x => ({ n: x.n, dir: x.dir })) : pool.map(n => ({ n, dir: pickDir() }));
+      Object.assign(d, { items: shuffle(items).map(x => ({ ...x, level, miss: 0 })), roundNo: 0 });
       learnRound(d);
     }
     if (mode === 'test') Object.assign(d, { phase: 'setup', opts: { count: 20, dir: drillDir(), types: { tf: true, mc: true, write: true }, ...lsGet(TEST_OPTS_KEY, {}) } });
@@ -930,7 +1011,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const total = d.pool.length, done = d.known.size;
     const head = drillTop(d, `${done} / ${total}`, true) + progressHtml(done, total);
     if (done >= total) return head + doneHtml(`Все ${total} ${pluralRu(total, 'слово', 'слова', 'слов')} отмечены «знаю»`,
-      `${d.round} ${pluralRu(d.round, 'круг', 'круга', 'кругов')}`,
+      `${d.round} ${pluralRu(d.round, 'круг', 'круга', 'кругов')}${d.fx.shaky ? ` · покажутся раньше: ${d.fx.shaky.size}` : ''}`,
       `<button class="cards-btn primary" onclick="Cards.drillDo('restart')">Пройти заново</button><button class="cards-btn" onclick="Cards.drillDo('mode', 'learn')">Заучивание</button>`);
     if (d.i >= d.queue.length) {
       const left = total - done;
@@ -1040,11 +1121,14 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   function learnFinish(d, ok) {
     const q = d.q, it = q.it;
     q.answered = true; q.ok = ok; d.roundRes.n++;
-    if (ok) { it.level++; d.roundRes.ok++; }
+    const result = ok ? 'ok' : q.check && q.check.near ? 'near' : 'miss';
+    trainEvidence(d, it.n, it.dir, q.type === 'write' ? 'recall' : 'recognize', result);
+    if (ok) { it.level++; d.roundRes.ok++; learnGraduate(d, it); }
     else { it.miss++; if (!it.requeued) { it.requeued = true; q.requeuedNow = true; d.round.push(it); } }
     // Верный ответ уходит сам, как в Quizlet; на ошибке ждём «Дальше», чтобы успели прочитать правильный
     if (ok) setTimeout(() => { if (S.view === 'drill' && S.drill === d && d.q === q) { learnNext(d); render(); } }, q.type === 'mc' ? 700 : 1100);
   }
+  function learnGraduate(d, it) { if (it.level >= 2) graduateNew(d, it.n, it.dir, it.miss === 0); }
   function learnNext(d) {
     if (!d.q || !d.q.answered) return;
     d.ri++;
@@ -1054,17 +1138,17 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   }
   function renderLearn(d) {
     const N = d.items.length, mastered = d.items.filter(x => x.level >= 2).length;
-    const head = drillTop(d, `${mastered} / ${N}`, !!d.q && !d.q.answered) + progressHtml(d.items.reduce((s, x) => s + Math.min(2, x.level), 0), N * 2);
+    const head = drillTop(d, `${mastered} / ${N}`, !d.fixedDir && !!d.q && !d.q.answered) + progressHtml(d.items.reduce((s, x) => s + Math.min(2, x.level), 0), N * 2);
     if (!d.q && !d.summary) {
       const hard = d.items.filter(x => x.miss).sort((a, b) => b.miss - a.miss).slice(0, 8);
       const misses = d.items.reduce((s, x) => s + x.miss, 0);
       const list = hard.length ? `<div class="drill-list"><div class="study-box-label">Труднее всего</div>${hard.map(x => `<div class="drill-list-row"><b>${esc(x.n.word)}</b><span>${esc(mainRu(x.n))}</span><i>${x.miss} ${pluralRu(x.miss, 'ошибка', 'ошибки', 'ошибок')}</i></div>`).join('')}</div>` : '';
       return head + doneHtml(`Все ${N} ${pluralRu(N, 'слово', 'слова', 'слов')} освоены`, misses ? `${misses} ${pluralRu(misses, 'ошибка', 'ошибки', 'ошибок')} по пути` : 'Без единой ошибки',
-        `<button class="cards-btn primary" onclick="Cards.drillDo('restart')">Пройти заново</button><button class="cards-btn" onclick="Cards.drillDo('mode', 'test')">Тест</button>`, list);
+        `<button class="cards-btn primary" onclick="Cards.drillDo('restart')">Пройти заново</button><button class="cards-btn" onclick="Cards.drillDo('mode', 'test')">Тест</button>`, fxLine(d) + list);
     }
     if (d.summary) {
       return head + `<div class="study-body"><div class="cards-done"><div>Круг ${d.roundNo} пройден</div>
-        <div class="study-summary">Верно ${d.roundRes.ok} из ${d.roundRes.n} · освоено ${mastered} из ${N}</div>
+        <div class="study-summary">Верно ${d.roundRes.ok} из ${d.roundRes.n} · освоено ${mastered} из ${N}</div>${fxLine(d)}
         <div class="drill-actions"><button class="cards-btn primary" onclick="Cards.drillDo('continue')">Продолжить</button></div></div></div>
         <div class="study-footer"><div class="study-hint">Enter — продолжить</div></div>`;
     }
@@ -1133,6 +1217,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       if (q.type === 'tf') return { ok: a === q.truth };
       const c = checkWritten(q.n, q.dir, a); return { ok: !!(c && c.ok), near: !!(c && c.near), check: c };
     });
+    d.qs.forEach((q, i) => { const r = d.res[i]; if (!r.empty) trainEvidence(d, q.n, q.dir, q.type === 'write' ? 'recall' : 'recognize', r.ok ? 'ok' : r.near ? 'near' : 'miss'); });
     d.phase = 'result';
   }
   function renderTest(d) {
@@ -1159,7 +1244,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const ok = d.res.filter(r => r.ok).length, pct = Math.round(ok / total * 100);
     return drillTop(d, `${ok} / ${total}`) + progressHtml(ok, total) + `
       <div class="study-body"><div class="test-sheet">
-        <div class="test-score"><div class="test-score-big">${pct}%</div><div class="study-summary">верно ${ok} из ${total}</div>
+        <div class="test-score"><div class="test-score-big">${pct}%</div><div class="study-summary">верно ${ok} из ${total}</div>${fxLine(d)}
           <div class="drill-actions"><button class="cards-btn primary" onclick="Cards.drillDo('tnew')">Новый тест</button>${ok < total ? `<button class="cards-btn" onclick="Cards.drillDo('learnWrong')">Учить ошибки</button>` : ''}</div></div>
         ${testSheet(d)}
       </div></div>`;
@@ -1206,6 +1291,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       seenW.add(w); seenR.add(r); pairs.push(n);
     }
     d.tiles = shuffle(pairs.flatMap((n, p) => [{ p, side: 'it', text: n.word }, { p, side: 'ru', text: mainRu(n) }]));
+    d.pairNotes = pairs;
     Object.assign(d, { pairs: pairs.length, gone: new Set(), sel: null, bad: null, penalty: 0, start: Date.now(), end: 0, phase: 'run', record: false });
     matchTick(d);
   }
@@ -1230,6 +1316,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
         if (d.record) { best[key] = time; lsSet(MATCH_BEST_KEY, best); }
       }
     } else {
+      const first = d.tiles[d.sel]; trainEvidence(d, d.pairNotes[first.p], first.side, 'recognize', 'miss');
       d.bad = [d.sel, t]; d.sel = null; d.penalty += 1000;
       const bad = d.bad; setTimeout(() => { if (d.bad === bad) { d.bad = null; if (S.view === 'drill' && S.drill === d) render(); } }, 500);
     }
@@ -1277,7 +1364,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     const d = S.drill; if (!d || S.view !== 'drill') return;
     const it = d.mode === 'flash' ? d.queue[d.i] : null;
     switch (act) {
-      case 'restart': S.drill = newDrill(d.mode, d.deckId, d.pool); break;
+      case 'restart': S.drill = newDrill(d.mode, d.deckId, d.pool, d.opts); break;
       case 'mode': S.drill = newDrill(a, d.deckId); break;
       // Направление меняется на ходу: у карточек и у ещё не освоенных слов заучивания
       case 'dir': {
@@ -1292,7 +1379,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       case 'know':
         if (!it) return;
         d.hist.push({ i: d.i, known: !!a });
-        if (a) { d.known.add(it.n); d.roundKnown++; }
+        if (a) { d.known.add(it.n); d.roundKnown++; } else trainEvidence(d, it.n, it.dir, 'self', 'miss');
         d.i++; d.flipped = false; break;
       case 'undo': {
         const h = d.mode === 'flash' && d.hist.pop(); if (!h) return;
@@ -1310,7 +1397,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
       // «Почти» — это опечатка, и человек вправе решить, что ошибки не было
       case 'override': {
         const q = d.q; if (!q || !q.answered || q.ok) return;
-        q.ok = true; q.it.level++; q.it.miss--; d.roundRes.ok++;
+        q.ok = true; q.it.level++; q.it.miss--; d.roundRes.ok++; learnGraduate(d, q.it);
         if (q.requeuedNow) { d.round.splice(d.round.lastIndexOf(q.it), 1); q.it.requeued = false; }
         learnNext(d); break;
       }
@@ -1512,7 +1599,7 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
   function study(deckId, tag) {
     pushView('study');
     S.deckId = deckId; S.view = 'study'; S.undo = null;
-    S.session = { start: Date.now(), n: 0, again: 0 }; // для итога в конце сессии
+    S.session = { start: Date.now(), n: 0, again: 0, missed: new Set() }; // для итога в конце сессии и «Доучить»
     if (tag !== undefined) S.tagFilter = tag;
     buildQueue(); nextCard(); render();
   }
@@ -1538,15 +1625,36 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     S.reviews.push(local);
     if (!S.reviewsMissing) sb('reviews', { method: 'POST', body: rev }).then(rows => { if (rows && rows[0]) local.id = rows[0].id; }).catch(e => { if (isMissingTable(e)) S.reviewsMissing = true; });
     S.undo = { before, card: S.current, review: local };
-    if (S.session) { S.session.n++; if (rating === 1) S.session.again++; }
+    if (S.session) { S.session.n++; if (rating === 1) { S.session.again++; S.session.missed.add(S.current.id); } }
     if (window.refreshHomeDue) refreshHomeDue();
     const payload = { state: after.state, step: after.step, due: after.due, interval_days: after.interval_days, ease: after.ease, reps: after.reps, lapses: after.lapses };
     sb(`cards?id=eq.${S.current.id}`, { method: 'PATCH', body: payload }).catch(e => showToast('⚠ Не сохранилось: ' + e.message));
     nextCard(); render();
   }
+  // «Доучить»: слова, на которых в этой сессии нажали «Снова», — заучиванием, сразу после повторения.
+  // Карточки стоят на шаге переучивания, письменный ответ в заучивании их и закрывает (см. trainEvidence)
+  const missedCards = s => [...((s && s.missed) || [])].map(id => S.cards.find(c => c.id === id)).filter(c => c && noteById(c.note_id));
+  function relearnBtn(s) {
+    const k = new Set(missedCards(s).map(c => c.note_id)).size;
+    return k ? `<button class="cards-btn primary" onclick="Cards.relearnMissed()">Доучить ${k} ${pluralRu(k, 'слово', 'слова', 'слов')}</button>` : '';
+  }
+  function startLearnItems(deckId, cards) {
+    const items = cards.map(c => ({ n: noteById(c.note_id), dir: c.direction })).filter(x => x.n && x.n.word && x.n.translation);
+    if (!items.length) return;
+    const pool = [...new Set(items.map(x => x.n))];
+    pushView('drill');
+    S.deckId = deckId; S.view = 'drill'; S.drill = newDrill('learn', deckId, pool, { items, source: 'learn' }); render();
+  }
+  // Новые слова на сегодня — в пределах дневного лимита, в том же порядке, что их дало бы повторение
+  function newCardsToday(deckId) {
+    return cardsOfNotes(scopeNotes(deckId)).filter(c => c.state === 'new')
+      .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)).slice(0, newPerDay());
+  }
   async function undo() {
     if (!S.undo) return;
     const { before, card, review } = S.undo; S.undo = null;
+    if (review && review.rating === 1 && S.session) { S.session.missed.delete(card.id); S.session.again = Math.max(0, S.session.again - 1); }
+    if (S.session && review) S.session.n = Math.max(0, S.session.n - 1);
     if (review) { S.reviews = S.reviews.filter(r => r !== review); if (review.id) sb(`reviews?id=eq.${review.id}`, { method: 'DELETE' }).catch(() => {}); }
     Object.assign(card, before);
     sb(`cards?id=eq.${card.id}`, { method: 'PATCH', body: { state: before.state, step: before.step, due: before.due, interval_days: before.interval_days, ease: before.ease, reps: before.reps, lapses: before.lapses } }).catch(() => {});
@@ -2037,6 +2145,8 @@ create index if not exists reviews_at_idx on reviews(reviewed_at);`;
     todayHero: () => S.loaded && !S.missingTables ? todayHero(null) : '',
     reveal, answer, undo,
     drill: startDrill, drillDo, drillHard, deckTab, deckMenu,
+    relearnMissed() { startLearnItems(S.deckId, missedCards(S.session)); },
+    learnNew(id) { startLearnItems(id || null, newCardsToday(id || null)); },
     openAdd(id) { pushView('add'); S.deckId = id; S.view = 'add'; S.build = null; render(); },
     buildFromText, importFile, saveBuild,
     toggleItem(i, v) { S.build.items[i].include = v; render(); },

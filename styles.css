@@ -3750,3 +3750,7 @@ body.no-search .back-btn { margin-top: -32px; }
 .hard-row span { color: var(--muted); font-style: italic; overflow-wrap: anywhere; }
 .hard-row i { font-style: normal; font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--danger); white-space: nowrap; }
 .stat-section .drill-actions { justify-content: flex-start; margin-top: 14px; }
+/* Вторая задача дня: новые слова через заучивание — тихая кнопка рядом с главной */
+.today-new { padding: 9px 14px; border: 1.5px solid var(--border); border-radius: var(--radius); background: white; color: var(--ink); font-family: var(--font-text); font-size: var(--fs-small); cursor: pointer; white-space: nowrap; transition: border-color var(--t-base), color var(--t-base); }
+.today-new:hover { border-color: var(--terracotta); color: var(--terracotta); }
+.fx-line { margin-top: 6px; }
