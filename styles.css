@@ -3761,3 +3761,5 @@ body.no-search .back-btn { margin-top: -32px; }
 .today-foot.two .today-go { justify-content: flex-start; align-self: stretch; justify-self: stretch; width: 100%; box-sizing: border-box; }
 /* Иконки слева встают столбиком: треугольник над плюсом */
 .today-foot.two .today-go > .icon:first-child { flex: 0 0 auto; }
+/* Синонимы на итальянской стороне Карточек — тише слова и транскрипции */
+.flash-face .study-alt { margin-top: 0; font-size: var(--fs-small); }

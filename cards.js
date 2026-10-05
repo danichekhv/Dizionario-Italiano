@@ -45,6 +45,10 @@
     if (parts.length < 2 || parts.some(p => p.split(/\s+/).length > 2)) return { word: s, alt: [] };
     return { word: parts[0], alt: parts.slice(1) };
   }
+  // Строка «синонимы»: другие итальянские слова того же значения. clickable — кнопки в свои статьи
+  // (в учёбе после ответа), иначе простой текст: в Карточках нажатие переворачивает карточку
+  const altHtml = (n, clickable) => (n.alt || []).length ? `<div class="study-alt">синонимы: ${n.alt.map(a => clickable
+    ? `<button type="button" data-alt-w="${esc(a)}">${esc(a)}</button>` : esc(a)).join(', ')}</div>` : '';
   const wordVariants = n => [n.word, ...(n.alt || [])].map(w => String(w || '').trim()).filter(Boolean);
   // Колонки alt может ещё не быть: её добавляют разовым SQL. Молча выбросить синонимы нельзя —
   // человек их только что напечатал, пусть знает, почему они не сохранились
@@ -854,7 +858,7 @@ alter table reviews add column if not exists applied boolean default false;`;
         <div class="study-rule"></div>
         ${typedBlock}
         <div class="study-answer">${!isIt && isPhrase(answer) ? phraseHtml(answer) : esc(answer)}</div>
-        ${!isIt && (n.alt || []).length ? `<div class="study-alt">ещё: ${n.alt.map(a => `<button type="button" data-alt-w="${esc(a)}">${esc(a)}</button>`).join(', ')}</div>` : ''}
+        ${altHtml(n, true)}
         ${n.phonetic ? `<div class="study-ipa">${esc(n.phonetic)}</div>` : ''}
         ${sentence}
         ${n.meaning ? `<div class="study-box"><div class="study-box-label">Значение</div><div class="study-box-text">${makeClickable(n.meaning)}</div></div>` : ''}
@@ -1037,6 +1041,7 @@ alter table reviews add column if not exists applied boolean default false;`;
     // Итальянская сторона — слово с транскрипцией и примером, русская — перевод. Какая из них лицом, решает направление
     const itFace = `<div class="flash-word">${esc(n.word)}</div>
           ${n.phonetic ? `<div class="flash-ipa">${esc(n.phonetic)}</div>` : ''}
+          ${altHtml(n, false)}
           ${n.example ? `<div class="flash-ex">${esc(n.example)}</div>` : ''}`;
     const ruFace = `<div class="flash-tr">${esc(n.translation)}</div>`;
     const [front, back] = it.dir === 'it' ? [itFace, ruFace] : [ruFace, itFace];
@@ -1183,7 +1188,7 @@ alter table reviews add column if not exists applied boolean default false;`;
         const c = q.check;
         const typed = c ? `<div class="study-typed ${c.ok ? 'ok' : c.near ? 'near' : 'bad'}"><div class="study-typed-line">${diffHtml(c.typedOut)}</div>
           <div class="study-typed-arrow">${c.ok ? '✓ верно' : c.near ? '≈ почти' : '✗'}</div></div>` : '';
-        body = `<div class="study-rule"></div>${typed}<div class="study-answer">${esc(ansText(n, it.dir))}</div>${n.phonetic && it.dir === 'ru' ? `<div class="study-ipa">${esc(n.phonetic)}</div>` : ''}${sentence}`;
+        body = `<div class="study-rule"></div>${typed}<div class="study-answer">${esc(ansText(n, it.dir))}</div>${altHtml(n, true)}${n.phonetic && it.dir === 'ru' ? `<div class="study-ipa">${esc(n.phonetic)}</div>` : ''}${sentence}`;
       }
     }
     const note = q.answered && !q.ok ? `<div class="drill-note">Слово вернётся в конце круга</div>` : '';
