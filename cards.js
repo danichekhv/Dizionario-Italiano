@@ -1764,6 +1764,19 @@ alter table reviews add column if not exists applied boolean default false;`;
   // Строка «слово — перевод» без CSV: тире с пробелами вокруг, справа кириллица
   const dashPair = s => { const m = s.match(/^(.+?)\s+[-–—]\s+(.+)$/); return m && hasCyr(m[2]) && !hasCyr(m[1]) ? [m[1], m[2]] : null; };
 
+  // Ячейка, где итальянский и русский смешаны через «,» или «;», — это несколько полей, разделённых
+  // не тем знаком: «berretto, шапочка» при разделителе «;». Режем на границе алфавитов, а куски одного
+  // алфавита склеиваем обратно, чтобы запятая внутри примера его не рвала
+  function unmix(c) {
+    if (!(hasCyr(c) && hasLat(c))) return [c];
+    const p = c.split(/(\s*[,;]\s*)/), out = []; let kind = null;
+    for (let i = 0; i < p.length; i += 2) {
+      const k = isRu(p[i]) ? 'ru' : isIt(p[i]) ? 'it' : null;
+      if (out.length && (!k || k === kind)) out[out.length - 1] += p[i - 1].trim() + ' ' + p[i];
+      else { out.push(p[i]); kind = k; }
+    }
+    return out.map(s => s.trim()).filter(Boolean);
+  }
   function parseLines(text) {
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const delim = pickDelim(lines);
@@ -1773,8 +1786,7 @@ alter table reviews add column if not exists applied boolean default false;`;
     const join = delim === ';' ? '; ' : ', ';
     const items = [];
     lines.forEach(line => {
-      // Ячейка, где через «;» смешаны итальянский и русский, — это два поля, разделённых не тем знаком
-      const cells = split(line).flatMap(c => { const p = c.split(/\s*;\s*/); return hasCyr(c) && hasLat(c) && p.every(x => isRu(x) || isIt(x)) ? p : [c]; });
+      const cells = split(line).flatMap(unmix);
       const dp = dashPair(cells[0]); if (dp) cells.splice(0, 1, ...dp);
       const f = { word: '', translation: '', example: '', meaning: '', tags: '' };
       // «imprenditore, uomo d'affari» в списке через запятую: короткие итальянские куски подряд — синонимы слова
