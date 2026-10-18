@@ -1533,7 +1533,7 @@ alter table reviews add column if not exists applied boolean default false;`;
     if (!b) {
       body = `
         <p class="cards-p">Вставьте слова, по одному в строке. Перевод, транскрипцию, пример и значение приложение соберёт само: сначала из кэша словаря и Викисловаря, недостающее допишет модель одним запросом.</p>
-        <p class="cards-p">Можно и готовыми строками CSV: <code>слово; перевод; пример; значение; теги</code> (разделитель <code>;</code>, <code>,</code> или табуляция). Пустые поля будут дозаполнены.</p>
+        <p class="cards-p">Можно и готовыми строками CSV: <code>слово; перевод; пример; значение; теги</code> (разделитель <code>;</code>, <code>,</code> или табуляция). Пустые поля будут дозаполнены. Перевод с запятыми можно взять в кавычки, а можно и так; строку заголовка вроде <code>итальянский,русский</code> приложение поймёт, колонки можно переставить. Если в строке только русское слово, итальянское подберёт модель.</p>
         <textarea class="cards-textarea" id="cardsWords" placeholder="frigorifero&#10;caffettiera&#10;tovagliolo; салфетка&#10;…"></textarea>
         <input class="cards-input" id="cardsTags" placeholder="теги через запятую, например: cucina, A2" autocomplete="off">
         <div class="cards-actions">
@@ -1730,16 +1730,90 @@ alter table reviews add column if not exists applied boolean default false;`;
   }
 
   // ── Действия: добавление слов ────────────────────────────────────────────────
+  // Поле CSV с учётом кавычек: «confetti,"конфеты, драже"» — два поля, а не три
+  function splitCsv(line, delim) {
+    const out = []; let cur = '', q = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (q) { if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+      else if (ch === '"' && !cur.trim()) { q = true; cur = ''; }
+      else if (ch === delim) { out.push(cur.trim()); cur = ''; }
+      else cur += ch;
+    }
+    out.push(cur.trim());
+    return out;
+  }
+  // Разделитель один на весь текст: тот, что делит больше строк. По каждой строке отдельно нельзя —
+  // в «berretto,шапочка; фуражка» точка с запятой стоит внутри перевода, а не между полями
+  function pickDelim(lines) {
+    let best = null, bestN = 0;
+    ['\t', ';', ','].forEach(d => { const k = lines.filter(l => splitCsv(l, d).length > 1).length; if (k > bestN) { best = d; bestN = k; } });
+    return best;
+  }
+  const hasCyr = s => /[а-яё]/i.test(s), hasLat = s => /[a-zà-ÿ]/i.test(s);
+  const isRu = s => hasCyr(s) && !hasLat(s), isIt = s => hasLat(s) && !hasCyr(s);
+  // Заголовок: «итальянский,русский», «word;translation;example» — по нему и порядок колонок
+  const HEAD = {
+    word: /^(word|parola|слово|итальянский|итал\.?|italiano|italian|it)$/i,
+    translation: /^(translation|traduzione|перевод|русский|рус\.?|russo|russian|ru)$/i,
+    example: /^(example|esempio|пример)$/i,
+    meaning: /^(meaning|definition|significato|definizione|значение|определение)$/i,
+    tags: /^(tags?|теги?)$/i
+  };
+  const headCol = c => Object.keys(HEAD).find(k => HEAD[k].test(c.trim()));
+  // Строка «слово — перевод» без CSV: тире с пробелами вокруг, справа кириллица
+  const dashPair = s => { const m = s.match(/^(.+?)\s+[-–—]\s+(.+)$/); return m && hasCyr(m[2]) && !hasCyr(m[1]) ? [m[1], m[2]] : null; };
+
   function parseLines(text) {
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const delim = pickDelim(lines);
+    const split = l => delim ? splitCsv(l, delim) : [l];
+    let cols = ['word', 'translation', 'example', 'meaning', 'tags'], header = false;
+    if (lines.length) { const h = split(lines[0]).map(headCol); if (h.every(Boolean) && h.includes('word')) { cols = h; header = true; lines.shift(); } }
+    const join = delim === ';' ? '; ' : ', ';
     const items = [];
-    text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).forEach(line => {
-      const delim = line.includes('\t') ? '\t' : (line.includes(';') ? ';' : (line.split(',').length > 1 ? ',' : null));
-      const parts = delim ? line.split(delim).map(p => p.trim().replace(/^"|"$/g, '')) : [line];
-      if (!parts[0] || /^(word|parola|слово)$/i.test(parts[0])) return; // заголовок CSV
-      const { word, alt } = splitWord(parts[0]); if (!word) return; // кавычки убираем, «a, b» — варианты
-      items.push({ word, alt, translation: parts[1] || '', example: parts[2] || '', meaning: parts[3] || '', tags: parts[4] ? parts[4].split(/[,\s]+/).filter(Boolean) : [] });
+    lines.forEach(line => {
+      // Ячейка, где через «;» смешаны итальянский и русский, — это два поля, разделённых не тем знаком
+      const cells = split(line).flatMap(c => { const p = c.split(/\s*;\s*/); return hasCyr(c) && hasLat(c) && p.every(x => isRu(x) || isIt(x)) ? p : [c]; });
+      const dp = dashPair(cells[0]); if (dp) cells.splice(0, 1, ...dp);
+      const f = { word: '', translation: '', example: '', meaning: '', tags: '' };
+      // «imprenditore, uomo d'affari» в списке через запятую: короткие итальянские куски подряд — синонимы слова
+      if (!header) while (cells.length > 1 && isIt(cells[0]) && isIt(cells[1]) && cells[1].split(/\s+/).length <= 2) cells.splice(0, 2, cells[0] + ', ' + cells[1]);
+      // Колонок больше, чем в заголовке, или перевод без кавычек разъехался по полям («конфеты, драже»):
+      // кириллица подряд за переводом — это тот же перевод
+      if (!header || cells.length > cols.length) {
+        const ti = cols.indexOf('translation');
+        while (ti >= 0 && cells.length > ti + 1 && isRu(cells[ti + 1]) && (header || cols[ti + 1] !== 'tags')) cells.splice(ti, 2, [cells[ti], cells[ti + 1]].filter(Boolean).join(join));
+      }
+      cells.forEach((c, i) => { if (cols[i] && !f[cols[i]]) f[cols[i]] = c; });
+      // Перепутанные колонки: русское в слове, итальянское в переводе
+      if (isRu(f.word) && (isIt(f.translation) || !f.translation)) [f.word, f.translation] = [f.translation, f.word];
+      // Перевод, прилипший к слову («berretto, шапочка»): кириллические куски уходят в перевод
+      const bits = cleanQuery(f.word).split(/[,;/]/).map(x => x.trim()).filter(Boolean);
+      const ruBits = bits.filter(isRu);
+      if (ruBits.length) { f.word = bits.filter(b => !isRu(b)).join(', '); f.translation = [...ruBits, f.translation].filter(Boolean).join(join); }
+      const { word, alt } = splitWord(f.word);
+      if (!word && !f.translation) return;
+      // Без слова, только по-русски: итальянское подберёт модель перед поиском по словарям (findItalian)
+      items.push({ word, alt, translation: f.translation, example: f.example, meaning: f.meaning, tags: f.tags ? f.tags.split(/[,\s]+/).filter(Boolean) : [] });
     });
     return items;
+  }
+  // Строки, где дано только русское: просим у модели итальянское слово, перевод остаётся человека
+  async function findItalian(list) {
+    const BATCH = 15;
+    for (let i = 0; i < list.length; i += BATCH) {
+      const chunk = list.slice(i, i + BATCH);
+      try {
+        const { results } = await backendApi('/api/cards-fill', { list: chunk.map(x => ({ russian: x.translation, missing: ['word'] })) });
+        const arr = Array.isArray(results) ? results : (results && Array.isArray(results.items) ? results.items : []);
+        chunk.forEach((x, k) => {
+          const r = arr.find(r => r && r.russian === x.translation) || arr[k];
+          const w = cleanQuery(r && r.word); if (!isIt(w)) return;
+          const s = splitWord(w); x.word = s.word; x.alt = [...new Set([...(x.alt || []), ...s.alt])]; x.fromRu = true;
+        });
+      } catch (e) { showToast('⚠ Модель не ответила: ' + e.message); }
+    }
   }
 
   async function lookupOne(it) {
@@ -1754,13 +1828,21 @@ alter table reviews add column if not exists applied boolean default false;`;
       phrase ? [] : fetchRuWiktBlocks(lw).catch(() => [])
     ]);
     let light = null; // разбор Викисловаря: нужен и ниже, когда выбираем блок ru.wiktionary
+    // Перевод, данный человеком, задаёт смысл карточки. Статья в кэше может описывать другое значение
+    // или вовсе созвучное слово (ложные друзья: confetti — «драже», а не «конфетти»), и тогда её пример
+    // и толкование в карточку не берём: модель напишет их под данный перевод
+    const ruKey = s => trVariants(s).map(v => v.toLowerCase().replace(/ё/g, 'е'));
+    const cachedRu = cached && cached.russian ? [cached.russian.main, cached.russian.alternatives].filter(Boolean).join('; ') : '';
+    const ownSense = !!it.translation && !ruKey(it.translation).some(v => ruKey(cachedRu).includes(v));
     if (cached) {
       d.word = cached.word || d.word; d.pos = cached.partOfSpeech || '';
       d.translation = d.translation || (cached.russian && cached.russian.main) || '';
       d.phonetic = cached.phonetic || '';
       const m0 = (cached.meanings || [])[0] || {};
-      d.example = d.example || m0.example || cached.example || '';
-      d.meaning = d.meaning || m0.definition || cached.definition || '';
+      if (!ownSense) {
+        d.example = d.example || m0.example || cached.example || '';
+        d.meaning = d.meaning || m0.definition || cached.definition || '';
+      }
     }
     if (phrase) {
       d.isPhrase = true; d.pos = d.pos || 'locuzione';
@@ -1772,7 +1854,9 @@ alter table reviews add column if not exists applied boolean default false;`;
       const m = light = mapFreeDictionary(fd, { light: true });
       if (m && m.lemma) { d.warn = `форма слова ${m.lemma}, карточка будет на неё`; d.word = m.lemma; return lookupOne({ ...it, word: m.lemma, _redirected: true }).then(x => ({ ...x, warn: d.warn })); }
       if (m && m.lemmas) d.warn = `форма нескольких слов: ${m.lemmas.map(l => l.lemma).join(', ')}`;
-      else if (m) { d.phonetic = d.phonetic || m.phonetic || ''; d.pos = d.pos || m.partOfSpeech || ''; d.glosses = (m.senses || []).map(s => s.gloss).filter(Boolean).slice(0, 3); d.example = d.example || (m.senses || []).map(s => s.example).find(Boolean) || ''; }
+      else if (m) { d.phonetic = d.phonetic || m.phonetic || ''; d.pos = d.pos || m.partOfSpeech || ''; d.glosses = (m.senses || []).map(s => s.gloss).filter(Boolean).slice(0, 3);
+        // Пример первого значения годится, только если значение одно или перевод не задан: иначе он может быть про другое
+        if (!it.translation || (m.senses || []).length === 1) d.example = d.example || (m.senses || []).map(s => s.example).find(Boolean) || ''; }
     }
     // Перевод из ru.wiktionary — только для той части речи, о которой карточка: у прилагательного
     // «fisico» там описано существительное, и в карточку уезжало «телосложение» вместо «физический».
@@ -1795,8 +1879,10 @@ alter table reviews add column if not exists applied boolean default false;`;
     for (let i = 0; i < need.length; i += BATCH) {
       const chunk = need.slice(i, i + BATCH);
       if (S.build) { S.build.status = `Модель дописывает недостающее: ${Math.min(i + BATCH, need.length)} из ${need.length}…`; render(); }
-      const list = chunk.map(x => ({ word: x.word, isPhrase: x.isPhrase || undefined, partOfSpeech: x.pos || undefined, englishGlosses: x.glosses.length ? x.glosses : undefined,
-        missing: fieldsOf(x).filter(f => !x[f]) }));
+      // Готовый перевод уходит модели как смысл карточки: без него пример и толкование к confetti
+      // написаны про бумажное «конфетти», хотя на обороте «конфеты»
+      const list = chunk.map(x => ({ word: x.word, translation: x.translation || undefined, isPhrase: x.isPhrase || undefined, partOfSpeech: x.pos || undefined,
+        englishGlosses: (x.glosses || []).length ? x.glosses : undefined, missing: fieldsOf(x).filter(f => !x[f]) }));
       try {
         const { results, by } = await backendApi('/api/cards-fill', { list });
         const arr = Array.isArray(results) ? results : (results && Array.isArray(results.items) ? results.items : []);
@@ -1810,8 +1896,12 @@ alter table reviews add column if not exists applied boolean default false;`;
 
   async function runBuild(items, tags) {
     S.build = { phase: 'running', total: items.length, done: 0, status: 'Ищем в словарях…', items: [], llmUsed: null }; render();
+    const ruOnly = items.filter(i => !i.word);
+    if (ruOnly.length) { S.build.status = 'Подбираем итальянские слова к русским…'; render(); await findItalian(ruOnly); }
     const out = new Array(items.length); let idx = 0;
-    const worker = async () => { while (idx < items.length) { const i = idx++; try { out[i] = await lookupOne(items[i]); } catch (e) { out[i] = { ...items[i], phonetic: '', pos: '', glosses: [], include: true, warn: 'ошибка поиска: ' + e.message }; } S.build.done++; S.build.status = `Ищем в словарях: ${S.build.done} из ${items.length}…`; render(); } };
+    const worker = async () => { while (idx < items.length) { const i = idx++;
+      if (!items[i].word) { out[i] = { ...items[i], phonetic: '', pos: '', glosses: [], include: false, warn: 'не нашлось итальянское слово — впишите его сами' }; S.build.done++; continue; }
+      try { out[i] = await lookupOne(items[i]); } catch (e) { out[i] = { ...items[i], phonetic: '', pos: '', glosses: [], include: true, warn: 'ошибка поиска: ' + e.message }; } S.build.done++; S.build.status = `Ищем в словарях: ${S.build.done} из ${items.length}…`; render(); } };
     await Promise.all([worker(), worker(), worker()]);
     // дубли (два одинаковых слова или уже есть в колоде)
     const existing = new Set(notesInDeck(S.deckId).flatMap(n => wordVariants(n).map(w => w.toLowerCase()))); const seen = new Set();
@@ -1819,6 +1909,7 @@ alter table reviews add column if not exists applied boolean default false;`;
       const ks = wordVariants(it).map(w => w.toLowerCase());
       if (ks.some(x => existing.has(x))) { it.include = false; it.warn = 'уже есть в колоде'; }
       else if (ks.some(x => seen.has(x))) { it.include = false; it.warn = 'дубль в списке'; }
+      else if (it.fromRu) it.warn = it.warn || 'дано по-русски, итальянское слово подобрала модель — проверьте';
       else if ((it.alt || []).length) it.warn = 'ещё варианты: ' + it.alt.join(', '); // разбор строки виден до сохранения
       ks.forEach(x => seen.add(x));
       it.tags = [...new Set([...(it.tags || []), ...tags])];
@@ -1839,7 +1930,7 @@ alter table reviews add column if not exists applied boolean default false;`;
     r.readAsText(file);
   }
   async function saveBuild() {
-    const items = S.build.items.filter(i => i.include); if (!items.length) return;
+    const items = S.build.items.filter(i => i.include && i.word); if (!items.length) return;
     try {
       const notes = await sb('notes', { method: 'POST', body: items.map(i => noteBody({ deck_id: S.deckId, word: i.word, alt: i.alt || [], translation: i.translation || '', phonetic: i.phonetic || '', example: i.example || '', meaning: i.meaning || '', pos: i.pos || '', tags: i.tags || [] })) });
       const cards = await sb('cards', { method: 'POST', body: notes.flatMap(n => [{ note_id: n.id, direction: 'it' }, { note_id: n.id, direction: 'ru' }]) });

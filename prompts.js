@@ -252,6 +252,8 @@ Return ONLY valid JSON, no markdown: {"russian":{"main":"перевод","altern
     return `You are an expert Italian lexicographer. For each Italian item below, provide ONLY the fields listed in "missing".
 Fields: "translation" = primary Russian translation (1-3 words, alternatives after ";" allowed), "phonetic" = IPA with ˈ before the stressed syllable, "example" = one natural Italian sentence using the word, "meaning" = short definition in Italian (1 sentence).
 Items with "isPhrase": true are multi-word expressions (idioms, collocations, set phrases): "translation" = the idiomatic Russian equivalent, not word-for-word; "meaning" = what the whole expression means; "example" = a natural sentence using the whole expression. Never add a phonetic for them.
+If an item already has "translation", the user chose that sense: "example" and "meaning" must illustrate exactly that sense, even when the word has a better-known one or "englishGlosses" say otherwise. Watch for false friends and similar-sounding words: Italian "confetti" = sugared almonds (конфеты, драже), not paper confetti (that is "coriandoli"); "camera" = room, "firma" = signature, "ditta" = company.
+Items with "russian" and "word" in "missing" have no Italian word yet: put into "word" the most natural Italian equivalent of that Russian word (dictionary form, no article) and copy "russian" back unchanged.
 Return ONLY a JSON array of objects {"word": "...", ...fields}, in the same order, no markdown.
 ${JSON.stringify(list)}`;
   }
