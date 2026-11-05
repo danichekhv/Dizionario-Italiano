@@ -102,7 +102,7 @@ async function withinAnonQuota(ip) {
   return typeof n === 'number' ? n <= ANON_LIMIT : true;
 }
 
-// ── Модели: пишет всегда Gemini, проверяет всегда другой провайдер ──────────────────────────
+// ── Модели: пишет Claude или Gemini (см. «Писатель» ниже), проверяет всегда другой провайдер ─
 // Раньше это гарантировалось только если у пользователя случайно было два разных ключа
 // (app.js: «иначе она подтвердит собственные выдумки»); на своих ключах это стало правилом без исключений.
 // thinkingLevel:minimal ускоряет и удешевляет ответ; часть ключей/регионов его не принимает —
@@ -130,6 +130,91 @@ async function geminiJson(env, prompt) {
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   return extractJson(text);
 }
+// ── Писатель: Claude Haiku напрямую через API Anthropic, Gemini — запасной ──────────────────
+// Нет секрета ANTHROPIC_API_KEY — пишет Gemini, как раньше. Есть — пишет Claude, а если он не ответил,
+// отказался или прислал не JSON, тот же запрос уходит в Gemini (если есть GEMINI_KEY).
+// Модель меняется секретом WRITER_MODEL (id из документации Anthropic) без правки кода.
+const CLAUDE_URL = 'https://api.anthropic.com/v1/messages';
+const CLAUDE_MODEL = 'claude-haiku-5-5';
+const writerModel = env => env.WRITER_MODEL || CLAUDE_MODEL;
+const WRITER_NAME = { 'claude-haiku-5-5': 'Claude Haiku 5.5', 'claude-sonnet-5-5': 'Claude Sonnet 5.5' };
+const writerLabel = env => WRITER_NAME[writerModel(env)] || writerModel(env);
+function callClaude(env, prompt, stream) {
+  return fetch(CLAUDE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2026-10-21' },
+    body: JSON.stringify({
+      model: writerModel(env), stream, max_tokens: 16000,
+      // Словарным задачам долгие размышления не нужны, а их токены оплачиваются как ответ
+      output_config: { effort: 'low' },
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+}
+async function claudeHttpError(res) {
+  const data = await res.json().catch(() => ({}));
+  return new Error(data.error?.message || `Claude HTTP ${res.status}`);
+}
+// Отказ приходит как обычный ответ 200, а обрезанный JSON разбирать незачем
+function assertClaudeStop(reason) {
+  if (reason === 'refusal') throw new Error('Claude отказался отвечать');
+  if (reason === 'max_tokens') throw new Error('Ответ Claude обрезан по длине');
+}
+async function claudeJson(env, prompt) {
+  const res = await callClaude(env, prompt, false);
+  if (!res.ok) throw await claudeHttpError(res);
+  const data = await res.json();
+  assertClaudeStop(data.stop_reason);
+  // Ответ может начинаться с блоков размышления, текст ищем по типу, а не по позиции
+  return extractJson(data.content.filter(b => b.type === 'text').map(b => b.text).join(''));
+}
+async function writerJson(env, prompt) {
+  if (env.ANTHROPIC_API_KEY) {
+    try { return { out: await claudeJson(env, prompt), by: writerLabel(env) }; }
+    catch (e) { if (!env.GEMINI_KEY) throw e; console.warn('Claude не ответил, пишет Gemini:', e.message); }
+  }
+  return { out: await geminiJson(env, prompt), by: 'Gemini' };
+}
+// Куски текста из потока Claude: размышления пропускаем, отказ и сбой становятся исключением
+async function* claudeText(body) {
+  const dec = new TextDecoder(); let buf = '';
+  for await (const chunk of body) {
+    buf += dec.decode(chunk, { stream: true });
+    let nl;
+    while ((nl = buf.indexOf('\n')) !== -1) {
+      const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+      if (!line.startsWith('data:')) continue; // строки «event:» и разделители
+      const ev = JSON.parse(line.slice(5));
+      if (ev.type === 'error') throw new Error(ev.error?.message || 'Claude: сбой потока');
+      if (ev.type === 'message_delta') assertClaudeStop(ev.delta?.stop_reason);
+      if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') yield ev.delta.text;
+    }
+  }
+}
+// Отдаём поток в SSE того вида, что отдаёт Gemini: клиент (streamArticleHybrid в app.js) читает именно его.
+// Первый кусок ждём до ответа клиенту: пока ни слова не ушло, сбой ещё можно передать Gemini.
+async function claudeStreamResponse(env, prompt) {
+  const res = await callClaude(env, prompt, true);
+  if (!res.ok || !res.body) throw await claudeHttpError(res);
+  const text = claudeText(res.body);
+  const first = await text.next();
+  if (first.done) throw new Error('Claude вернул пустой ответ');
+  const enc = new TextEncoder();
+  const sse = obj => enc.encode(`data: ${JSON.stringify(obj)}\n\n`);
+  const piece = t => sse({ candidates: [{ content: { parts: [{ text: t }] } }] });
+  const stream = new ReadableStream({
+    start(ctrl) { ctrl.enqueue(piece(first.value)); },
+    async pull(ctrl) {
+      try {
+        const { value, done } = await text.next();
+        if (done) ctrl.close(); else ctrl.enqueue(piece(value));
+      } catch (e) { ctrl.enqueue(sse({ error: { message: e.message } })); ctrl.close(); }
+    },
+    cancel() { return text.return(); }
+  });
+  return new Response(stream, { headers: { 'Content-Type': 'text/event-stream', 'X-LLM': writerLabel(env) } });
+}
+
 const checkerProvider = env => CHECK_URLS[env.CHECK_PROVIDER] ? env.CHECK_PROVIDER : 'groq';
 const CHECK_NAME = { groq: 'Groq', cerebras: 'Cerebras', mistral: 'Mistral' };
 const checkerLabel = env => `${CHECK_NAME[checkerProvider(env)]} · ${env.CHECK_MODEL || CHECK_MODELS[checkerProvider(env)]}`;
@@ -228,6 +313,10 @@ async function handleApi(request, env) {
   try {
     if (url.pathname === '/api/article/hybrid') {
       const prompt = P.fdCompletionPrompt(body.base, { ruHint: body.ruHint });
+      if (env.ANTHROPIC_API_KEY) {
+        try { return await claudeStreamResponse(env, prompt); }
+        catch (e) { if (!env.GEMINI_KEY) throw e; console.warn('Claude не ответил, пишет Gemini:', e.message); }
+      }
       let upstream = await callGeminiRaw(env, prompt, true);
       let errData = null;
       if (!upstream.ok || !upstream.body) errData = await upstream.json().catch(() => ({}));
@@ -239,56 +328,56 @@ async function handleApi(request, env) {
       if (errData) return json({ error: errData.error?.message || `HTTP ${upstream.status}` }, 502);
       // Тело — «как есть» SSE-поток от Gemini: клиент читает его тем же ридером, что раньше
       // читал прямой ответ Google, только URL теперь свой.
-      return new Response(upstream.body, { headers: { 'Content-Type': 'text/event-stream' } });
+      return new Response(upstream.body, { headers: { 'Content-Type': 'text/event-stream', 'X-LLM': 'Gemini' } });
     }
     if (url.pathname === '/api/article/fallback') {
       const prompt = P.articleFallbackPrompt(body.word) + P.ruHintRule(body.ruHint);
-      const entry = await geminiJson(env, prompt);
-      return json({ entry, by: 'Gemini' });
+      const { out: entry, by } = await writerJson(env, prompt);
+      return json({ entry, by });
     }
     if (url.pathname === '/api/article/check') {
       const v = await verifyArticle(env, body.entry, body.base);
       return json(v);
     }
     if (url.pathname === '/api/article/fix') {
-      const patch = await geminiJson(env, P.fixArticlePrompt(body.entry, body.notes));
-      return json({ patch, by: 'Gemini' });
+      const { out: patch, by } = await writerJson(env, P.fixArticlePrompt(body.entry, body.notes));
+      return json({ patch, by });
     }
     if (url.pathname === '/api/phrase') {
-      const entry = await geminiJson(env, P.phrasePrompt(body.phrase));
-      return json({ entry, by: 'Gemini' });
+      const { out: entry, by } = await writerJson(env, P.phrasePrompt(body.phrase));
+      return json({ entry, by });
     }
     if (url.pathname === '/api/russian-search') {
-      const results = await geminiJson(env, P.russianSearchPrompt(body.word));
-      return json({ results, by: 'Gemini' });
+      const { out: results, by } = await writerJson(env, P.russianSearchPrompt(body.word));
+      return json({ results, by });
     }
     if (url.pathname === '/api/voices') {
-      const raw = await geminiJson(env, P.voicesPrompt(body.word, body.partOfSpeech, body.meaningsText));
-      return json({ voices: raw && raw.voices, by: 'Gemini' });
+      const { out: raw, by } = await writerJson(env, P.voicesPrompt(body.word, body.partOfSpeech, body.meaningsText));
+      return json({ voices: raw && raw.voices, by });
     }
     if (url.pathname === '/api/cards-fill') {
-      const results = await geminiJson(env, P.cardsFillPrompt(body.list));
-      return json({ results, by: 'Gemini' });
+      const { out: results, by } = await writerJson(env, P.cardsFillPrompt(body.list));
+      return json({ results, by });
     }
     if (url.pathname === '/api/pratica') {
-      const raw = await geminiJson(env, P.praticaPrompt(body.text, body.topics));
-      return json({ raw, by: 'Gemini' });
+      const { out: raw, by } = await writerJson(env, P.praticaPrompt(body.text, body.topics));
+      return json({ raw, by });
     }
     if (url.pathname === '/api/preview/ru') {
-      const raw = await geminiJson(env, P.previewRuPrompt(body.word, body.partOfSpeech, body.glosses));
+      const raw = (await writerJson(env, P.previewRuPrompt(body.word, body.partOfSpeech, body.glosses))).out;
       return json({ russian: raw && raw.russian });
     }
     if (url.pathname === '/api/preview/mini') {
-      const entry = await geminiJson(env, P.previewMiniPrompt(body.word));
+      const entry = (await writerJson(env, P.previewMiniPrompt(body.word))).out;
       return json({ entry });
     }
     if (url.pathname === '/api/preview/translit') {
-      const raw = await geminiJson(env, P.previewTranslitPrompt(body.word, body.partOfSpeech, body.gloss));
+      const raw = (await writerJson(env, P.previewTranslitPrompt(body.word, body.partOfSpeech, body.gloss))).out;
       return json({ russian: raw && raw.russian });
     }
     if (url.pathname === '/api/grammar') {
-      const g = await geminiJson(env, P.grammarPrompt(body.topic));
-      return json({ entry: g, by: 'Gemini' });
+      const { out: g, by } = await writerJson(env, P.grammarPrompt(body.topic));
+      return json({ entry: g, by });
     }
   } catch (e) {
     return json({ error: e.message || String(e) }, 502);

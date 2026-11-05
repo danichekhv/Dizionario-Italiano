@@ -466,8 +466,8 @@ async function previewApi(path, body) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
-// Потоковый вариант — только для гибридного пути (fdCompletionPrompt): Worker проксирует «как есть»
-// SSE-ответ Gemini, поэтому ридер тот же, что раньше читал прямой ответ Google, только URL свой.
+// Потоковый вариант — только для гибридного пути (fdCompletionPrompt): Worker отдаёт SSE в формате
+// Gemini, какая бы модель ни писала, а её имя кладёт в заголовок X-LLM.
 async function streamArticleHybrid(base, ruHint, onText) {
   const loggedIn = !!(window.Auth && Auth.user());
   if (!loggedIn && anonTrialsLeft() <= 0) {
@@ -509,7 +509,7 @@ async function streamArticleHybrid(base, ruHint, onText) {
       if (t) { text += t; if (onText) { try { onText(text); } catch(e) {} } }
     }
   }
-  return extractJson(text);
+  return { extra: extractJson(text), by: res.headers.get('X-LLM') || 'Gemini' };
 }
 
 function extractJson(text) {
@@ -1562,7 +1562,7 @@ function validateArticle(entry, base) {
 }
 
 // Проверка второй моделью по фактам Викисловаря и по самим значениям — оба вопроса теперь
-// задаёт бэкенд (worker.js): пишет всегда Gemini, проверяет всегда другой провайдер, это больше
+// задаёт бэкенд (worker.js): пишет Claude или Gemini, проверяет всегда другой провайдер, это больше
 // не зависит от того, какие ключи случайно завёл пользователь.
 async function verifyArticle(entry, base) {
   return articleApi('check', { entry, base });
@@ -1732,7 +1732,7 @@ function extractMeaningsFromPartial(partial) {
   return out;
 }
 
-function fdMergeCompletion(base, extra) {
+function fdMergeCompletion(base, extra, by) {
   // Пометку берём от модели; если модель вернула ровно столько значений, сколько знает
   // Викисловарь, и своей пометки не дала — подставляем разобранную из его тегов
   const meanings = Array.isArray(extra.meanings) && extra.meanings.some(m => m && m.definition)
@@ -1763,11 +1763,11 @@ function fdMergeCompletion(base, extra) {
     category: extra.category || 'altro',
     meanings,
     relatedWords: related,
-    llm: 'Gemini' // пишет теперь всегда бэкенд общим ключом
+    llm: by // пишет бэкенд общим ключом, модель называет он же
   };
 }
 
-// Гибридный путь: сразу показываем факты из Викисловаря, Gemini дописывает остальное
+// Гибридный путь: сразу показываем факты из Викисловаря, модель дописывает остальное
 // Одно написание — два разных слова: существительное «puzza» и форма глагола puzzare. Показываем
 // выбор, а не запихиваем чужую лемму со спряжениями в чужую же статью. Спрашиваем только при ручном
 // вводе: по ссылке слово уже выбрано, а в самой статье развилка и так стоит строкой «также форма слова».
@@ -1814,7 +1814,7 @@ async function lookupWordHybrid(query, base, opts = {}) {
   try {
     const ruHint = await (opts.ruHintP || ruHintFor(base.word)); // lookupWord обычно уже запустил её параллельно с Викисловарём
     let shownRu = false, shownMeanings = 0;
-    const extra = await streamArticleHybrid(base, ruHint, partial => {
+    const { extra, by } = await streamArticleHybrid(base, ruHint, partial => {
       if (currentDictWord !== key || !currentDictEntry || !currentDictEntry._pending) return;
       if (!shownRu) {
         const m = partial.match(/"russian"\s*:\s*\{[^{}]*\}/);
@@ -1826,7 +1826,7 @@ async function lookupWordHybrid(query, base, opts = {}) {
         renderEntry({ ...currentDictEntry, meanings: meanings.map(m => ({ ...m, label: usageLabel([m.label], '') })), _pending: true });
       }
     });
-    const entry = fdMergeCompletion(base, extra);
+    const entry = fdMergeCompletion(base, extra, by);
     entry.sources = { structure: 'wiktionary', text: entry.llm, ruHint: !!ruHint };
     if (opts.headless) {
       // Батч (золотой набор, пересборка кэша): экрана нет, спешить некуда — статья должна уйти
@@ -1920,7 +1920,7 @@ async function lookupWord(word, _depth = 0, opts = {}) {
   // 3. Fallback: слова нет в Викисловаре или таблица форм неполная — бэкенд генерирует всё
   try {
     const ruHint = await ruHintP;
-    const { entry } = await articleApi('fallback', { word, ruHint });
+    const { entry, by } = await articleApi('fallback', { word, ruHint });
     if (!entry.word) { if (opts.headless) throw new Error('parola non trovata'); $('errorText').textContent = `"${word}" — слово не найдено`; showState('error'); return; }
     entry.relatedWords = await verifyWords(entry.relatedWords);
     entry.partOfSpeech = cleanPos(entry.partOfSpeech);
@@ -1936,7 +1936,7 @@ async function lookupWord(word, _depth = 0, opts = {}) {
     entry.unverified = !(await wordExists(entry.word || word));
     // Транскрипцию модели не берём: словари, иначе правила чтения
     { const r = await resolveIpa(entry.word || word); entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; entry.phoneticSrc = r.src; }
-    entry.llm = 'Gemini'; // пишет теперь всегда бэкенд общим ключом
+    entry.llm = by; // пишет бэкенд общим ключом, модель называет он же
     entry.sources = { structure: 'model', text: entry.llm, ruHint: !!ruHint };
     validateArticle(entry, null); // неполную статью не сохраняем
     if (opts.headless) { await finalizeArticle(entry, word, null, { silent: true }); return entry; }
@@ -2630,7 +2630,7 @@ function renderEntry(e) {
     mc.innerHTML = `
       <span class="pending-shimmer wide"></span>
       <span class="pending-shimmer wide" style="width:70%"></span>
-      <div class="pending-note">Gemini готовит перевод и определения…</div>`;
+      <div class="pending-note">Готовим перевод и определения…</div>`;
   } else if (e.meanings && e.meanings.length > 0) {
     // Новый формат — массив значений
     if (e.meanings.length === 1) {
