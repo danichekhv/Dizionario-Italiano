@@ -1,6 +1,6 @@
 // ── Аккаунты: вход по почте и паролю, профиль с ключами, общий кэш + личные данные ──
 // Supabase Auth через его REST, без SDK. Пока пользователь не вошёл, запросы идут с анонимным
-// ключом: кэш статей читается, а избранное, колоды и карта «моих слов» требуют входа.
+// ключом: кэш статей читается, а избранное и колоды требуют входа.
 // Права на уровне строк (RLS) задаются SQL-скриптом ниже: кэш читают все, пишут вошедшие;
 // личные таблицы каждый видит только свои.
 (function () {
@@ -89,7 +89,7 @@ create index if not exists cards_note_idx on cards(note_id);
 create index if not exists notes_deck_idx on notes(deck_id);
 create index if not exists reviews_at_idx on reviews(reviewed_at);
 
--- просмотренные слова (для личной карты слов) и профиль с ключами
+-- просмотренные слова (там же личные теги) и профиль с ключами
 create table if not exists word_views (
   user_id uuid not null default auth.uid(),
   word text not null,
@@ -252,19 +252,8 @@ drop policy if exists dz_own on production_log;
 create policy dz_own on production_log for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 
--- 7. Карта слов строится из своих просмотров. Пересечение word_views с кэшем статей считает база:
--- иначе браузер тянет весь словарь и выбрасывает чужое, а это мегабайты ради сотни своих слов.
--- security definer нужен, чтобы соединение прошло одним запросом; чужого не отдаст — фильтр по auth.uid().
-create or replace function my_map_words()
-returns table (word text, w text, cat text, pos text, rel jsonb, ru text, unv text)
-language sql stable security definer set search_path = public as $$
-  select d.word,
-         d.data->>'word', d.data->>'category', d.data->>'partOfSpeech',
-         d.data->'relatedWords', d.data->'russian'->>'main', d.data->>'unverified'
-  from word_views v join dictionary d on d.word = v.word
-  where v.user_id = auth.uid()
-$$;
-grant execute on function my_map_words() to authenticated;
+-- 7. Функция для карты слов: карты больше нет, а функция с security definer без дела не нужна
+drop function if exists my_map_words();
 
 -- набранный на карточке ответ: пока просто сохраняем, потом неверные пойдут в тот же журнал
 alter table reviews add column if not exists typed text;
@@ -397,7 +386,7 @@ grant execute on function llm_usage_bump_anon(text) to anon;`;
     session = null; clearTimeout(refreshTimer); save(); apply();
     if (window.refreshHomeDue) refreshHomeDue();
     showToast('Вы вышли из аккаунта');
-    if (typeof _currentState !== 'undefined' && ['favorites', 'cards', 'graph'].includes(_currentState)) switchMode('dict');
+    if (typeof _currentState !== 'undefined' && ['favorites', 'cards'].includes(_currentState)) switchMode('dict');
   }
 
   // ── После входа: закрепить старые данные, забрать профиль ────────────────────
@@ -439,18 +428,12 @@ grant execute on function llm_usage_bump_anon(text) to anon;`;
     } catch (e) { console.warn('profile save:', e); }
   }
 
-  // Просмотренные слова → личная карта слов
+  // Журнал просмотренных слов
   const viewed = new Set();
   function logView(word) {
     if (!session || !word || viewed.has(word)) return;
     viewed.add(word);
-    if (typeof _myMapInfos !== 'undefined') _myMapInfos = null; // своя карта подтянет новое слово при следующем открытии
     fetch(`${SB_URL}/rest/v1/word_views`, { method: 'POST', headers: { ...SB_H, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ word, viewed_at: new Date().toISOString() }) }).catch(() => {});
-  }
-  async function myWords() {
-    if (!session) return null;
-    try { const res = await fetch(`${SB_URL}/rest/v1/word_views?select=word&limit=5000`, { headers: SB_H }); if (!res.ok) return null; return new Set((await res.json()).map(r => r.word)); }
-    catch (e) { return null; }
   }
 
   // ── Экран ────────────────────────────────────────────────────────────────────
@@ -476,7 +459,7 @@ grant execute on function llm_usage_bump_anon(text) to anon;`;
           <button class="cards-btn" onclick="Auth.signUpUi()">Создать аккаунт</button>
           <button class="auth-link" onclick="Auth.resetUi()">Забыли пароль?</button>
         </div>
-        <div class="apikey-hint-small">Без входа доступны словарь и грамматика из общей базы. Избранное, колоды, карта ваших слов, новые статьи и La Pratica — только после входа.</div>`;
+        <div class="apikey-hint-small">Без входа доступны словарь и грамматика из общей базы. Избранное, колоды, новые статьи и La Pratica — только после входа.</div>`;
     }
     const hb = document.querySelector('#headerSettingsBtn span:not([data-icon])');
     if (hb) hb.textContent = session ? (session.user.email || '').split('@')[0] : 'Аккаунт';
@@ -557,8 +540,7 @@ grant execute on function llm_usage_bump_anon(text) to anon;`;
   let wordTags = new Map(), tagColors = {}, profileSettings = {};
   const normTag = s => (s || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 30);
   function applyTagColors() {
-    if (!window.WordGraph) return;
-    Object.entries(tagColors).forEach(([n, c]) => { WordGraph.CAT_COLORS[n] = c; WordGraph.CAT_LABELS[n] = n; });
+    Object.entries(tagColors).forEach(([n, c]) => { TOPIC_COLORS[n] = c; });
   }
   async function loadTags() {
     wordTags = new Map();
@@ -568,19 +550,15 @@ grant execute on function llm_usage_bump_anon(text) to anon;`;
       if (!res.ok) return;
       (await res.json()).forEach(r => { if (Array.isArray(r.tags) && r.tags.length) wordTags.set(r.word, r.tags); });
       // цвета для тегов, которых нет в палитре (например, заведены на другом устройстве до синхронизации)
-      wordTags.forEach(tags => tags.forEach(t => { if (window.WordGraph && !WordGraph.CAT_COLORS[t] && !tagColors[t]) ensureColor(t, true); }));
+      wordTags.forEach(tags => tags.forEach(t => { if (!TOPIC_COLORS[t] && !tagColors[t]) ensureColor(t, true); }));
       applyTagColors();
     } catch (e) { console.warn('tags:', e); }
   }
   function tagsFor(word, category) {
     const own = wordTags.get((word || '').toLowerCase());
     if (own && own.length) return own;
-    const k = window.WordGraph ? WordGraph.catKey(category) : (category || '').toLowerCase();
+    const k = topicKey(category);
     return k && k !== '?' ? [k] : [];
-  }
-  const ownTags = w => wordTags.get((w || '').toLowerCase()) || null; // личные теги слова для узлов-тем графа
-  function applyTagsToNodes(nodes) {
-    (nodes || []).forEach(n => { const t = wordTags.get(n.id); if (t && t.length) n.cat = t[0]; });
   }
   async function setTags(word, tags) {
     const w = (word || '').toLowerCase(); const clean = [...new Set(tags.map(normTag).filter(Boolean))];
@@ -590,9 +568,8 @@ grant execute on function llm_usage_bump_anon(text) to anon;`;
   }
   let colorSaveTimer = 0;
   async function ensureColor(name, silent) {
-    if (!window.WordGraph) return;
-    if (WordGraph.CAT_COLORS[name] || tagColors[name]) { applyTagColors(); return; }
-    const used = new Set([...Object.values(WordGraph.CAT_COLORS), ...Object.values(tagColors)]);
+    if (TOPIC_COLORS[name] || tagColors[name]) { applyTagColors(); return; }
+    const used = new Set([...Object.values(TOPIC_COLORS), ...Object.values(tagColors)]);
     const free = TAG_PALETTE.filter(c => !used.has(c));
     tagColors[name] = free.length ? free[Math.floor(Math.random() * free.length)] : `hsl(${Math.floor(Math.random() * 360)} 45% 45%)`;
     applyTagColors();
@@ -660,6 +637,6 @@ grant execute on function llm_usage_bump_anon(text) to anon;`;
     }
   } catch (e) {}
 
-  window.Auth = { user: () => session && session.user, isAdmin, require, ensureFresh, forceRefresh, signIn, signUp, signOut, resetPassword, changePassword, pushProfile, pullProfile, logView, myWords, renderUi, signInUi, signUpUi, resetUi, changePasswordUi, showSql, copySql,
-    tagsFor, ownTags, applyTagsToNodes, renameTagUi, addTagUi, loadTags };
+  window.Auth = { user: () => session && session.user, isAdmin, require, ensureFresh, forceRefresh, signIn, signUp, signOut, resetPassword, changePassword, pushProfile, pullProfile, logView, renderUi, signInUi, signUpUi, resetUi, changePasswordUi, showSql, copySql,
+    tagsFor, renameTagUi, addTagUi, loadTags };
 })();

@@ -1,5 +1,5 @@
 // Dizionario · основной скрипт: конфигурация, API, поиск и рендер статей, избранное, интерфейс.
-// Загружается перед cards.js, graph.js и auth.js, которые опираются на его глобальные функции.
+// Загружается перед cards.js и auth.js, которые опираются на его глобальные функции.
 // ── Иконки: один набор (Feather), одна толщина линии. В разметке — <span data-icon="…">,
 // в шаблонах — ${svgIcon('…')}. Звезда заливается классом .starred у родителя.
 const ICONS = {
@@ -10,7 +10,6 @@ const ICONS = {
   type: '<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>',
   layers: '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
   pen: '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>',
-  graph: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>',
   search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
   x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
   plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
@@ -23,7 +22,6 @@ const ICONS = {
   trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   undo: '<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>',
   external: '<line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/>',
-  fit: '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>',
   key: '<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>',
   'arrow-down': '<line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>',
   'chevron-left': '<polyline points="15 18 9 12 15 6"/>',
@@ -55,10 +53,26 @@ const ICONS = {
 function svgIcon(name) { return `<svg class="icon icon-${name}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`; }
 document.querySelectorAll('[data-icon]').forEach(el => { el.innerHTML = svgIcon(el.dataset.icon); });
 // ── Конфигурация ─────────────────────────────────────────────────────────────
-// Темы слов: одна и та же таксономия в промптах и в легенде графа (graph.js).
+// Темы слов: одна и та же таксономия в промптах и в тегах статьи.
 // Раньше было 10 тем и почти всё уходило в «altro», теперь модель выбирает из ~40.
 const CATEGORY_KEYS = ['cibo','bevande','cucina','natura','animali','piante','geografia','clima','tempo','persone','famiglia','corpo','salute','emozioni','carattere','casa','oggetti','vestiti','città','viaggio','trasporti','lavoro','scuola','scienza','tecnologia','denaro','diritto','politica','società','cultura','arte','musica','sport','comunicazione','azioni','movimento','pensiero','quantità','astratto','grammatica','altro'];
 const CATEGORY_PROMPT = CATEGORY_KEYS.join(' / ') + ' — choose the single most specific one; use altro only if nothing fits';
+// Цвета тем. Сюда же auth.js дописывает цвета личных тегов пользователя
+const TOPIC_COLORS = {
+  cibo: '#c4522a', bevande: '#d9773a', cucina: '#a8552c', natura: '#4a7c3a', animali: '#6f8f3a', piante: '#3f9a5a', geografia: '#2f7a6a', clima: '#5aa0b8',
+  tempo: '#6b6b9c', persone: '#b8860b', famiglia: '#c9a227', corpo: '#c97b3a', salute: '#d95f6a', emozioni: '#b03a6a', carattere: '#9c4f8a',
+  casa: '#8b5a2b', oggetti: '#a07850', vestiti: '#c96b8c', 'città': '#4f6fa0', viaggio: '#2a8c8c', trasporti: '#3a7ab8', lavoro: '#3b64b4', scuola: '#5b7fd6',
+  scienza: '#2f5f8f', tecnologia: '#4a6a8a', denaro: '#7a8a2a', diritto: '#6a5a4a', politica: '#8a3a3a', 'società': '#7a5a8a', cultura: '#7a4fa0', arte: '#a04fa0',
+  musica: '#c04f8a', sport: '#3a9a4a', comunicazione: '#4f8fc0', azioni: '#e08a3a', movimento: '#d4a017', pensiero: '#6a7ab0', 'quantità': '#8a8a5a',
+  astratto: '#7c7060', grammatica: '#a09a8a', altro: '#9a8f7c', '?': '#b8ae9c'
+};
+// Тема статьи → ключ из списка: модель иногда пишет лишнее («cibo e bevande» → cibo). Пустая тема — «?»
+function topicKey(c) {
+  const s = (c == null ? '' : String(c)).toLowerCase().trim(); if (!s) return '?';
+  if (TOPIC_COLORS[s]) return s;
+  const k = s.replace(/[^a-zàèéìòù]/g, ''); if (TOPIC_COLORS[k]) return k;
+  return Object.keys(TOPIC_COLORS).find(key => key !== '?' && key !== 'altro' && s.startsWith(key)) || 'altro';
+}
 
 // ── Экран настроек: вход в аккаунт ─────────────────────────────────────────────
 // Раньше здесь же заводили ключи Gemini/быстрого провайдера (BYOK) — генерация теперь идёт
@@ -110,7 +124,6 @@ async function sbGet(table, key) {
 async function sbGetTopic(table, key) { return sbGet(table, key); }
 
 async function sbSave(table, keyCol, keyVal, data) {
-  if (table === 'dictionary' && typeof _mapInfos !== 'undefined') { _mapInfos = null; _myMapInfos = null; } // карта слов подтянет новое слово при следующем открытии
   // Лёгкие данные шторки для этого слова устарели: статья теперь есть, и её перевод точнее того,
   // что удалось собрать по кусочкам. Иначе шторка до конца сессии показывает своё, а статья своё
   if (table === 'dictionary') { try { delete _previewCache['d:' + String(keyVal).toLowerCase()]; } catch (e) {} } // объявлен ниже в файле — до загрузки его ещё нет
@@ -297,7 +310,7 @@ const TRACKABLE = ['result','rulist','grammar','favorites','initial'];
 function showState(state) {
   // Push history when moving away from a meaningful state to another
   // Don't push if we're going to loading/error (transient states), or if suppressed
-  const pushable = ['result','rulist','grammar','favorites','cards','graph','pratica','gramindex','qa','initial'];
+  const pushable = ['result','rulist','grammar','favorites','cards','pratica','gramindex','qa','initial'];
   if (!_suppressHistory && state !== _currentState && pushable.includes(_currentState)) {
     const savedState = _currentState;
     const savedMode = currentMode;
@@ -340,12 +353,6 @@ function showState(state) {
         renderRuResults(query, results, ruTitle);
         _suppressHistory = true; showState('rulist'); _suppressHistory = false;
       });
-    } else if (savedState === 'graph') {
-      pushHistory(() => {
-        currentMode = 'dict';
-        applyModeUI('dict');
-        _suppressHistory = true; openWordMap(); _suppressHistory = false;
-      });
     } else if (savedState === 'cards') {
       const snap = window.Cards && Cards.snapshot ? Cards.snapshot() : null; // какой именно экран колод был открыт
       pushHistory(() => {
@@ -384,7 +391,7 @@ function showState(state) {
     } else if (savedState === 'initial') {
       // Поиск всегда идёт через 'loading', поэтому фиксируем начальный экран
       // и при уходе в loading — иначе кнопка «Назад» после первого поиска не появится
-      if (['result','rulist','grammar','favorites','cards','graph','pratica','gramindex','qa','loading'].includes(state)) {
+      if (['result','rulist','grammar','favorites','cards','pratica','gramindex','qa','loading'].includes(state)) {
         const m = savedMode;
         pushHistory(() => {
           currentMode = m;
@@ -399,7 +406,7 @@ function showState(state) {
   // Подсказка про опечатку живёт ровно один экран ошибки и не должна всплыть над следующим
   const _es = $('errorSuggest'); if (_es) _es.innerHTML = '';
   _currentState = state;
-  ['initialMsg','loadingMsg','errorMsg','resultCard','ruResults','grammarCard','favScreen','cardsScreen','graphScreen','praticaScreen','gramIndexScreen','qaScreen']
+  ['initialMsg','loadingMsg','errorMsg','resultCard','ruResults','grammarCard','favScreen','cardsScreen','praticaScreen','gramIndexScreen','qaScreen']
     .forEach(id => { const el = $(id); if (el) el.classList.remove('active'); });
   if (state === 'initial')        { $('initialMsg').classList.add('active'); renderHistory(); renderHome(); hideInlineHistory(); }
   else if (state === 'loading')   { $('loadingMsg').classList.add('active'); hideRecent(); hideInlineHistory(); }
@@ -409,7 +416,6 @@ function showState(state) {
   else if (state === 'grammar')   { $('grammarCard').classList.add('active'); hideRecent(); renderInlineHistory('grammar'); }
   else if (state === 'favorites') { $('favScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
   else if (state === 'cards')     { $('cardsScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
-  else if (state === 'graph')     { $('graphScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
   else if (state === 'pratica')   { $('praticaScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
   else if (state === 'gramindex') { $('gramIndexScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
   else if (state === 'qa')        { $('qaScreen').classList.add('active'); hideRecent(); hideInlineHistory(); }
@@ -888,7 +894,7 @@ async function phrasePhonetic(phrase) {
 
 // ── Проверка по Викисловарю: связи от модели не должны плодить выдуманные слова ────────
 // Модель иногда придумывает слова (fieraismo). Попав в relatedWords, такое слово становится кнопкой
-// под статьёй и узлом графа, а клик по нему рождает ещё одну выдуманную статью в общем кэше.
+// под статьёй, а клик по нему рождает ещё одну выдуманную статью в общем кэше.
 // Поэтому всё, что модель предложила как связанное, сверяем с Викисловарём до сохранения,
 // а у уже сохранённых статей подчищаем список при показе.
 const _wordExists = {};
@@ -944,7 +950,6 @@ async function collapseDictionaryAliases() {
     const n = parseInt(text) || 0;
     _aliasesMissing = false;
     Object.keys(_aliasCache).forEach(k => delete _aliasCache[k]);
-    if (typeof _mapInfos !== 'undefined') { _mapInfos = null; _myMapInfos = null; }
     showToast(n ? `✓ Схлопнуто копий: ${n}` : 'Копий не нашлось');
     console.log('collapseDictionaryAliases: строк схлопнуто', n);
   } catch (e) { showToast('Не вышло: ' + e.message); }
@@ -968,7 +973,7 @@ async function cleanupRelatedCache() {
       if (ok.length !== list.length) { list.filter(w => !ok.includes(w)).forEach(w => removed.add(w)); d.relatedWords = ok; changed = true; }
     }
     // Заголовок статьи: одиночное слово, которого нет в Викисловаре, — выдумка модели.
-    // Удалять строки права не позволяют, поэтому помечаем: граф и «мои слова» такие статьи не показывают
+    // Удалять строки права не позволяют, поэтому помечаем: «мои слова» такие статьи не показывают
     const head = String(d.word || row.word || '');
     if (!d.isPhrase && !/\s/.test(head) && !d.unverified && !(await wordExists(head))) { d.unverified = true; fake.push(head.toLowerCase()); changed = true; }
     // Ключ с кавычками (fare “bella figura”) — след старого запроса из колоды; чистая статья у выражения уже есть
@@ -991,7 +996,6 @@ async function cleanupRelatedCache() {
       }
     }
   } catch (e) { console.warn('notes cleanup:', e); }
-  _mapInfos = null; _myMapInfos = null;
   console.log('cleanupRelatedCache: убраны связи', [...removed], '· помечены выдуманными', fake, '· ошибок сохранения', failed);
   showToast(`Проверено статей: ${rows.length}. Исправлено: ${fixed}, связей убрано: ${removed.size}, скрыто статей: ${fake.length}, слов в колодах: ${notesFixed}${failed ? `, не сохранилось: ${failed}` : ''}${_wordCheckFailed ? `, словарь не ответил по ${_wordCheckFailed} словам — повторите позже` : ''}`);
 }
@@ -1933,7 +1937,7 @@ async function lookupWord(word, _depth = 0, opts = {}) {
       .map(l => ({ ...l, desc: l.desc || `форма слова ${l.lemma}` }));
     // Пометки модель отдаёт по-английски, на экран они идут сокращениями по-русски
     if (Array.isArray(entry.meanings)) entry.meanings = entry.meanings.map(m => ({ ...m, label: usageLabel([m && m.label], '') }));
-    // Слова нет в Викисловаре, статья целиком от модели: помечаем, в граф и «мои слова» оно не попадёт
+    // Слова нет в Викисловаре, статья целиком от модели: помечаем, в «мои слова» оно не попадёт
     entry.unverified = !(await wordExists(entry.word || word));
     // Транскрипцию модели не берём: словари, иначе правила чтения
     { const r = await resolveIpa(entry.word || word); entry.phonetic = r.ipa; entry.phoneticApprox = r.approx; entry.phoneticSrc = r.src; }
@@ -2499,7 +2503,7 @@ function renderEntry(e) {
   currentDictEntry = e;
   currentDictWord = (e.word || '').toLowerCase();
   checkIfStarred('dict', (e.word || '').toLowerCase());
-  if (!e._pending && !e.unverified && window.Auth) Auth.logView((e.word || '').toLowerCase()); // для личной карты слов
+  if (!e._pending && !e.unverified && window.Auth) Auth.logView((e.word || '').toLowerCase()); // журнал просмотров, в той же таблице живут личные теги
     $('wordTitle').textContent = e.word;
   $('wordPhonetic').innerHTML = highlightStress(e.phonetic);
   $('wordPhonetic').classList.toggle('approx', !!e.phoneticApprox);
@@ -2508,13 +2512,13 @@ function renderEntry(e) {
   // Теги слова: по умолчанию тема из статьи, у вошедшего пользователя — свои (клик переименовывает,
   // «+» добавляет). Часть речи слева тегом не является и не редактируется.
   document.querySelectorAll('.word-tag, .word-tag-add').forEach(x => x.remove());
-  const tags = window.Auth ? Auth.tagsFor(e.word, e.category) : (e.category && window.WordGraph ? [WordGraph.catKey(e.category)] : []);
+  const tags = window.Auth ? Auth.tagsFor(e.word, e.category) : (e.category ? [topicKey(e.category)] : []);
   let anchor = $('wordType');
   tags.forEach((t, i) => {
     const tag = document.createElement('span');
     tag.className = 'word-category-badge word-tag';
-    // Цвет из общей палитры графа (graph.js); у своих тегов цвет назначен при создании
-    const color = window.WordGraph && WordGraph.CAT_COLORS[t];
+    // Цвет из палитры тем; у своих тегов цвет назначен при создании
+    const color = TOPIC_COLORS[t];
     if (color && /^#[0-9a-f]{6}$/i.test(color)) {
       const [r, g, b] = [1, 3, 5].map(k => parseInt(color.slice(k, k + 2), 16));
       tag.style.background = `rgba(${r},${g},${b},0.14)`;
@@ -2678,14 +2682,12 @@ function renderEntry(e) {
   const hadRelated = !!relList.children.length;
   relSec.className = 'related-words-section' + (e.isVerb ? ' has-conj' : '');
   relSec.style.display = hadRelated ? 'block' : 'none';
-  if (hadRelated) applyRelatedView(e); else destroyRelatedGraph();
   // Похожие по написанию считаются на лету по списку слов словаря, поэтому дорисовываются, когда
   // ответит база. Если за это время открыли другую статью — чужой экран не трогаем.
   similarWords(e).then(sim => {
     if (!sim.length || currentDictWord !== String(e.word || '').toLowerCase()) return;
     relList.appendChild(relatedRow('Non confondere', sim));
     relSec.style.display = 'block';
-    if (!hadRelated) applyRelatedView(e);
   });
 
   const conjSection = $('conjugationSection');
@@ -3084,7 +3086,6 @@ function switchFavTab(tab) {
   const s = $('favSearch'); if (s) s.value = '';
   cachedFavRows = [];
   favSelected.clear();
-  const vt = $('favViewToggle'); if (vt) vt.style.display = tab === 'words' ? '' : 'none';
   renderFavList(tab);
 }
 
@@ -3169,163 +3170,9 @@ function addEntryToDeck() {
   Cards.addEntries([currentDictEntry]);
 }
 
-// ── Графы: связанные слова, карта всех слов, избранное ──────────────────────
-const graphHandlers = () => ({
-  onOpen: w => { $('searchInput').value = w; lookupWord(w); },
-  onTap: w => showBottomSheet(w, false),
-  onHover: (w, x, y) => showPreview(null, w, false, x, y),
-  onHoverEnd: () => scheduleHidePreview() // с задержкой: курсору нужно время дойти до подсказки через холст
-});
-let _relatedGraph = null, _relatedGraphKey = '';
-const getRelatedView = () => { try { return localStorage.getItem('dizionario_related_view') || 'graph'; } catch(e) { return 'graph'; } };
-const getRelatedDepth = () => { try { return parseInt(localStorage.getItem('dizionario_related_depth')) || 2; } catch(e) { return 2; } };
-function setRelatedView(v) {
-  try { localStorage.setItem('dizionario_related_view', v); } catch(e) {}
-  if (currentDictEntry) applyRelatedView(currentDictEntry);
-}
-function destroyRelatedGraph() {
-  if (_relatedGraph) { _relatedGraph.destroy(); _relatedGraph = null; }
-  _relatedGraphKey = '';
-  const g = $('relatedGraph'); if (g) g.innerHTML = '';
-}
-function applyRelatedView(e) {
-  const view = window.WordGraph ? getRelatedView() : 'list';
-  document.querySelectorAll('#relatedViewToggle .view-toggle-btn').forEach(b => b.classList.toggle('active', b.dataset.v === view));
-  $('relatedWordsList').style.display = view === 'list' ? '' : 'none';
-  $('relatedGraph').style.display = view === 'graph' ? 'block' : 'none';
-  if (view !== 'graph') { destroyRelatedGraph(); return; }
-  // Статья перерисовывается при дозагрузке; граф пересобираем, только если сменилось слово или список связей
-  const key = (e.word || '').toLowerCase() + '|' + (e.relatedWords || []).join(',');
-  if (_relatedGraph && _relatedGraphKey === key) return;
-  renderRelatedGraph(e, getRelatedDepth());
-}
-async function renderRelatedGraph(e, depth) {
-  const word = (e.word || '').toLowerCase();
-  _relatedGraphKey = word + '|' + (e.relatedWords || []).join(',');
-  // Граф не пересоздаём при смене колец или слова: узлы остаются на местах, а вид не улетает в угол
-  if (_relatedGraph) _relatedGraph.setLoading('Загрузка…');
-  else _relatedGraph = WordGraph.create($('relatedGraph'), {
-    height: window.innerWidth < 640 ? '360px' : '440px', depthControl: true, depth,
-    onDepth: d => { try { localStorage.setItem('dizionario_related_depth', d); } catch(e2) {} if (currentDictEntry) renderRelatedGraph(currentDictEntry, d); },
-    extraButtons: '<button class="wg-btn" onclick="openWordMap()" title="Все открытые слова">вся карта</button>',
-    hint: 'В центре это слово, вокруг его связи, дальше связи уже открытых слов. Серые точки ещё не открывались. Тяните, крутите колесо, кликайте.',
-    ...graphHandlers()
-  });
-  const g = _relatedGraph;
-  try {
-    const data = await WordGraph.buildAround(e, depth);
-    if (window.Auth) Auth.applyTagsToNodes(data.nodes);
-    if (g === _relatedGraph) g.setData(data.nodes, data.edges, { center: word });
-  } catch(err) { if (g === _relatedGraph) g.setLoading('Не удалось загрузить связи: ' + err.message); }
-}
-
-// Карта всех открытых слов
-let _mapGraph = null, _mapInfos = null;
-function openWordMap() {
-  if (currentMode !== 'dict') { currentMode = 'dict'; applyModeUI('dict'); }
-  showState('graph');
-  if (_mapGraph) { _mapGraph.destroy(); _mapGraph = null; }
-  const box = $('graphScreen');
-  // «Вся база» — вид для владельца: карта всех статей ни на один вопрос читателя не отвечает
-  // и перестаёт читаться, как только словарь вырастает. Читателю — его собственные слова.
-  const admin = !!(window.Auth && Auth.isAdmin && Auth.isAdmin());
-  box.innerHTML = `<div class="graph-screen-head"><div class="cards-title">Карта слов</div><div class="cards-head-deck" id="mapSub">слова, которые вы открывали</div></div><div id="mapGraphBox"></div>`;
-  _mapGraph = WordGraph.create($('mapGraphBox'), {
-    height: window.innerWidth < 640 ? '65vh' : '70vh', neighborsToggle: true, neighbors: false, wordLinksToggle: true, wordLinks: false,
-    onNeighbors: v => { _mapNeighbors = v; loadWordMap(); }, onWordLinks: v => { _mapLinks = v; loadWordMap(); },
-    extraButtons: admin ? '<button class="wg-toggle wg-all" title="Все статьи в общей базе — вид для владельца">вся база</button>' : '',
-    hint: 'Крупные узлы — темы и ваши теги, вокруг них ваши слова. Слова из колод обведены тёмным, из избранного — золотым, полые — те, что вам ещё не встречались. Клик по теме подсвечивает её слова, клик по слову открывает статью.',
-    ...graphHandlers()
-  });
-  const all = $('mapGraphBox').querySelector('.wg-all');
-  if (all) all.addEventListener('click', () => { _mapShowAll = all.classList.toggle('on'); loadWordMap(); });
-  _mapNeighbors = false; _mapShowAll = false;
-  loadWordMap();
-}
-let _mapNeighbors = false, _mapShowAll = false, _mapLinks = false, _myMapInfos = null, _mapTotal = 0;
-
-// Кто на карте: свои открытые слова. У вошедшего их считает база одним запросом (my_map_words),
-// у гостя они берутся из локальной истории просмотров. Раньше сюда приезжал весь словарь, из
-// которого 95% тут же выбрасывалось, — при росте базы это мегабайты ради сотни своих слов.
-async function mapPopulation() {
-  if (_mapShowAll) {
-    if (!_mapInfos) { const r = await WordGraph.loadAllWords(); _mapInfos = r.infos; _mapTotal = r.total; }
-    return _mapInfos;
-  }
-  if (window.Auth && Auth.user()) {
-    if (!_myMapInfos) {
-      try { _myMapInfos = await WordGraph.loadMyWords(); }
-      catch (e) {
-        // Функции my_map_words ещё нет — SQL из настроек не прогнан. Идём прежним путём, через весь
-        // словарь: медленно, зато карта не пустая до тех пор, пока владелец не выполнит скрипт.
-        console.warn('my_map_words:', e.message);
-        if (!_mapInfos) { const r = await WordGraph.loadAllWords(); _mapInfos = r.infos; _mapTotal = r.total; }
-        const mine = await Auth.myWords();
-        if (!mine) return _mapInfos;
-        _myMapInfos = new Map();
-        _mapInfos.forEach((info, id) => { if (mine.has(id)) _myMapInfos.set(id, info); });
-      }
-    }
-    return _myMapInfos;
-  }
-  const ids = [...new Set(getHistory().filter(i => i.mode === 'dict').map(i => String(i.word || '').toLowerCase()).filter(Boolean))];
-  return ids.length ? WordGraph.fetchWords(ids) : new Map();
-}
-
-async function loadWordMap() {
-  const g = _mapGraph; if (!g) return;
-  try {
-    const infos = await mapPopulation();
-    // Своё видно сразу: слово из колоды обводится тёмным, из избранного — золотым
-    const deck = new Set(window.Cards && Cards.allWords ? Cards.allWords() : []);
-    const fav = new Set((typeof cachedFavRows !== 'undefined' && cachedFavRows || []).map(r => String(r.word || '').toLowerCase()));
-    const mineOf = id => deck.has(id) ? 'deck' : fav.has(id) ? 'fav' : '';
-    const data = WordGraph.buildGraph(infos, { neighbors: _mapNeighbors && _mapLinks, wordLinks: _mapLinks, tagsOf: tagsOfInfo, mineOf });
-    if (window.Auth) Auth.applyTagsToNodes(data.nodes);
-    const sub = $('mapSub');
-    if (sub) sub.textContent = _mapShowAll
-      ? (_mapTotal > infos.size ? `вся база · показаны ${infos.size} из ${_mapTotal}` : `вся база · ${infos.size}`)
-      : `слова, которые вы открывали · ${infos.size}`;
-    if (g === _mapGraph) {
-      g.setData(data.nodes, data.edges);
-      if (!data.nodes.length) g.setLoading('Пока пусто: откройте несколько слов, и они появятся здесь');
-    }
-  } catch(err) { if (g === _mapGraph) g.setLoading('Не удалось загрузить: ' + err.message); }
-}
-
-// Избранное: список или граф
-let favView = 'list', _favGraph = null;
-function setFavView(v) {
-  favView = v;
-  document.querySelectorAll('#favViewToggle .view-toggle-btn').forEach(b => b.classList.toggle('active', b.dataset.v === v));
-  filterFavList();
-}
-// Теги слова для узлов-тем на графах: личные теги, а без них — тема статьи
-function tagsOfInfo(info) {
-  const own = window.Auth && Auth.ownTags ? Auth.ownTags(info.id) : null;
-  if (own && own.length) return own;
-  return info.cat && info.cat !== '?' ? [info.cat] : [];
-}
-function renderFavGraph(rows) {
-  const list = $('favList');
-  if (_favGraph) { _favGraph.destroy(); _favGraph = null; }
-  list.innerHTML = '<div id="favGraphBox"></div>';
-  let neighbors = false, links = false;
-  const build = () => { const data = WordGraph.buildFromEntries(rows.map(r => r.data), { neighbors: neighbors && links, wordLinks: links, tagsOf: tagsOfInfo }); if (window.Auth) Auth.applyTagsToNodes(data.nodes); _favGraph.setData(data.nodes, data.edges); };
-  _favGraph = WordGraph.create($('favGraphBox'), {
-    height: window.innerWidth < 640 ? '60vh' : '65vh', neighborsToggle: true, neighbors, wordLinksToggle: true, wordLinks: links,
-    onNeighbors: v => { neighbors = v; build(); }, onWordLinks: v => { links = v; build(); },
-    hint: 'Избранные слова вокруг своих тем. Клик по теме подсвечивает её слова. «Связи слов» включает связи между словами, соседи — ещё не открытые.',
-    ...graphHandlers()
-  });
-  build();
-}
-
 function renderFavRows(rows, tab) {
   const list = $('favList');
   const keyCol = tab === 'words' ? 'word' : 'topic';
-  if (tab === 'words' && favView === 'graph' && window.WordGraph) { _favVisibleKeys = []; updateFavToolbar(); renderFavGraph(rows); return; }
-  if (_favGraph) { _favGraph.destroy(); _favGraph = null; }
   list.innerHTML = '';
   _favVisibleKeys = tab === 'words' ? rows.map(r => r.word) : [];
   // Выделение не должно ссылаться на слова, которых в списке уже нет
@@ -3945,14 +3792,13 @@ async function fetchGeminiMiniPreview(word) {
   return q;
 }
 
-function showPreview(el, word, isGrammar, x, y) {
+function showPreview(el, word, isGrammar) {
   clearTimeout(_previewTimeout); clearTimeout(_hideTimer);
   const popup = $('wordPreview');
   popup.className = 'word-preview' + (isGrammar ? ' grammar-preview' : '');
   popup.innerHTML = `<div class="wp-loading">…</div>`;
   popup.dataset.word = word;
-  // Граф передаёт не элемент, а координаты курсора: якорем служит точка под ним
-  positionPreview(popup, el ? el.getBoundingClientRect() : { left: x - 8, right: x, top: y - 8, bottom: y + 4 });
+  positionPreview(popup, el.getBoundingClientRect());
   popup.classList.add('visible');
   const stillMine = () => popup.classList.contains('visible') && popup.dataset.word === word;
 
@@ -4025,7 +3871,7 @@ document.addEventListener('mouseover', (e) => {
   const word = el.textContent.trim();
   if (!word || word.length < 3) return;
   const isGrammar = el.classList.contains('history-chip') && currentMode === 'grammar';
-  showPreview(el, word, isGrammar, e.clientX, e.clientY);
+  showPreview(el, word, isGrammar);
 });
 
 document.addEventListener('mouseout', (e) => {
@@ -4115,17 +3961,14 @@ function renderHome() {
     tiles.push(`<div class="tile w4 h2">${head('layers', 'Сегодня')}<div class="tile-sub">Считаю, что пора повторить…</div></div>`);
   }
   // Недавних слов здесь нет: они выпадают под полем поиска, когда оно в фокусе
-  tiles.push(`<button class="tile link" onclick="openWordMap()" title="Все открытые слова и связи между ними">
-    ${head('graph', 'Карта слов')}
-    <div class="tile-title">Граф</div>
-    <div class="tile-sub">Открытые слова, темы и связи между ними</div>
-  </button>`);
-  tiles.push(`<button class="tile link" onclick="openFavorites()">
+  // Со статистикой Избранное делит ряд пополам, а без неё стоит колонкой рядом с большой плиткой
+  const stats = loggedIn && s;
+  tiles.push(`<button class="tile link ${stats ? 'home-half' : 'home-side'}" onclick="openFavorites()">
     ${head('star', 'Избранное')}
     <div class="tile-big">${loggedIn && _homeFavCount !== null ? _homeFavCount : '—'}</div>
     <div class="tile-sub">${loggedIn ? `${homePlural(_homeFavCount || 0, 'сохранённое слово', 'сохранённых слова', 'сохранённых слов')}` : 'избранные слова и правила'}</div>
   </button>`);
-  if (loggedIn && s) tiles.push(`<button class="tile link" onclick="switchMode('cards'); Cards.stats(null)">
+  if (stats) tiles.push(`<button class="tile link home-half" onclick="switchMode('cards'); Cards.stats(null)">
     ${head('chart', 'Статистика')}
     <div class="tile-title">Прогресс</div>
     <div class="tile-sub">Календарь, прогноз повторений, ответы</div>

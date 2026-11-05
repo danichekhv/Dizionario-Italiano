@@ -748,37 +748,7 @@
   .today-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   @media (max-width: 640px) { .today-actions { width: 100%; flex-direction: column; } .today-box .cards-btn { width: 100%; } .btn-row-name { width: 90px; font-size: var(--fs-small); } }
 
-  /* ── Граф слов ─────────────────────────────────────────────── */
-  .wg { background: white; border: 1.5px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-  .wg-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 12px; border-bottom: 1px solid var(--border); background: var(--parchment); }
-  .wg-search { flex: 1 1 140px; min-width: 120px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); font-family: var(--font-text); font-size: var(--fs-body); background: white; }
-  .wg-mode, .wg-depth { padding: 8px 32px 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); background-color: white; font-family: var(--font-text); font-size: var(--fs-body); }
-  .wg-inline { font-size: var(--fs-small); color: var(--muted); display: flex; align-items: center; gap: 4px; }
-  .wg-btn { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: white; cursor: pointer; font-family: var(--font-text); font-size: var(--fs-body); color: var(--ink); }
-  .wg-btn:hover { border-color: var(--terracotta); color: var(--terracotta); }
-  .wg-legend { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); }
-  .wg-chip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius); background: white; cursor: pointer; font-family: var(--font-text); font-size: var(--fs-small); color: var(--ink); letter-spacing: 0; text-transform: none; }
-  .wg-chip i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-  .wg-chip span { font-family: var(--font-mono); font-size: var(--fs-micro); color: var(--muted); }
-  .wg-chip.off { opacity: .4; text-decoration: line-through; }
-  .wg-chip-all { border: none; background: none; cursor: pointer; font-family: var(--font-text); font-size: var(--fs-small); color: var(--muted); padding: 4px 8px; }
-  .wg-chip-all:hover { color: var(--terracotta); }
-  .wg-canvas-wrap { position: relative; background: radial-gradient(ellipse at 50% 40%, #fcf9f3 0%, var(--cream) 100%); }
-  .wg-canvas { display: block; width: 100%; height: 100%; }
-  .wg-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); pointer-events: none; text-align: center; padding: 20px; }
-  .wg-hint { font-size: var(--fs-small); color: var(--stone); padding: 8px 12px; border-top: 1px solid var(--border); line-height: var(--lh-ui); }
-  .view-toggle { display: inline-flex; border: 1.5px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-left: 12px; flex-shrink: 0; }
-  .view-toggle-btn { background: none; border: none; padding: 2px 12px; font-family: var(--font-text); font-size: var(--fs-small); letter-spacing: 0; text-transform: none; color: var(--muted); cursor: pointer; }
-  .view-toggle-btn.active { background: var(--terracotta); color: white; font-style: normal; }
-  .related-graph { margin-top: 4px; }
-  .graph-screen { display: none; animation: fadeUp .4s ease both; }
-  .graph-screen.active { display: block; }
-  .graph-screen-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
-  .fav-view-toggle { margin-left: 0; } /* три элемента заголовка расставляет сам flex, без принудительного прижатия */
   .fav-header .fav-tabs { margin-left: auto; margin-bottom: 0; } /* нижний отступ вкладок сдвигал их вверх относительно строки */
-  .fav-view-toggle .view-toggle-btn { padding: 8px 16px; font-size: var(--fs-body); } /* одна высота с вкладками */
-  body.mode-grammar .fav-view-toggle { display: none !important; }
-  @media (max-width: 640px) { .wg-hint { display: none; } .wg-bar { padding: 8px; gap: 8px; } .wg-legend { padding: 8px 8px; } }
 
   /* ── Проверка словаря (владелец): пересборка кэша ── */
   .qa-screen { display: none; animation: fadeUp .4s ease both; }
@@ -1507,8 +1477,6 @@
     .fav-title { font-size: var(--fs-body); }
     .fav-header .fav-tabs { width: 100%; margin: 0; } /* базовое правило ниже задаёт fit-content, нужна специфичность выше */
     .fav-tab { flex: 1; text-align: center; }
-    .fav-header .fav-view-toggle { width: 100%; display: flex; margin: 0; }
-    .fav-header .view-toggle-btn { flex: 1; text-align: center; }
   }
 
   /* Компактный переключатель направления перевода — живёт внутри строки поиска,
@@ -3410,6 +3378,7 @@ body.mode-grammar .app-nav-btn.active .nav-badge { background: white; color: var
 .bento-label { font-family: var(--font-text); font-weight: 600; font-size: var(--fs-micro); letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--muted); margin: 24px 0 8px; }
 .tile { grid-column: span 2; display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 132px; padding: 14px 16px 16px; background: white; border: 1.5px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); color: var(--ink); font-family: var(--font-text); font-size: var(--fs-body); text-align: left; transition: border-color var(--t-base), transform var(--t-base), box-shadow var(--t-base); }
 .tile.w3 { grid-column: span 3; } .tile.w4 { grid-column: span 4; } .tile.w6 { grid-column: span 6; } .tile.h2 { grid-row: span 2; }
+.tile.home-half { grid-column: span 3; } .tile.home-side { grid-row: span 2; }
 .tile.link { cursor: pointer; }
 .tile.link:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .tile.link:active { transform: none; }
@@ -3451,6 +3420,7 @@ body.mode-grammar .crumbs { color: var(--night-muted); } body.mode-grammar .crum
   .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .tile { grid-column: span 1; min-height: 120px; padding: 12px 12px 14px; }
   .tile.w3, .tile.w4, .tile.w6 { grid-column: span 2; }
+  .tile.home-half { grid-column: span 1; } .tile.home-side { grid-column: span 2; grid-row: auto; }
   .tile-title { font-size: var(--fs-lead); }
   .tile-big { font-size: 32px; }
   /* Кнопки в подвале плитки делят строку поровну, а не по длине надписи.
@@ -3527,13 +3497,6 @@ body.mode-grammar .suggest-src { color: var(--night-muted); }
 .homograph .definition-text { font-size: var(--fs-body); line-height: var(--lh-ui); }
 .homograph .example-text { font-size: var(--fs-body); margin-top: 8px; }
 
-/* ── Панель графа: поле, сегментные переключатели и кнопки-тумблеры в стиле остальных контролов ── */
-.wg-bar .view-toggle { margin-left: 0; background: white; flex-shrink: 0; }
-.wg-bar .view-toggle-btn { padding: 8px 12px; font-style: normal; font-size: var(--fs-small); }
-.wg-toggle { padding: 8px 12px; border: 1.5px solid var(--border); border-radius: var(--radius); background: white; font-family: var(--font-text); font-size: var(--fs-small); color: var(--muted); cursor: pointer; white-space: nowrap; transition: all var(--t-base); }
-.wg-toggle:hover { border-color: var(--terracotta); color: var(--terracotta); }
-.wg-toggle.on { background: var(--terracotta); border-color: var(--terracotta); color: white; }
-@media (max-width: 640px) { .wg-search { flex-basis: 100%; } }
 
 /* Подписи-ярлыки (плитки главной, разделы статьи, поля, статистика): обычным регистром
    и обычной толщиной, отдельным «экранным» шрифтом. Бейджи, теги и шапки таблиц остаются капсом */

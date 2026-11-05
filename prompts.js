@@ -6,7 +6,7 @@
 // (`import './prompts-article.js'`), self в его isolate — общий глобальный объект.
 (function (root) {
 
-  // Темы слов: та же таксономия, что в легенде графа (graph.js).
+  // Темы слов: та же таксономия, что в тегах статьи (TOPIC_COLORS в app.js).
   const CATEGORY_KEYS = ['cibo','bevande','cucina','natura','animali','piante','geografia','clima','tempo','persone','famiglia','corpo','salute','emozioni','carattere','casa','oggetti','vestiti','città','viaggio','trasporti','lavoro','scuola','scienza','tecnologia','denaro','diritto','politica','società','cultura','arte','musica','sport','comunicazione','azioni','movimento','pensiero','quantità','astratto','grammatica','altro'];
   const CATEGORY_PROMPT = CATEGORY_KEYS.join(' / ') + ' — choose the single most specific one; use altro only if nothing fits';
 

@@ -2449,7 +2449,7 @@ alter table reviews add column if not exists applied boolean default false;`;
     study(id) { study(id, S.view === 'browse' ? S.tagFilter : ''); },
     // Все колоды разом: deckId = null, notesInDeck(null) обходит дерево от корня
     // Только итальянские колоды: подсказка ведёт в статью словаря, и чужое слово получило бы итальянскую статью в общей базе
-    allWords() { return S.notes.filter(inDict).flatMap(n => wordVariants(n).map(w => w.toLowerCase())); }, // для подсказок в поиске и подсветки на карте
+    allWords() { return S.notes.filter(inDict).flatMap(n => wordVariants(n).map(w => w.toLowerCase())); }, // для подсказок в поиске
     allTranslations() { return S.notes.filter(inDict).map(n => n.translation || '').filter(Boolean); }, // для подсказок в русском поиске
     studyAll() { if (window.Auth && !Auth.require('Войдите, чтобы учить карточки')) return; if (currentMode !== 'cards') { currentMode = 'cards'; applyModeUI('cards'); showState('cards'); } (S.loaded ? Promise.resolve() : loadAll()).then(() => study(null, '')); },
     // Сводка для плиток главной: к повторению и новых (в пределах дневного лимита), серия, слова

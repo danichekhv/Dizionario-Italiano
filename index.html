@@ -101,9 +101,6 @@
     <div class="bento home-bento" id="homeBento"></div>
   </div>
 
-  <!-- Карта всех открытых слов -->
-  <div class="graph-screen" id="graphScreen"></div>
-
   <!-- Russian results list -->
   <div class="ru-results" id="ruResults"></div>
 
@@ -130,10 +127,6 @@
         <button class="fav-tab active" id="favTabWords" onclick="switchFavTab('words')">Слова</button>
         <button class="fav-tab" id="favTabGram" onclick="switchFavTab('grammar')">Грамматика</button>
       </div>
-      <span class="view-toggle fav-view-toggle" id="favViewToggle">
-        <button class="view-toggle-btn active" data-v="list" onclick="setFavView('list')">список</button>
-        <button class="view-toggle-btn" data-v="graph" onclick="setFavView('graph')">граф</button>
-      </span>
     </div>
     <div class="fav-search-wrap">
       <input type="text" class="fav-search" id="favSearch" placeholder="Поиск по избранному…" oninput="filterFavList()" autocomplete="off" spellcheck="false">
@@ -240,14 +233,8 @@
 
     <!-- Related words -->
     <div class="related-words-section" id="relatedWordsSection" style="display:none">
-      <div class="section-label">Связанные слова
-        <span class="view-toggle" id="relatedViewToggle">
-          <button class="view-toggle-btn" data-v="graph" onclick="setRelatedView('graph')">граф</button>
-          <button class="view-toggle-btn" data-v="list" onclick="setRelatedView('list')">список</button>
-        </span>
-      </div>
+      <div class="section-label">Связанные слова</div>
       <div class="related-words" id="relatedWordsList"></div>
-      <div class="related-graph" id="relatedGraph" style="display:none"></div>
     </div>
 
   </div>
@@ -294,8 +281,6 @@
 <script src="app.js"></script>
 <!-- Колоды и карточки (Le Carte) — отдельный модуль, использует функции словаря выше -->
 <script src="cards.js"></script>
-<!-- Граф слов: связанные слова, карта всех слов, граф избранного -->
-<script src="graph.js"></script>
 <!-- La Pratica: разбор написанного пользователем текста -->
 <script src="pratica.js"></script>
 <!-- La Grammatica: справочник по разделам, закрытый список тем -->
