@@ -132,6 +132,7 @@ alter table reviews add column if not exists applied boolean default false;`;
     // Колоды и слова уже есть — показываем их, не дожидаясь истории ответов: она нужна только
     // для серии и статистики, а растёт с каждым повторением и грузится дольше всего
     if (_currentState === 'cards' && S.view !== 'study') render();
+    resumeSession();
     // История ответов отдельно: её таблица могла появиться позже остальных
     if (!S.missingTables) {
       try {
@@ -2248,6 +2249,76 @@ alter table reviews add column if not exists applied boolean default false;`;
       switchMode('cards');
     } catch (e) { showToast('⚠ ' + e.message + sqlHint(e)); if (sqlHint(e)) clear(); }
   }
+
+  // ── Сессия переживает выгрузку вкладки ───────────────────────────────────────
+  // Свёрнутую вкладку телефон может выгрузить, и при возврате страница загружается заново: ход
+  // упражнения, живущий в памяти, пропал бы. Поэтому при сворачивании кладём его в localStorage
+  // (sessionStorage у установленного приложения при выгрузке теряется), а после загрузки колод
+  // возвращаем. Подбор не храним: это игра на время, после паузы её секундомер ничего не значит.
+  const RESUME_KEY = 'dizionario_cards_resume', RESUME_MAX_AGE = DAY;
+  const keepDrill = d => d.mode === 'learn' ? !!(d.q || d.summary) : d.mode === 'flash' ? d.known.size < d.pool.length : d.mode === 'test' && d.phase === 'run';
+  // В упражнении одни и те же объекты лежат в нескольких местах (слово заучивания — и в items, и в
+  // round, и в q.it; прогресс меняется через любую из ссылок), а сравниваются заметки по тождеству.
+  // JSON этого не сохранит, поэтому заметку пишем её id, повтор объекта — номером первого появления.
+  function packRefs(root) {
+    const seen = new Map();
+    const walk = v => {
+      if (!v || typeof v !== 'object') return v;
+      if ('translation' in v && 'deck_id' in v) return { $n: v.id };
+      if (seen.has(v)) return { $r: seen.get(v) };
+      seen.set(v, seen.size);
+      if (v instanceof Set) return { $s: [...v].map(walk) };
+      if (Array.isArray(v)) return v.map(walk);
+      const o = {}; for (const k in v) o[k] = walk(v[k]); return o;
+    };
+    return walk(root);
+  }
+  function unpackRefs(root) {
+    const list = [];
+    const walk = v => {
+      if (!v || typeof v !== 'object') return v;
+      if (v.$n !== undefined) { const n = noteById(v.$n); if (!n) throw new Error('заметка удалена'); return n; }
+      if (v.$r !== undefined) return list[v.$r];
+      if (v.$s) { const s = new Set(); list.push(s); v.$s.forEach(x => s.add(walk(x))); return s; }
+      if (Array.isArray(v)) { const a = []; list.push(a); v.forEach(x => a.push(walk(x))); return a; }
+      const o = {}; list.push(o); for (const k in v) o[k] = walk(v[k]); return o;
+    };
+    return walk(root);
+  }
+  const dropResume = () => { try { localStorage.removeItem(RESUME_KEY); } catch (e) {} };
+  let resumeDone = false;
+  function saveResume() {
+    const user = window.Auth && Auth.user();
+    if (!user || !resumeDone) return; // до возврата прошлой сессии её запись затирать нельзя
+    // Сессия идёт, если открыт экран учёбы или человек вышел из него в статью («Назад» вернёт обратно).
+    // По разделу не судим: «Новые слова» на главной открывают заучивание, не уходя с главной
+    const overlayEl = document.getElementById('studyOverlay');
+    const live = (overlayEl && overlayEl.classList.contains('open')) || _currentState === 'result' || _currentState === 'loading';
+    let state = null;
+    if (live && S.view === 'drill' && S.drill && keepDrill(S.drill)) state = { drill: packRefs(S.drill) };
+    else if (live && S.view === 'study' && S.current) state = { session: packRefs(S.session || null) };
+    if (state) lsSet(RESUME_KEY, { ...state, user: user.id, at: Date.now(), snap: window.Cards.snapshot() });
+    else dropResume();
+  }
+  function resumeSession() {
+    if (resumeDone || S.missingTables || !(window.Auth && Auth.user())) return;
+    if (!S.notes.length) return; // колоды ещё не прочитались: auth.js перечитает их под свежим токеном, тогда и вернём
+    resumeDone = true;
+    const saved = lsGet(RESUME_KEY, null);
+    if (!saved) return;
+    if (saved.user !== Auth.user().id || Date.now() - saved.at > RESUME_MAX_AGE) { dropResume(); return; }
+    if (_currentState !== 'initial' && _currentState !== 'cards') return; // человек уже ушёл на другой экран, не выдёргиваем
+    let drill, session;
+    try { drill = unpackRefs(saved.drill); session = unpackRefs(saved.session); }
+    catch (e) { dropResume(); return; } // слово успели удалить: такую сессию не собрать
+    if (drill) { drill.turning = false; drill.leaving = false; } // анимация, прерванная сворачиванием, не должна запирать карточку
+    currentMode = 'cards'; applyModeUI('cards'); showState('cards');
+    S.view = 'decks'; S.folder = saved.snap.folder; pushView(saved.snap.view); // «Назад» из упражнения — к той же колоде
+    S.drill = drill || null; S.session = session || null;
+    window.Cards.restore(saved.snap);
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveResume(); });
+  window.addEventListener('pagehide', saveResume);
 
   // ── Клавиатура в режиме учёбы ────────────────────────────────────────────────
   document.addEventListener('keydown', e => {
