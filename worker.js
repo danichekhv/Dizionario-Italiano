@@ -356,7 +356,7 @@ async function handleApi(request, env) {
       return json({ voices: raw && raw.voices, by });
     }
     if (url.pathname === '/api/cards-fill') {
-      const { out: results, by } = await writerJson(env, P.cardsFillPrompt(body.list));
+      const { out: results, by } = await writerJson(env, P.cardsFillPrompt(body.list, body.lang));
       return json({ results, by });
     }
     if (url.pathname === '/api/pratica') {

@@ -15,7 +15,7 @@
     queue: [], current: null, revealed: false, undo: null,
     loaded: false, missingTables: false,
     build: null, browseSelected: new Set(), browseQuery: '',
-    drill: null, reviews: [], reviewsMissing: false, shownAt: 0, statsDeckId: null, hasAlt: true, hasSource: false
+    drill: null, reviews: [], reviewsMissing: false, shownAt: 0, statsDeckId: null, hasAlt: true, hasSource: false, hasLang: false
   };
 
   // ── Supabase REST ────────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@
   }
   // Строка «синонимы»: другие итальянские слова того же значения. clickable — кнопки в свои статьи
   // (в учёбе после ответа), иначе простой текст: в Карточках нажатие переворачивает карточку
-  const altHtml = (n, clickable) => (n.alt || []).length ? `<div class="study-alt">синонимы: ${n.alt.map(a => clickable
+  const altHtml = (n, clickable) => (n.alt || []).length ? `<div class="study-alt">синонимы: ${n.alt.map(a => clickable && inDict(n)
     ? `<button type="button" data-alt-w="${esc(a)}">${esc(a)}</button>` : esc(a)).join(', ')}</div>` : '';
   const wordVariants = n => [n.word, ...(n.alt || [])].map(w => String(w || '').trim()).filter(Boolean);
   // Колонки alt может ещё не быть: её добавляют разовым SQL. Молча выбросить синонимы нельзя —
@@ -129,6 +129,8 @@ alter table reviews add column if not exists applied boolean default false;`;
     // Есть ли колонка синонимов — спрашиваем базу прямо. По первой заметке гадать нельзя: при пустой
     // колоде гадать не по чему, а в открытой до прогона SQL вкладке ответ устареет и синонимы пропадут
     if (!S.missingTables) { try { await sb('notes?select=alt&limit=1'); S.hasAlt = true; } catch (e) { S.hasAlt = false; } }
+    // Без колонки языка все колоды итальянские, а выбор языка не показываем: сохранить его было бы негде
+    if (!S.missingTables) { try { await sb('decks?select=lang&limit=1'); S.hasLang = true; } catch (e) { S.hasLang = false; } }
     // Колоды и слова уже есть — показываем их, не дожидаясь истории ответов: она нужна только
     // для серии и статистики, а растёт с каждым повторением и грузится дольше всего
     if (_currentState === 'cards' && S.view !== 'study') render();
@@ -354,7 +356,7 @@ alter table reviews add column if not exists applied boolean default false;`;
         <div class="tile-head"><div class="tile-icon">${svgIcon(kids ? 'folder' : 'deck')}</div>
           <button class="deck-play" onclick="event.stopPropagation();Cards.study('${d.id}')" title="Учить">${svgIcon('play')}</button></div>
         <div class="tile-title">${esc(d.name)}</div>
-        <div class="tile-sub">${notes.length} ${pluralRu(notes.length, 'слово', 'слова', 'слов')}${kids ? ` · ${kids} ${pluralRu(kids, 'подколода', 'подколоды', 'подколод')}` : ''}</div>
+        <div class="tile-sub">${deckLang(d.id) === 'it' ? '' : `${LANGS[deckLang(d.id)].name} · `}${notes.length} ${pluralRu(notes.length, 'слово', 'слова', 'слов')}${kids ? ` · ${kids} ${pluralRu(kids, 'подколода', 'подколоды', 'подколод')}` : ''}</div>
         <div class="tile-foot deck-counts" title="новые · заучиваемые · к повторению"><span class="c-new">${c.new}</span><span class="c-learn">${c.learn}</span><span class="c-due">${c.due}</span></div>
         <div class="tile-bar" title="выучено ${pct}%"><i style="width:${pct}%"></i></div>
       </div>`;
@@ -377,6 +379,7 @@ alter table reviews add column if not exists applied boolean default false;`;
             <button onclick="Cards.deckMenu(false);Cards.newDeck('${id}')">${svgIcon('folder')} Новая подколода</button>
             <button onclick="Cards.deckMenu(false);Cards.shareDeck('${id}')">${svgIcon('link')} Поделиться</button>
             <button onclick="Cards.deckMenu(false);Cards.renameDeck('${id}')">${svgIcon('edit')} Переименовать</button>
+            ${S.hasLang ? `<button onclick="Cards.deckMenu(false);Cards.setDeckLang('${id}')">${svgIcon('globe')} Язык: ${LANGS[deckLang(id)].name.toLowerCase()}</button>` : ''}
             <hr>
             <button class="danger" onclick="Cards.deckMenu(false);Cards.deleteDeck('${id}')">${svgIcon('trash')} Удалить колоду</button>
           </div>
@@ -730,22 +733,44 @@ alter table reviews add column if not exists applied boolean default false;`;
   const stripAccents = s => String(s || '').replace(/[A-Za-zÀ-ÿ]+/g, w => w.normalize('NFD').replace(/[̀-ͯ]/g, ''));
   const normAns = s => stripAccents(String(s || '').toLowerCase().replace(/ё/g, 'е')).replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
   const IT_ARTICLE = /^(il|lo|la|l|i|gli|le|un|uno|una|del|della|di|a|da|in|con|su|per)\s+/;
+  // ── Язык колоды ──────────────────────────────────────────────────────────────
+  // Перевод всегда русский, а изучаемый язык — свойство колоды; у подколоды без своего языка он от родителя.
+  // Итальянский связан со словарём сайта. Другие языки собирает только модель, и в словарь они не ходят
+  // ни за данными, ни по ссылкам: иначе английское слово получило бы итальянскую статью в общей базе.
+  // Направление карточки в базе остаётся 'it': там это значит «изучаемый язык → русский».
+  const LANGS = {
+    it: { code: 'IT', name: 'Итальянский', adv: 'по-итальянски', adj: 'итальянское', art: IT_ARTICLE, sample: 'frigorifero&#10;caffettiera&#10;tovagliolo; салфетка&#10;…' },
+    en: { code: 'EN', name: 'Английский', adv: 'по-английски', adj: 'английское', art: /^(the|a|an|to)\s+/, sample: 'fridge&#10;teapot&#10;napkin; салфетка&#10;…' },
+    de: { code: 'DE', name: 'Немецкий', adv: 'по-немецки', adj: 'немецкое', art: /^(der|die|das|den|dem|des|ein|eine|einen|einem|einer|zu)\s+/, sample: 'Kühlschrank&#10;Teekanne&#10;Serviette; салфетка&#10;…' },
+    fr: { code: 'FR', name: 'Французский', adv: 'по-французски', adj: 'французское', art: /^(le|la|les|l|un|une|des|du|de|d)\s+/, sample: 'réfrigérateur&#10;théière&#10;serviette; салфетка&#10;…' },
+    es: { code: 'ES', name: 'Испанский', adv: 'по-испански', adj: 'испанское', art: /^(el|la|los|las|un|una|unos|unas)\s+/, sample: 'nevera&#10;tetera&#10;servilleta; салфетка&#10;…' }
+  };
+  function deckLang(id) {
+    let d = id ? deckById(id) : null;
+    while (d) { if (d.lang) return LANGS[d.lang] ? d.lang : 'it'; d = d.parent_id ? deckById(d.parent_id) : null; }
+    return 'it';
+  }
+  const langOf = n => LANGS[deckLang(n.deck_id)];
+  const inDict = n => deckLang(n.deck_id) === 'it';
   function itStem(word) {
     const w = normAns(word);
     const s = w.replace(/(arsi|ersi|irsi|are|ere|ire|zione|mente)$/, '').replace(/[aeio]$/, '');
     return s.length >= 3 ? s : w;
   }
   // Разбивает пример на токены и помечает те, что относятся к слову карточки
-  function clozeTokens(example, word) {
+  function clozeTokens(n) {
+    const example = n.example, word = n.word;
     if (!example || !word) return null;
     const parts = normAns(word).split(' ').filter(w => w.length > 1);
-    const stems = parts.map(itStem);
+    // Правила окончаний итальянские. В других языках ищем само слово и его ближайшие формы, а короткое —
+    // только целиком: иначе в «to go» пропуском стало бы и «tomorrow»
+    const dict = inDict(n), stems = parts.map(p => dict ? itStem(p) : p.length >= 4 ? p : null), tail = dict ? 6 : 3;
     const tokens = example.split(/(\p{L}[\p{L}'’]*)/u).filter(t => t !== '');
     let hits = 0;
     const out = tokens.map(t => {
       if (!/^\p{L}/u.test(t)) return { t, hit: false, word: false };
       const nt = normAns(t);
-      const hit = stems.some((s, i) => nt === parts[i] || (nt.startsWith(s) && nt.length <= s.length + 6));
+      const hit = stems.some((s, i) => nt === parts[i] || (s && nt.startsWith(s) && nt.length <= s.length + tail));
       if (hit) hits++;
       return { t, hit, word: true };
     });
@@ -754,12 +779,12 @@ alter table reviews add column if not exists applied boolean default false;`;
     return out;
   }
   // HTML примера: mode = 'gap' (слово скрыто) | 'mark' (слово выделено). Остальные слова кликабельны, как в статье.
-  function sentenceHtml(tokens, mode) {
+  function sentenceHtml(tokens, mode, clickable) {
     return tokens.map(x => {
       if (!x.word) return esc(x.t);
       // Изучаемое слово не кликабельно: подсказка по нему выдала бы ответ
       if (x.hit) return mode === 'gap' ? `<span class="cloze-gap" style="min-width:${Math.max(3, x.t.length) * 0.6}em"></span>` : `<span class="cloze-hit">${esc(x.t)}</span>`;
-      return makeClickable(x.t);
+      return clickable ? makeClickable(x.t) : esc(x.t);
     }).join('');
   }
   // Что считается верным ответом: для RU→IT — слово, форма из примера, с артиклем и без;
@@ -776,7 +801,7 @@ alter table reviews add column if not exists applied boolean default false;`;
       // Верен любой из синонимов карточки: «предприниматель» — это и imprenditore, и uomo d'affari
       wordVariants(n).forEach(v => {
         const w = v.replace(/["“”„«»]/g, '').trim(); if (!w) return;
-        out.push(w); const bare = w.replace(IT_ARTICLE, ''); if (bare !== w) out.push(bare);
+        out.push(w); const bare = w.replace(langOf(n).art, ''); if (bare !== w) out.push(bare);
       });
       if (tokens) { const form = tokens.filter(x => x.hit).map(x => x.t).join(' '); if (form && !out.includes(form)) out.push(form); }
     }
@@ -799,21 +824,22 @@ alter table reviews add column if not exists applied boolean default false;`;
     while (j < m) { typedOut.push({ ch: '-', cls: 'miss' }); correctOut.push({ ch: b[j++], cls: 'miss' }); }
     return { typedOut, correctOut };
   }
-  function checkTyped(typed, variants, italian) {
+  // art — артикли языка, если ответ пишут на изучаемом языке; у русского ответа их нет
+  function checkTyped(typed, variants, art) {
     // Пояснение в скобках не часть ответа: варианты перевода сравниваются без скобок, значит и ответ тоже.
     // Иначе «заниматься (видом деятельности)», написанное слово в слово, не совпадало с «заниматься»
     const bare = String(typed || '').replace(/\([^)]*\)?/g, ' ').replace(/\s+/g, ' ').trim();
     if (bare && bare !== String(typed).trim()) {
-      const r = checkTyped(bare, variants, italian);
+      const r = checkTyped(bare, variants, art);
       if (r && r.ok) return { ...r, ...charDiff(String(typed).trim(), String(typed).trim()) };
     }
     let t = normAns(typed);
     if (!t) return null;
-    // Артикль перед итальянским словом не ошибка: убираем его и из проверки, и из показа
-    if (italian && IT_ARTICLE.test(t)) { t = t.replace(IT_ARTICLE, ''); typed = typed.trim().replace(/^\S+\s+/, ''); }
+    // Артикль перед словом не ошибка: убираем его и из проверки, и из показа
+    if (art && art.test(t)) { t = t.replace(art, ''); typed = typed.trim().replace(/^\S+\s+/, ''); }
     const tBare = t;
     // точное совпадение с любым вариантом — без учёта регистра, знаков препинания, ударений и артикля
-    let best = variants.find(v => { const nv = normAns(v); return nv === t || nv === tBare || nv.replace(IT_ARTICLE, '') === tBare; });
+    let best = variants.find(v => { const nv = normAns(v); return nv === t || nv === tBare || nv.replace(art || IT_ARTICLE, '') === tBare; });
     if (best) return { ok: true, near: false, best, ...charDiff(typed.trim(), best) };
     // Несколько вариантов подряд («смешной забавный», «смешной, забавный»): разбираем ответ на куски,
     // каждый из которых — один из вариантов перевода (вариант может быть из нескольких слов)
@@ -888,11 +914,14 @@ alter table reviews add column if not exists applied boolean default false;`;
     }
     const { n, front, answer } = cardFaces(S.current);
     const isIt = S.current.direction === 'it';
+    const lang = langOf(n), dict = inDict(n);
+    const linked = s => dict ? makeClickable(s) : esc(s); // ссылки в статьи — только у слов из словаря сайта
+    const phrased = s => dict && isPhrase(s);
     // Слова фразы на лицевой стороне кликабельны только после ответа: шторка по наведению показала бы перевод
-    const tokens = clozeTokens(n.example, n.word);
+    const tokens = clozeTokens(n);
     // Лицевая сторона: пример с пропуском (RU→IT) или с выделенным словом (IT→RU); слова примера кликабельны
-    const sentence = tokens ? `<div class="study-box study-sentence"><div class="study-box-label">Пример</div><div class="study-box-text italic">${sentenceHtml(tokens, S.revealed || isIt ? 'mark' : 'gap')}</div></div>`
-      : (S.revealed && n.example ? `<div class="study-box"><div class="study-box-label">Пример</div><div class="study-box-text italic">${makeClickable(n.example)}</div></div>` : '');
+    const sentence = tokens ? `<div class="study-box study-sentence"><div class="study-box-label">Пример</div><div class="study-box-text italic">${sentenceHtml(tokens, S.revealed || isIt ? 'mark' : 'gap', dict)}</div></div>`
+      : (S.revealed && n.example ? `<div class="study-box"><div class="study-box-label">Пример</div><div class="study-box-text italic">${linked(n.example)}</div></div>` : '');
     const chk = S.check;
     const typedBlock = S.revealed && chk ? `
         <div class="study-typed ${chk.ok ? 'ok' : chk.near ? 'near' : 'bad'}">
@@ -903,18 +932,18 @@ alter table reviews add column if not exists applied boolean default false;`;
     const input = !S.revealed ? `
         <div class="study-input-wrap">
           <input class="study-input" id="studyInput" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"
-            placeholder="${isIt ? 'перевод' : 'слово по-итальянски'}" onkeydown="if(event.key==='Enter'||(event.key===' '&&!this.value.trim())){event.preventDefault();Cards.submitTyped(this.value)}else if(event.key==='Escape'){this.blur()}">
+            placeholder="${isIt ? 'перевод' : `слово ${lang.adv}`}" onkeydown="if(event.key==='Enter'||(event.key===' '&&!this.value.trim())){event.preventDefault();Cards.submitTyped(this.value)}else if(event.key==='Escape'){this.blur()}">
         </div>` : '';
     const back = S.revealed ? `
         <div class="study-rule"></div>
         ${typedBlock}
-        <div class="study-answer">${!isIt && isPhrase(answer) ? phraseHtml(answer) : esc(answer)}</div>
+        <div class="study-answer">${!isIt && phrased(answer) ? phraseHtml(answer) : esc(answer)}</div>
         ${altHtml(n, true)}
         ${n.phonetic ? `<div class="study-ipa">${esc(n.phonetic)}</div>` : ''}
         ${sentence}
-        ${n.meaning ? `<div class="study-box"><div class="study-box-label">Значение</div><div class="study-box-text">${makeClickable(n.meaning)}</div></div>` : ''}
+        ${n.meaning ? `<div class="study-box"><div class="study-box-label">Значение</div><div class="study-box-text">${linked(n.meaning)}</div></div>` : ''}
         ${(n.tags || []).length ? `<div class="study-tags">${n.tags.map(t => `<span class="tag-chip">#${esc(t)}</span>`).join('')}</div>` : ''}
-        <button class="study-article" onclick="Cards.openNoteArticle('${esc(n.word || '').replace(/'/g, '&#39;')}')">открыть статью ${svgIcon('external')}</button>` : `${sentence}${input}`;
+        ${dict ? `<button class="study-article" onclick="Cards.openNoteArticle('${esc(n.word || '').replace(/'/g, '&#39;')}')">открыть статью ${svgIcon('external')}</button>` : ''}` : `${sentence}${input}`;
     const suggested = chk ? (chk.ok ? 3 : chk.near ? 2 : 1) : 0;
     const buttons = S.revealed ? `
       <div class="study-buttons">
@@ -926,8 +955,8 @@ alter table reviews add column if not exists applied boolean default false;`;
     el.innerHTML = head + `
       <div class="study-body">
         <div class="study-card ${S.current.direction}">
-          <div class="study-dir">${isIt ? 'IT → RU' : 'RU → IT'}${S.current.state === 'new' ? ' · новая' : ''}</div>
-          <div class="study-front">${isIt && isPhrase(front) && S.revealed ? phraseHtml(front) : esc(front)}</div>
+          <div class="study-dir">${isIt ? `${lang.code} → RU` : `RU → ${lang.code}`}${S.current.state === 'new' ? ' · новая' : ''}</div>
+          <div class="study-front">${isIt && phrased(front) && S.revealed ? phraseHtml(front) : esc(front)}</div>
           ${back}
         </div>
       </div>
@@ -947,7 +976,9 @@ alter table reviews add column if not exists applied boolean default false;`;
     { key: 'test', name: 'Тест', icon: 'list', sub: 'Вопросы разных видов с оценкой' },
     { key: 'match', name: 'Подбор', icon: 'shuffle', sub: 'Пары на время' },
   ];
-  const DIR_LABEL = { it: 'IT → RU', ru: 'RU → IT', mix: 'вперемешку' };
+  const DIR_LABEL = { it: c => `${c} → RU`, ru: c => `RU → ${c}`, mix: () => 'вперемешку' };
+  // Подпись языка в переключателе. «Все колоды» могут быть на разных языках — тогда пишем просто «слово»
+  const poolCode = d => { const codes = new Set(d.pool.map(n => langOf(n).code)); return codes.size === 1 ? [...codes][0] : 'СЛОВО'; };
   const LEARN_ROUND = 7, MATCH_PAIRS = 6;
   const lsGet = (k, def) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? def : v; } catch (e) { return def; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
@@ -1039,7 +1070,7 @@ alter table reviews add column if not exists applied boolean default false;`;
       c('shaky') && `покажутся раньше: ${c('shaky')}`, c('lapsed') && `вернулось на заучивание: ${c('lapsed')}`].filter(Boolean);
     return `<div class="study-summary sub fx-line">${parts.length ? 'Расписание: ' + parts.join(' · ') : 'Расписание не изменилось: этим словам ещё рано на повторение'}</div>`;
   }
-  const checkWritten = (n, dir, typed) => checkTyped(typed, answerVariants({ direction: dir }, n, clozeTokens(n.example, n.word)), dir === 'ru');
+  const checkWritten = (n, dir, typed) => checkTyped(typed, answerVariants({ direction: dir }, n, clozeTokens(n)), dir === 'ru' ? langOf(n).art : null);
   const progressHtml = (done, total) => `<div class="drill-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}"><i style="width:${total ? Math.min(100, Math.round(done / total * 100)) : 0}%"></i></div>`;
   const fmtSec = ms => (ms / 1000).toFixed(1).replace('.', ',') + ' с';
   const matchKey = deckId => deckId || 'all';
@@ -1222,7 +1253,7 @@ alter table reviews add column if not exists applied boolean default false;`;
         <div class="study-footer"><div class="study-hint">Enter — продолжить</div></div>`;
     }
     const q = d.q, it = q.it, n = it.n;
-    const prompt = q.type === 'mc' ? (it.dir === 'it' ? 'Выберите перевод' : 'Выберите слово') : (it.dir === 'it' ? 'Напишите перевод' : 'Напишите по-итальянски');
+    const prompt = q.type === 'mc' ? (it.dir === 'it' ? 'Выберите перевод' : 'Выберите слово') : (it.dir === 'it' ? 'Напишите перевод' : `Напишите ${langOf(n).adv}`);
     let body = '';
     if (q.type === 'mc') {
       body = `<div class="drill-opts">${q.options.map((o, k) => {
@@ -1230,11 +1261,11 @@ alter table reviews add column if not exists applied boolean default false;`;
         return `<button class="drill-opt${cls}" onclick="Cards.drillDo('pick', ${k})" ${q.answered ? 'disabled' : ''}><span class="drill-key">${k + 1}</span>${esc(ansText(o, it.dir))}</button>`;
       }).join('')}</div>`;
     } else {
-      const tokens = it.dir === 'ru' ? clozeTokens(n.example, n.word) : null;
-      const sentence = tokens ? `<div class="study-box study-sentence"><div class="study-box-label">Пример</div><div class="study-box-text italic">${sentenceHtml(tokens, q.answered ? 'mark' : 'gap')}</div></div>` : '';
+      const tokens = it.dir === 'ru' ? clozeTokens(n) : null;
+      const sentence = tokens ? `<div class="study-box study-sentence"><div class="study-box-label">Пример</div><div class="study-box-text italic">${sentenceHtml(tokens, q.answered ? 'mark' : 'gap', inDict(n))}</div></div>` : '';
       if (!q.answered) body = `${sentence}
         <div class="study-input-wrap"><input class="study-input" id="drillInput" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"
-          placeholder="${it.dir === 'it' ? 'перевод' : 'слово по-итальянски'}" onkeydown="if(event.key==='Enter'){event.preventDefault();Cards.drillDo('write', this.value)}else if(event.key==='Escape'){this.blur()}"></div>`;
+          placeholder="${it.dir === 'it' ? 'перевод' : `слово ${langOf(n).adv}`}" onkeydown="if(event.key==='Enter'){event.preventDefault();Cards.drillDo('write', this.value)}else if(event.key==='Escape'){this.blur()}"></div>`;
       else {
         const c = q.check;
         const typed = c ? `<div class="study-typed ${c.ok ? 'ok' : c.near ? 'near' : 'bad'}"><div class="study-typed-line">${diffHtml(c.typedOut)}</div>
@@ -1297,7 +1328,7 @@ alter table reviews add column if not exists applied boolean default false;`;
       return drillTop(d) + `<div class="study-body"><div class="study-card drill-setup">
         <div class="study-front">Тест</div>
         <div class="drill-field"><div class="study-box-label">Вопросов</div><div class="drill-chips">${counts.map(c => chip(String(o.count) === String(c) || (c === 'all' && o.count >= N), 'tcount', c, c === 'all' ? `все ${N}` : c)).join('')}</div></div>
-        <div class="drill-field"><div class="study-box-label">Направление</div><div class="drill-chips">${Object.keys(DIR_LABEL).map(k => chip(o.dir === k, 'tdir', k, DIR_LABEL[k])).join('')}</div></div>
+        <div class="drill-field"><div class="study-box-label">Направление</div><div class="drill-chips">${Object.keys(DIR_LABEL).map(k => chip(o.dir === k, 'tdir', k, DIR_LABEL[k](poolCode(d)))).join('')}</div></div>
         <div class="drill-field"><div class="study-box-label">Виды вопросов</div><div class="drill-chips">${TEST_TYPES.map(([k, l]) => chip(o.types[k], 'ttype', k, l)).join('')}</div></div>
         <div class="drill-actions"><button class="cards-btn primary" onclick="Cards.drillDo('tstart')">Начать тест</button></div>
       </div></div>`;
@@ -1343,7 +1374,7 @@ alter table reviews add column if not exists applied boolean default false;`;
         const typed = r && r.check ? `<div class="study-typed ${r.ok ? 'ok' : r.near ? 'near' : 'bad'}"><div class="study-typed-line">${diffHtml(r.check.typedOut)}</div></div>` : '';
         inner = `<div class="test-q-text">${esc(askText(q.n, q.dir))}</div>
           ${r ? `${typed || '<div class="test-empty">без ответа</div>'}${r.ok ? '' : `<div class="test-correct">${esc(ansText(q.n, q.dir))}</div>`}`
-            : `<input class="study-input test-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${q.dir === 'it' ? 'перевод' : 'слово по-итальянски'}" value="${esc(a || '')}" oninput="Cards.drillDo('tinput', ${i}, this.value)">`}`;
+            : `<input class="study-input test-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${q.dir === 'it' ? 'перевод' : `слово ${langOf(q.n).adv}`}" value="${esc(a || '')}" oninput="Cards.drillDo('tinput', ${i}, this.value)">`}`;
       }
       html += `<div class="test-q${r ? (r.ok ? ' ok' : ' bad') : ''}" data-q="${i}"><div class="test-q-num">${i + 1}${mark}</div><div class="test-q-body">${inner}</div></div>`;
     });
@@ -1417,7 +1448,7 @@ alter table reviews add column if not exists applied boolean default false;`;
         <button class="cards-back" onclick="goBack()" title="К колоде">←</button>
         <div class="cards-head-deck">${m.name} · ${esc(deck ? deck.name : 'все колоды')}</div>
         ${counter ? `<div class="drill-count">${counter}</div>` : ''}
-        ${dirToggle ? `<button class="drill-chip" onclick="Cards.drillDo('dir')" title="Сменить направление">${DIR_LABEL[drillDir()]}</button>` : ''}
+        ${dirToggle ? `<button class="drill-chip" onclick="Cards.drillDo('dir')" title="Сменить направление">${DIR_LABEL[drillDir()](poolCode(d))}</button>` : ''}
       </div>`;
   }
   const doneHtml = (title, sub, buttons, extra = '') => `<div class="study-body"><div class="cards-done"><div class="cards-done-mark">✓</div><div>${title}</div>
@@ -1532,10 +1563,11 @@ alter table reviews add column if not exists applied boolean default false;`;
     const deck = deckById(S.deckId); const b = S.build;
     let body = '';
     if (!b) {
+      const L = LANGS[deckLang(S.deckId)];
       body = `
-        <p class="cards-p">Вставьте слова, по одному в строке. Перевод, транскрипцию, пример и значение приложение соберёт само: сначала из кэша словаря и Викисловаря, недостающее допишет модель одним запросом.</p>
-        <p class="cards-p">Можно и готовыми строками CSV: <code>слово; перевод; пример; значение; теги</code> (разделитель <code>;</code>, <code>,</code> или табуляция). Пустые поля будут дозаполнены. Перевод с запятыми можно взять в кавычки, а можно и так; строку заголовка вроде <code>итальянский,русский</code> приложение поймёт, колонки можно переставить. Если в строке только русское слово, итальянское подберёт модель.</p>
-        <textarea class="cards-textarea" id="cardsWords" placeholder="frigorifero&#10;caffettiera&#10;tovagliolo; салфетка&#10;…"></textarea>
+        <p class="cards-p">Вставьте слова, по одному в строке. ${L.code === 'IT' ? 'Перевод, транскрипцию, пример и значение приложение соберёт само: сначала из кэша словаря и Викисловаря, недостающее допишет модель одним запросом.' : `Язык колоды: ${L.name.toLowerCase()}. Перевод, транскрипцию, пример и значение напишет модель, проверьте их перед сохранением.`}</p>
+        <p class="cards-p">Можно и готовыми строками CSV: <code>слово; перевод; пример; значение; теги</code> (разделитель <code>;</code>, <code>,</code> или табуляция). Пустые поля будут дозаполнены. Перевод с запятыми можно взять в кавычки, а можно и так; строку заголовка вроде <code>${L.name.toLowerCase()},русский</code> приложение поймёт, колонки можно переставить. Если в строке только русское слово, ${L.adj} подберёт модель.</p>
+        <textarea class="cards-textarea" id="cardsWords" placeholder="${L.sample}"></textarea>
         <input class="cards-input" id="cardsTags" placeholder="теги через запятую, например: cucina, A2" autocomplete="off">
         <div class="cards-actions">
           <button class="cards-btn primary" onclick="Cards.buildFromText()">Собрать карточки</button>
@@ -1578,7 +1610,7 @@ alter table reviews add column if not exists applied boolean default false;`;
         <div class="browse-row">
           <input type="checkbox" ${S.browseSelected.has(n.id) ? 'checked' : ''} onchange="Cards.selectNote('${n.id}', this.checked)">
           <button class="browse-word" onclick="Cards.editNote('${n.id}')">${highlight(n.word, q)}${(n.alt || []).length ? ` <span class="browse-alt">· ${n.alt.map(a => highlight(a, q)).join(' · ')}</span>` : ''}</button>
-          <button class="browse-open" onclick="Cards.openNoteArticle('${esc(n.word).replace(/'/g, '&#39;')}')" title="Открыть статью в словаре">${svgIcon('external')}</button>
+          ${inDict(n) ? `<button class="browse-open" onclick="Cards.openNoteArticle('${esc(n.word).replace(/'/g, '&#39;')}')" title="Открыть статью в словаре">${svgIcon('external')}</button>` : '<span class="browse-open" style="visibility:hidden"></span>'}
           <div class="browse-ru">${highlight(n.translation, q)}</div>
           <div class="browse-tags">${(n.tags || []).map(t => `<span class="tag-chip" onclick="Cards.setTagFilter('${esc(t)}')">#${esc(t)}</span>`).join('')}</div>
           <div class="browse-state" title="состояние карточек: н новая, з заучивается, п повторение">${st}</div>
@@ -1644,9 +1676,33 @@ alter table reviews add column if not exists applied boolean default false;`;
   async function newDeck(parentId) {
     const name = prompt(parentId ? `Название подколоды в «${deckById(parentId).name}»:` : 'Название колоды:');
     if (!name || !name.trim()) return;
+    // Подколода берёт язык родителя, спрашиваем только про новую колоду верхнего уровня
+    const lang = !parentId && S.hasLang ? await askLang(`На каком языке слова в «${name.trim()}»?`, 'it') : null;
+    if (!parentId && S.hasLang && !lang) return;
     // Колоду создают, чтобы что-то в неё положить, — сразу заходим внутрь, а не показываем список
-    try { const [d] = await sb('decks', { method: 'POST', body: { name: name.trim(), parent_id: parentId || null } }); S.decks.push(d); openDeck(d.id); }
+    try { const [d] = await sb('decks', { method: 'POST', body: { name: name.trim(), parent_id: parentId || null, ...(lang ? { lang } : {}) } }); S.decks.push(d); openDeck(d.id); }
     catch (e) { showToast('⚠ ' + e.message); }
+  }
+  // Выбор языка: промис вернёт код языка, а при закрытии окна мимо кнопок просто не разрешится
+  let _langResolve = null;
+  function askLang(title, current) {
+    const m = cardsModal();
+    m.innerHTML = `<div class="cards-modal-box">
+        <div class="cards-title small">${esc(title)}</div>
+        <div class="deck-pick-list">${Object.keys(LANGS).map(k => `<button class="deck-pick" style="--depth:0" onclick="Cards.pickLang('${k}')">${LANGS[k].name}<span>${k === current ? '✓' : ''}</span></button>`).join('')}</div>
+        <div class="cards-actions"><button class="cards-btn" onclick="Cards.closeModal()">Отмена</button></div>
+      </div>`;
+    m.style.display = 'flex';
+    return new Promise(resolve => { _langResolve = resolve; });
+  }
+  async function setDeckLang(id) {
+    const cur = deckLang(id), lang = await askLang(`Язык колоды «${deckById(id).name}»`, cur);
+    if (!lang || lang === cur) return;
+    try {
+      await sb(`decks?id=eq.${id}`, { method: 'PATCH', body: { lang } });
+      deckById(id).lang = lang; render();
+      showToast(`✓ ${LANGS[lang].name}: так будут собираться новые слова, готовые карточки не меняются`);
+    } catch (e) { showToast('⚠ ' + e.message); }
   }
   async function renameDeck(id) {
     const d = deckById(id); const name = prompt('Новое название:', d.name); if (!name || !name.trim() || name.trim() === d.name) return;
@@ -1677,7 +1733,7 @@ alter table reviews add column if not exists applied boolean default false;`;
     S.revealed = true; S.check = null;
     if (typed && typed.trim()) {
       const { n } = cardFaces(S.current);
-      S.check = checkTyped(typed, answerVariants(S.current, n, clozeTokens(n.example, n.word)), S.current.direction !== 'it');
+      S.check = checkTyped(typed, answerVariants(S.current, n, clozeTokens(n)), S.current.direction !== 'it' ? langOf(n).art : null);
     }
     render();
   }
@@ -1755,7 +1811,7 @@ alter table reviews add column if not exists applied boolean default false;`;
   const isRu = s => hasCyr(s) && !hasLat(s), isIt = s => hasLat(s) && !hasCyr(s);
   // Заголовок: «итальянский,русский», «word;translation;example» — по нему и порядок колонок
   const HEAD = {
-    word: /^(word|parola|слово|итальянский|итал\.?|italiano|italian|it)$/i,
+    word: /^(word|parola|слово|итальянский|итал\.?|italiano|italian|it|английский|англ\.?|english|en|немецкий|нем\.?|deutsch|german|de|французский|франц\.?|français|francais|french|fr|испанский|исп\.?|español|espanol|spanish|es)$/i,
     translation: /^(translation|traduzione|перевод|русский|рус\.?|russo|russian|ru)$/i,
     example: /^(example|esempio|пример)$/i,
     meaning: /^(meaning|definition|significato|definizione|значение|определение)$/i,
@@ -1807,18 +1863,18 @@ alter table reviews add column if not exists applied boolean default false;`;
       if (ruBits.length) { f.word = bits.filter(b => !isRu(b)).join(', '); f.translation = [...ruBits, f.translation].filter(Boolean).join(join); }
       const { word, alt } = splitWord(f.word);
       if (!word && !f.translation) return;
-      // Без слова, только по-русски: итальянское подберёт модель перед поиском по словарям (findItalian)
+      // Без слова, только по-русски: слово на языке колоды подберёт модель перед сборкой (findForeign)
       items.push({ word, alt, translation: f.translation, example: f.example, meaning: f.meaning, tags: f.tags ? f.tags.split(/[,\s]+/).filter(Boolean) : [] });
     });
     return items;
   }
-  // Строки, где дано только русское: просим у модели итальянское слово, перевод остаётся человека
-  async function findItalian(list) {
+  // Строки, где дано только русское: просим у модели слово на языке колоды, перевод остаётся человека
+  async function findForeign(list, lang) {
     const BATCH = 15;
     for (let i = 0; i < list.length; i += BATCH) {
       const chunk = list.slice(i, i + BATCH);
       try {
-        const { results } = await backendApi('/api/cards-fill', { list: chunk.map(x => ({ russian: x.translation, missing: ['word'] })) });
+        const { results } = await backendApi('/api/cards-fill', { lang, list: chunk.map(x => ({ russian: x.translation, missing: ['word'] })) });
         const arr = Array.isArray(results) ? results : (results && Array.isArray(results.items) ? results.items : []);
         chunk.forEach((x, k) => {
           const r = arr.find(r => r && r.russian === x.translation) || arr[k];
@@ -1829,10 +1885,12 @@ alter table reviews add column if not exists applied boolean default false;`;
     }
   }
 
-  async function lookupOne(it) {
+  async function lookupOne(it, lang = 'it') {
     const lw = it.word.toLowerCase();
     const d = { ...it, phonetic: '', pos: '', glosses: [], include: true, warn: '' };
     const phrase = isPhrase(lw);
+    // Словари ниже итальянские: другому языку они только подсунули бы созвучное итальянское слово
+    if (lang !== 'it') { if (phrase) d.isPhrase = true; return d; }
     // Выражение из нескольких слов словари не знают: берём кэш статьи, транскрипцию собираем из слов,
     // остальное (перевод, пример, значение) допишет модель — но уже без транскрипции
     const [cached, fd, ruBlocks] = await Promise.all([
@@ -1882,10 +1940,11 @@ alter table reviews add column if not exists applied boolean default false;`;
     return d;
   }
 
-  async function completeWithLlm(items) {
+  async function completeWithLlm(items, lang = 'it') {
     // У выражений транскрипцию не просим: модель в них путает ударения, лучше пусто, чем неверно
-    // Транскрипцию у модели не просим вообще: она берётся из словарей или по правилам чтения (resolveIpa)
-    const fieldsOf = () => ['translation', 'example', 'meaning'];
+    // У итальянских слов транскрипция берётся из словарей или по правилам чтения (resolveIpa),
+    // а для других языков этих источников нет, там её пишет модель
+    const fieldsOf = x => lang !== 'it' && !x.isPhrase ? ['translation', 'phonetic', 'example', 'meaning'] : ['translation', 'example', 'meaning'];
     const need = items.filter(i => fieldsOf(i).some(f => !i[f]));
     if (!need.length) return null;
     const BATCH = 15; let used = null;
@@ -1897,7 +1956,7 @@ alter table reviews add column if not exists applied boolean default false;`;
       const list = chunk.map(x => ({ word: x.word, translation: x.translation || undefined, isPhrase: x.isPhrase || undefined, partOfSpeech: x.pos || undefined,
         englishGlosses: (x.glosses || []).length ? x.glosses : undefined, missing: fieldsOf(x).filter(f => !x[f]) }));
       try {
-        const { results, by } = await backendApi('/api/cards-fill', { list });
+        const { results, by } = await backendApi('/api/cards-fill', { list, lang });
         const arr = Array.isArray(results) ? results : (results && Array.isArray(results.items) ? results.items : []);
         arr.forEach(r => { const t = chunk.find(x => x.word.toLowerCase() === String(r.word || '').toLowerCase()) || chunk[arr.indexOf(r)]; if (!t) return;
           fieldsOf(t).forEach(f => { if (!t[f] && r[f]) t[f] = String(r[f]); }); });
@@ -1908,13 +1967,14 @@ alter table reviews add column if not exists applied boolean default false;`;
   }
 
   async function runBuild(items, tags) {
+    const lang = deckLang(S.deckId), L = LANGS[lang];
     S.build = { phase: 'running', total: items.length, done: 0, status: 'Ищем в словарях…', items: [], llmUsed: null }; render();
     const ruOnly = items.filter(i => !i.word);
-    if (ruOnly.length) { S.build.status = 'Подбираем итальянские слова к русским…'; render(); await findItalian(ruOnly); }
+    if (ruOnly.length) { S.build.status = `Подбираем слова ${L.adv} к русским…`; render(); await findForeign(ruOnly, lang); }
     const out = new Array(items.length); let idx = 0;
     const worker = async () => { while (idx < items.length) { const i = idx++;
-      if (!items[i].word) { out[i] = { ...items[i], phonetic: '', pos: '', glosses: [], include: false, warn: 'не нашлось итальянское слово — впишите его сами' }; S.build.done++; continue; }
-      try { out[i] = await lookupOne(items[i]); } catch (e) { out[i] = { ...items[i], phonetic: '', pos: '', glosses: [], include: true, warn: 'ошибка поиска: ' + e.message }; } S.build.done++; S.build.status = `Ищем в словарях: ${S.build.done} из ${items.length}…`; render(); } };
+      if (!items[i].word) { out[i] = { ...items[i], phonetic: '', pos: '', glosses: [], include: false, warn: `не нашлось ${L.adj} слово — впишите его сами` }; S.build.done++; continue; }
+      try { out[i] = await lookupOne(items[i], lang); } catch (e) { out[i] = { ...items[i], phonetic: '', pos: '', glosses: [], include: true, warn: 'ошибка поиска: ' + e.message }; } S.build.done++; S.build.status = `Ищем в словарях: ${S.build.done} из ${items.length}…`; render(); } };
     await Promise.all([worker(), worker(), worker()]);
     // дубли (два одинаковых слова или уже есть в колоде)
     const existing = new Set(notesInDeck(S.deckId).flatMap(n => wordVariants(n).map(w => w.toLowerCase()))); const seen = new Set();
@@ -1922,13 +1982,13 @@ alter table reviews add column if not exists applied boolean default false;`;
       const ks = wordVariants(it).map(w => w.toLowerCase());
       if (ks.some(x => existing.has(x))) { it.include = false; it.warn = 'уже есть в колоде'; }
       else if (ks.some(x => seen.has(x))) { it.include = false; it.warn = 'дубль в списке'; }
-      else if (it.fromRu) it.warn = it.warn || 'дано по-русски, итальянское слово подобрала модель — проверьте';
+      else if (it.fromRu) it.warn = it.warn || `дано по-русски, ${L.adj} слово подобрала модель — проверьте`;
       else if ((it.alt || []).length) it.warn = 'ещё варианты: ' + it.alt.join(', '); // разбор строки виден до сохранения
       ks.forEach(x => seen.add(x));
       it.tags = [...new Set([...(it.tags || []), ...tags])];
     });
     S.build.items = out;
-    S.build.llmUsed = await completeWithLlm(out.filter(i => i.include));
+    S.build.llmUsed = await completeWithLlm(out.filter(i => i.include), lang);
     S.build.phase = 'preview'; render();
   }
   function buildFromText() {
@@ -2085,9 +2145,10 @@ alter table reviews add column if not exists applied boolean default false;`;
     if (!changed) return;
     it.phonetic = ''; it.warn = 'пересобираю…'; render();
     try {
-      const keep = it.include;
-      const d = await lookupOne({ ...it, warn: '' });
+      const keep = it.include, lang = deckLang(S.deckId);
+      const d = await lookupOne({ ...it, warn: '' }, lang);
       Object.assign(it, d); it.include = keep;
+      if (lang !== 'it') await completeWithLlm([it], lang); // транскрипцию здесь неоткуда взять, кроме модели
     } catch (e) { it.warn = 'ошибка поиска: ' + (e.message || e); }
     render();
   }
@@ -2099,8 +2160,9 @@ alter table reviews add column if not exists applied boolean default false;`;
     if (!confirm(`Пересобрать «${n.word}»? Перевод, пример, значение и транскрипция будут написаны заново.`)) return;
     closeModal(); showToast('Пересобираю…');
     try {
-      const d = await lookupOne({ word: n.word, alt: n.alt || [], translation: '', example: '', meaning: '', tags: n.tags || [] });
-      await completeWithLlm([d]);
+      const lang = deckLang(n.deck_id);
+      const d = await lookupOne({ word: n.word, alt: n.alt || [], translation: '', example: '', meaning: '', tags: n.tags || [] }, lang);
+      await completeWithLlm([d], lang);
       const body = noteBody({ word: d.word || n.word, alt: n.alt || [], translation: d.translation || '', phonetic: d.phonetic || '',
         example: d.example || '', meaning: d.meaning || '', pos: d.pos || n.pos || '', tags: n.tags || [] });
       await sb(`notes?id=eq.${id}`, { method: 'PATCH', body });
@@ -2140,7 +2202,8 @@ alter table reviews add column if not exists applied boolean default false;`;
   function renderPicker() {
     const m = picker(); const words = _pendingNotes.map(n => n.word);
     const rows = [];
-    const walk = (pid, depth) => childrenOf(pid).forEach(d => { rows.push(`<button class="deck-pick" style="--depth:${depth}" onclick="Cards.pickDeck('${d.id}')">${esc(d.name)}<span>${notesInDeck(d.id).length}</span></button>`); walk(d.id, depth + 1); });
+    // Сюда приходят слова из словаря, а он итальянский: колоды на других языках им не подходят
+    const walk = (pid, depth) => childrenOf(pid).forEach(d => { if (deckLang(d.id) === 'it') rows.push(`<button class="deck-pick" style="--depth:${depth}" onclick="Cards.pickDeck('${d.id}')">${esc(d.name)}<span>${notesInDeck(d.id).length}</span></button>`); walk(d.id, depth + 1); });
     walk(null, 0);
     m.innerHTML = `
       <div class="cards-modal-box">
@@ -2368,12 +2431,14 @@ alter table reviews add column if not exists applied boolean default false;`;
     async reload() { S.loaded = false; if (_currentState === 'cards') render(); await loadAll(); if (_currentState === 'cards') render(); },
     copySql() { const t = window.DIZ_SETUP_SQL || SETUP_SQL; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => showToast('✓ SQL скопирован'), () => { const el = $('cardsSql'); const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); showToast('Выделено — скопируйте вручную'); }); },
     openDeck,
-    newDeck, renameDeck, deleteDeck,
+    newDeck, renameDeck, deleteDeck, setDeckLang,
+    pickLang(k) { closeModal(); const done = _langResolve; _langResolve = null; if (done) done(k); },
     setNewPerDay(v) { try { localStorage.setItem(NEW_PER_DAY_KEY, String(Math.max(0, parseInt(v) || 0))); } catch (e) {} render(); },
     study(id) { study(id, S.view === 'browse' ? S.tagFilter : ''); },
     // Все колоды разом: deckId = null, notesInDeck(null) обходит дерево от корня
-    allWords() { return S.notes.flatMap(n => wordVariants(n).map(w => w.toLowerCase())); }, // для подсказок в поиске и подсветки на карте
-    allTranslations() { return S.notes.map(n => n.translation || '').filter(Boolean); }, // для подсказок в русском поиске
+    // Только итальянские колоды: подсказка ведёт в статью словаря, и чужое слово получило бы итальянскую статью в общей базе
+    allWords() { return S.notes.filter(inDict).flatMap(n => wordVariants(n).map(w => w.toLowerCase())); }, // для подсказок в поиске и подсветки на карте
+    allTranslations() { return S.notes.filter(inDict).map(n => n.translation || '').filter(Boolean); }, // для подсказок в русском поиске
     studyAll() { if (window.Auth && !Auth.require('Войдите, чтобы учить карточки')) return; if (currentMode !== 'cards') { currentMode = 'cards'; applyModeUI('cards'); showState('cards'); } (S.loaded ? Promise.resolve() : loadAll()).then(() => study(null, '')); },
     // Сводка для плиток главной: к повторению и новых (в пределах дневного лимита), серия, слова
     async homeSummary() {

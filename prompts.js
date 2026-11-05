@@ -248,7 +248,18 @@ Return ONLY valid JSON, no markdown: {"russian":{"main":"перевод","altern
   }
 
   // ── Сборка карточек: довписать перевод/пример/значение батчем ───────────────────────────────
-  function cardsFillPrompt(list) {
+  // Язык колоды приходит от клиента, поэтому в промпт идёт только значение из этого списка, а не сама строка.
+  // Неизвестный язык — итальянский, как у колод, созданных до выбора языка.
+  const CARD_LANGS = { en: 'English', de: 'German', fr: 'French', es: 'Spanish' };
+  function cardsFillPrompt(list, lang) {
+    const L = Object.prototype.hasOwnProperty.call(CARD_LANGS, lang) ? CARD_LANGS[lang] : null;
+    if (L) return `You are an expert ${L} lexicographer writing flashcards for Russian speakers. For each ${L} item below, provide ONLY the fields listed in "missing".
+Fields: "translation" = primary Russian translation (1-3 words, alternatives after ";" allowed), "phonetic" = IPA with ˈ before the stressed syllable, no slashes or brackets, "example" = one natural ${L} sentence using the word, "meaning" = short definition in ${L} (1 sentence).
+Items with "isPhrase": true are multi-word expressions (idioms, collocations, set phrases): "translation" = the idiomatic Russian equivalent, not word-for-word; "meaning" = what the whole expression means; "example" = a natural sentence using the whole expression. Never add a phonetic for them.
+If an item already has "translation", the user chose that sense: "example" and "meaning" must illustrate exactly that sense, even when the word has a better-known one. Watch for false friends.
+Items with "russian" and "word" in "missing" have no ${L} word yet: put into "word" the most natural ${L} equivalent of that Russian word (dictionary form, no article) and copy "russian" back unchanged.
+Return ONLY a JSON array of objects {"word": "...", ...fields}, in the same order, no markdown.
+${JSON.stringify(list)}`;
     return `You are an expert Italian lexicographer. For each Italian item below, provide ONLY the fields listed in "missing".
 Fields: "translation" = primary Russian translation (1-3 words, alternatives after ";" allowed), "phonetic" = IPA with ˈ before the stressed syllable, "example" = one natural Italian sentence using the word, "meaning" = short definition in Italian (1 sentence).
 Items with "isPhrase": true are multi-word expressions (idioms, collocations, set phrases): "translation" = the idiomatic Russian equivalent, not word-for-word; "meaning" = what the whole expression means; "example" = a natural sentence using the whole expression. Never add a phonetic for them.

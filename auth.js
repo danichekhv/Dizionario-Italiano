@@ -78,6 +78,8 @@ alter table notes add column if not exists user_id uuid default auth.uid();
 -- Синонимы на той же карточке: «imprenditore, uomo d'affari» — одно значение с вариантами.
 -- В word остаётся главное слово (по нему ищется статья и транскрипция), остальные живут здесь.
 alter table notes add column if not exists alt text[] default '{}';
+-- Изучаемый язык колоды: en, de, fr, es; пусто — как у родителя, а у колоды верхнего уровня итальянский
+alter table decks add column if not exists lang text;
 alter table cards add column if not exists user_id uuid default auth.uid();
 alter table reviews add column if not exists user_id uuid default auth.uid();
 -- Откуда ответ: srs — обычное повторение, learn / test / flash / match — тренировка; applied — сдвинул ли он расписание
@@ -212,11 +214,11 @@ begin
   create temp table if not exists deck_map (old_id uuid, new_id uuid) on commit drop;
   -- не delete без where: через API Supabase включает safeupdate, и такой delete падает
   truncate deck_map;
-  for r in (with recursive t as (select id, name, parent_id, 0 as lvl from decks where id = v_src
-                                 union all select d.id, d.name, d.parent_id, t.lvl + 1 from decks d join t on d.parent_id = t.id)
+  for r in (with recursive t as (select id, name, lang, parent_id, 0 as lvl from decks where id = v_src
+                                 union all select d.id, d.name, d.lang, d.parent_id, t.lvl + 1 from decks d join t on d.parent_id = t.id)
             select * from t order by lvl) loop
-    insert into decks (name, parent_id, user_id)
-      values (r.name, (select new_id from deck_map where old_id = r.parent_id), v_me) returning id into v_new;
+    insert into decks (name, lang, parent_id, user_id)
+      values (r.name, r.lang, (select new_id from deck_map where old_id = r.parent_id), v_me) returning id into v_new;
     insert into deck_map values (r.id, v_new);
     if r.id = v_src then v_root := v_new; end if;
   end loop;
