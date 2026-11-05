@@ -139,14 +139,14 @@ const CLAUDE_MODEL = 'claude-haiku-5-5';
 const writerModel = env => env.WRITER_MODEL || CLAUDE_MODEL;
 const WRITER_NAME = { 'claude-haiku-5-5': 'Claude Haiku 5.5', 'claude-sonnet-5-5': 'Claude Sonnet 5.5' };
 const writerLabel = env => WRITER_NAME[writerModel(env)] || writerModel(env);
-function callClaude(env, prompt, stream) {
+function callClaude(env, prompt, stream, effort = 'high') {
   return fetch(CLAUDE_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2026-10-21' },
     body: JSON.stringify({
-      model: writerModel(env), stream, max_tokens: 16000,
-      // Словарным задачам долгие размышления не нужны, а их токены оплачиваются как ответ
-      output_config: { effort: 'low' },
+      // Размышления входят в max_tokens: при высоком effort им нужен запас, иначе ответ обрежется
+      model: writerModel(env), stream, max_tokens: stream ? 64000 : 16000,
+      output_config: { effort },
       messages: [{ role: 'user', content: prompt }]
     })
   });
@@ -160,17 +160,17 @@ function assertClaudeStop(reason) {
   if (reason === 'refusal') throw new Error('Claude отказался отвечать');
   if (reason === 'max_tokens') throw new Error('Ответ Claude обрезан по длине');
 }
-async function claudeJson(env, prompt) {
-  const res = await callClaude(env, prompt, false);
+async function claudeJson(env, prompt, effort) {
+  const res = await callClaude(env, prompt, false, effort);
   if (!res.ok) throw await claudeHttpError(res);
   const data = await res.json();
   assertClaudeStop(data.stop_reason);
   // Ответ может начинаться с блоков размышления, текст ищем по типу, а не по позиции
   return extractJson(data.content.filter(b => b.type === 'text').map(b => b.text).join(''));
 }
-async function writerJson(env, prompt) {
+async function writerJson(env, prompt, effort) {
   if (env.ANTHROPIC_API_KEY) {
-    try { return { out: await claudeJson(env, prompt), by: writerLabel(env) }; }
+    try { return { out: await claudeJson(env, prompt, effort), by: writerLabel(env) }; }
     catch (e) { if (!env.GEMINI_KEY) throw e; console.warn('Claude не ответил, пишет Gemini:', e.message); }
   }
   return { out: await geminiJson(env, prompt), by: 'Gemini' };
@@ -363,16 +363,17 @@ async function handleApi(request, env) {
       const { out: raw, by } = await writerJson(env, P.praticaPrompt(body.text, body.topics));
       return json({ raw, by });
     }
+    // Шторка при наведении: ответ крошечный, а ждать его нельзя — поэтому effort ниже, чем у статей
     if (url.pathname === '/api/preview/ru') {
-      const raw = (await writerJson(env, P.previewRuPrompt(body.word, body.partOfSpeech, body.glosses))).out;
+      const raw = (await writerJson(env, P.previewRuPrompt(body.word, body.partOfSpeech, body.glosses), 'low')).out;
       return json({ russian: raw && raw.russian });
     }
     if (url.pathname === '/api/preview/mini') {
-      const entry = (await writerJson(env, P.previewMiniPrompt(body.word))).out;
+      const entry = (await writerJson(env, P.previewMiniPrompt(body.word), 'low')).out;
       return json({ entry });
     }
     if (url.pathname === '/api/preview/translit') {
-      const raw = (await writerJson(env, P.previewTranslitPrompt(body.word, body.partOfSpeech, body.gloss))).out;
+      const raw = (await writerJson(env, P.previewTranslitPrompt(body.word, body.partOfSpeech, body.gloss), 'low')).out;
       return json({ russian: raw && raw.russian });
     }
     if (url.pathname === '/api/grammar') {
