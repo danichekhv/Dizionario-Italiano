@@ -745,6 +745,18 @@ alter table reviews add column if not exists applied boolean default false;`;
     fr: { code: 'FR', name: 'Французский', adv: 'по-французски', adj: 'французское', art: /^(le|la|les|l|un|une|des|du|de|d)\s+/, sample: 'réfrigérateur&#10;théière&#10;serviette; салфетка&#10;…' },
     es: { code: 'ES', name: 'Испанский', adv: 'по-испански', adj: 'испанское', art: /^(el|la|los|las|un|una|unos|unas)\s+/, sample: 'nevera&#10;tetera&#10;servilleta; салфетка&#10;…' }
   };
+  // Флаги рисуем сами: эмодзи-флагов в Windows нет, вместо них показались бы буквы «IT» и «GB»
+  const stripes = (dir, colors) => colors.map((c, i) => dir === 'v'
+    ? `<rect x="${i * 20}" width="20" height="40" fill="${c}"/>`
+    : `<rect y="${(i * 40 / 3).toFixed(2)}" width="60" height="13.4" fill="${c}"/>`).join('');
+  const FLAGS = {
+    it: stripes('v', ['#009246', '#fff', '#ce2b37']),
+    en: '<rect width="60" height="40" fill="#012169"/><path d="M0 0L60 40M60 0L0 40" stroke="#fff" stroke-width="8"/><path d="M0 0L60 40M60 0L0 40" stroke="#c8102e" stroke-width="3"/><path d="M30 0V40M0 20H60" stroke="#fff" stroke-width="13"/><path d="M30 0V40M0 20H60" stroke="#c8102e" stroke-width="8"/>',
+    de: stripes('h', ['#000', '#dd0000', '#ffce00']),
+    fr: stripes('v', ['#0055a4', '#fff', '#ef4135']),
+    es: '<rect width="60" height="40" fill="#aa151b"/><rect y="10" width="60" height="20" fill="#f1bf00"/>'
+  };
+  const flagSvg = k => `<svg viewBox="0 0 60 40" aria-hidden="true">${FLAGS[k]}</svg>`;
   function deckLang(id) {
     let d = id ? deckById(id) : null;
     while (d) { if (d.lang) return LANGS[d.lang] ? d.lang : 'it'; d = d.parent_id ? deckById(d.parent_id) : null; }
@@ -1689,7 +1701,7 @@ alter table reviews add column if not exists applied boolean default false;`;
     const m = cardsModal();
     m.innerHTML = `<div class="cards-modal-box">
         <div class="cards-title small">${esc(title)}</div>
-        <div class="deck-pick-list">${Object.keys(LANGS).map(k => `<button class="deck-pick" style="--depth:0" onclick="Cards.pickLang('${k}')">${LANGS[k].name}<span>${k === current ? '✓' : ''}</span></button>`).join('')}</div>
+        <div class="lang-flags">${Object.keys(LANGS).map(k => `<button class="lang-flag${k === current ? ' on' : ''}" onclick="Cards.pickLang('${k}')"${k === current ? ' aria-current="true"' : ''}>${flagSvg(k)}${LANGS[k].name}</button>`).join('')}</div>
         <div class="cards-actions"><button class="cards-btn" onclick="Cards.closeModal()">Отмена</button></div>
       </div>`;
     m.style.display = 'flex';

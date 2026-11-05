@@ -2595,6 +2595,18 @@
   }
   .deck-pick:hover { border-color: var(--terracotta); color: var(--terracotta); }
   .deck-pick span { font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--muted); }
+  /* Выбор языка колоды: флаги с подписью. Неполный нижний ряд — по центру */
+  .lang-flags { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 16px 0 8px; }
+  .lang-flag {
+    flex: 0 1 calc((100% - 20px) / 3); min-width: 0; padding: 12px 4px 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    background: none; border: 1.5px solid var(--border); border-radius: var(--radius);
+    color: var(--ink); font-family: var(--font-text); font-size: var(--fs-small); cursor: pointer;
+    transition: border-color .15s, color .15s;
+  }
+  .lang-flag:hover { border-color: var(--terracotta); color: var(--terracotta); }
+  .lang-flag.on { border-color: var(--terracotta); background: rgba(var(--terracotta-rgb), .08); }
+  .lang-flag svg { display: block; width: 54px; height: 36px; border-radius: 2px; box-shadow: 0 0 0 1px rgba(var(--ink-rgb), .15); }
   @media (max-width: 640px) {
     .fav-todeck { display: none; }
     .fav-toolbar .cards-btn { flex: 1; }
